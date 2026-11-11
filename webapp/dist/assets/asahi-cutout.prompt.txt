@@ -1,0 +1,4 @@
+Mode: built-in image_gen, background-extraction, transparent_background=true
+Input: /Users/kazu/Downloads/image2.jpeg
+Prompt:
+Use case: background-extraction. Input image: edit target, supplied hand-drawn anime portrait of Asahi, a smiling winking young man with raised index finger and an NF armband. Remove ONLY the plain white exterior background to genuine transparency. Preserve the original face, expression, hair, hand and fingers, pose, clothes, armband lettering, outlines, colors and paper-like texture exactly. Preserve white eyes, teeth and off-white clothes as opaque foreground. Remove exterior background and background gaps near fingers, hair, neck and shoulders. Keep original framing and all visible body parts; do not redraw or invent anything. No added outline, shadow, background, watermark or text. Transparent PNG for a small chat avatar.

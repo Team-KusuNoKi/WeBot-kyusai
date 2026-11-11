@@ -1,0 +1,4 @@
+Mode: built-in image_gen, background-extraction, transparent_background=true
+Input: /Users/kazu/Downloads/image0.jpeg
+Prompt:
+Use case: background-extraction. Input image: edit target, the supplied hand-drawn anime portrait of Misame. Remove ONLY the plain white background, yielding a genuine transparent PNG cutout. Preserve the exact original character, face, eyes, expression, hair, pose, clothing, pen lines, colors and paper-like texture on the character. Do not redraw, beautify, recolor, or invent missing body parts. Preserve white eye and clothing details; remove the exterior white background and white background gaps between hair and shoulders. Keep the same framing and full visible bust. No outline, no added shadow, no text. This asset will be a small chat avatar.

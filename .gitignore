@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+.sites-runtime/
+webapp/artifacts/
+
+# 公式サイトの作業コピーを含むデプロイ複製
+.build/
+
+# Wrangler のローカルキャッシュ
+.wrangler/
+
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm

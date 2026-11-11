@@ -1,0 +1,4 @@
+# Generate a secret with at least 32 random characters and set the same value with
+# wrangler pages secret put PLAY_SAVE_SECRET --project-name <actual-project-name>
+# Use a different secret for preview, never commit the real .dev.vars file.
+PLAY_SAVE_SECRET=

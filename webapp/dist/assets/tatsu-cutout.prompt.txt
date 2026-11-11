@@ -1,0 +1,4 @@
+Mode: built-in image_gen, background-extraction, transparent_background=true
+Input: /Users/kazu/Downloads/image1.jpeg
+Prompt:
+Use case: background-extraction. Input image: edit target, the supplied hand-drawn anime bust portrait of Tatsu, a dark-haired blue-eyed young man in a red jacket touching his neck, with a sweat drop on his cheek. Remove ONLY the plain white exterior background to genuine transparency. Preserve the original face, facial expression, eyes, sweat drop, hair, hand, fingers, pose, clothes, all pen lines, exact colors and paper-like texture. Keep white eyes, highlights, cream-colored clothing and white jacket stripes opaque. Remove only exterior white and background gaps between hair, fingers, neck and shoulders. Keep original framing and all visible body parts. Do not redraw, beautify or invent anything. No added outline, shadow, text, watermark or background. Transparent PNG for a small chat avatar.

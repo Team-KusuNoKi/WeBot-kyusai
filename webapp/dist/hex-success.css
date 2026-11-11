@@ -1,0 +1,44 @@
+dialog.hex-success {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 16px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+  scrollbar-gutter: auto;
+}
+.hex-success[open] { display: grid; place-items: center; }
+.hex-success::backdrop { background: rgba(19, 37, 41, .66); }
+.hex-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.hex-confetti i { position: absolute; top: 68%; border-radius: 1px; }
+.hex-success-card {
+  position: relative;
+  width: min(288px, 100%);
+  padding: 32px 24px 24px;
+  border: 1px solid #d8c390;
+  border-radius: 18px;
+  background: #fffaf0;
+  color: #203b39;
+  text-align: center;
+  box-shadow: 0 8px 36px #15232230;
+}
+.hex-success-card h2 { margin: 0 0 22px; font-size: 36px; line-height: 1.25; }
+.hex-success-card button {
+  min-height: 44px;
+  min-width: 132px;
+  padding: 10px 24px;
+  border: 0;
+  border-radius: 11px;
+  background: #203b39;
+  color: white;
+  font: inherit;
+  cursor: pointer;
+}
+.hex-success-card button:focus-visible { outline: 3px solid #a7712a; outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .hex-confetti { display: none; } }

@@ -1,0 +1,19 @@
+// Local webapp configuration: copy to wrangler.jsonc and fill the actual D1 database IDs.
+// The existing production official-site repository serves its root ("."), not "dist".
+// Do not copy this local output-directory setting into the production repository.
+// For production, add the binding in the existing Pages dashboard or preserve its existing configuration.
+{
+  "name": "kusunoki-official-site",
+  "pages_build_output_dir": "dist",
+  "compatibility_date": "2026-10-29",
+  "d1_databases": [
+    {
+      "binding": "PLAY_SAVES",
+      "database_name": "november-kyusai-play-saves",
+      // "database_id": "replace with the actual production database ID",
+      // "preview_database_id": "replace with a separate preview database ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "vars": { "PLAY_SAVE_SCENARIO_ID": "november-kyusai-v4" }
+}

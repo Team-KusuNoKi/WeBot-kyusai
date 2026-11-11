@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>六角形と立方体のパズル</title>
+<style>
+:root{color-scheme:light;font-family:Inter,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#203539;background:#f3f1e9}
+*{box-sizing:border-box}body{margin:0;overflow-x:hidden}main{max-width:960px;margin:0 auto;padding:48px 28px}.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:36px;align-items:start}.rules h1{font-size:17px;font-weight:650;margin:0 0 18px}.rules p{font-size:14px;line-height:1.95;margin:0 0 16px}.rules strong{font-weight:650}.play-area{min-width:0}.board{background:#fafbf5;border:1px solid #d9ded5;border-radius:22px;padding:22px 16px 24px}.mode-switch{display:flex;align-items:center;width:fit-content;gap:3px;padding:4px;margin:0 auto 12px;background:#e9eee3;border-radius:40px}.mode-switch span{font-size:13px;line-height:30px;padding:0 22px;border-radius:20px;color:#6b7876}.mode-switch .active{background:#203539;color:#fff}.stage{overflow:hidden}svg{display:block;width:100%;height:clamp(260px,50vh,440px);touch-action:pan-y;user-select:none;-webkit-user-select:none}#shape,#shape *{-webkit-tap-highlight-color:transparent}.face{stroke:none;cursor:pointer}.face.hovered,.face:focus-visible{filter:brightness(.82)}.face:focus,.face:focus-visible{stroke:none;outline:none;box-shadow:none}.edge{fill:none;stroke:#183e50;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round;pointer-events:none;vector-effect:non-scaling-stroke}.edge.hidden-edge{stroke-dasharray:5 7;stroke-width:1.9}.face.invalid{filter:none;fill:#e96565;animation:error-flash .55s ease-in-out}#reset{display:block;margin:12px auto 0;min-width:150px;padding:12px 28px;border:1px solid #203539;border-radius:11px;background:#203539;color:#fff;font:inherit;font-size:14px;cursor:pointer;touch-action:manipulation}#reset:focus-visible{outline:3px solid #587b21;outline-offset:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.screen-shake{animation:screen-shake .42s ease-in-out}
+.mode-row{position:relative}.pick-steps{position:absolute;left:calc(50% + 76px);top:7px;display:flex;align-items:center;gap:4px;color:#88918c;font:14px/24px sans-serif;white-space:nowrap;pointer-events:none}.pick-steps[hidden]{display:none}.pick-steps .active{color:#203539;font-weight:700}.pick-number{font:20px sans-serif;fill:#203539;stroke:#fffef7;stroke-width:3px;paint-order:stroke;pointer-events:none}
+@keyframes error-flash{0%,50%,100%{fill:#e96565}25%,75%{fill:#ffa1a1}}@keyframes screen-shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}
+@media(max-width:680px){main{padding:24px 18px 28px}.layout{grid-template-columns:1fr;gap:18px}.rules h1{margin-bottom:12px}.rules p{font-size:13px;line-height:1.85;margin-bottom:10px}.board{padding:16px 12px 20px}.mode-switch{margin-bottom:6px}#reset{margin-top:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.game-status{text-align:center;font-size:14px}
+</style>
+</head>
+<body>
+<main id="app">
+ <div class="layout">
+  <section class="rules" aria-labelledby="rules-title">
+   <h1 id="rules-title">ルール</h1>
+   <p>すべてのエリアに色をつけてください。<br>押した面に隣接する面の色が反転します。</p>
+  </section>
+  <div class="play-area">
+   <section class="board" aria-label="パズルの表示エリア">
+    <div class="mode-row"><div class="mode-switch" aria-label="現在のモード"><span id="mode2" aria-current="false">2D</span><span id="mode3" class="active" aria-current="true">3D</span></div><div id="pick-steps" class="pick-steps" aria-label="三角形を2回選択" hidden><span data-pick-step="1">①</span><span aria-hidden="true">→</span><span data-pick-step="2">②</span></div></div>
+    <div class="stage"><svg id="shape" viewBox="100 0 400 380" aria-label="向きが固定された図形。現在は3D。"><g id="faces"></g><g id="edges" aria-hidden="true"></g></svg></div>
+    <p id="move-count" style="text-align:center"></p><button id="reset" type="button">やり直す</button>
+   </section>
+  </div>
+ </div>
+ <p id="feedback" class="game-status" role="status" aria-live="polite">3Dからスタート。三角形を2つ選んで1面を指定してください。</p>
+</main>
+<script>
+'use strict';
+// The six fixed sectors keep their coordinates in both adjacency modes.
+// All six square faces project to pairs of neighboring triangular sectors.
+const INITIAL = [false, false, false, false, true, true];
+const CUBE_FACE_AREAS = [[0,5],[0,1],[1,2],[2,3],[3,4],[4,5]];
+let colors = [...INITIAL], mode = 3;
+let moves = 0;
+let hoveredArea = -1, pendingArea = -1, errorAreas = [], errorTimer = null;
+let suppressHoverUntilMove = false;
+const $ = id => document.getElementById(id);
+const svgNS = 'http://www.w3.org/2000/svg';
+function neighbors(index, dimension, pressedFace) {
+ if(dimension===2)return [(index+5)%6,(index+1)%6];
+ return [0,1,2,3,4,5].filter(i=>!pressedFace.includes(i));
+}
+function updateHover() {
+ const selecting=mode===3&&!colors.every(Boolean);
+ $('pick-steps').hidden=!selecting;
+ for(const step of $('pick-steps').querySelectorAll('[data-pick-step]')) {
+  const active=Number(step.dataset.pickStep)===(pendingArea<0?1:2);
+  step.classList.toggle('active',active);
+  step.setAttribute('aria-current',String(selecting&&active));
+ }
+ // A triangle is selected on each tap. In 3D the second triangle confirms a square.
+ const areas=[hoveredArea,pendingArea].filter(i=>i>=0);
+ for(const face of $('faces').querySelectorAll('[data-face]')) {
+  const index=Number(face.getAttribute('data-face'));
+  face.classList.toggle('hovered',areas.includes(index));
+  face.classList.toggle('invalid',errorAreas.includes(index));
+  face.setAttribute('aria-pressed',String(pendingArea===index));
+ }
+}
+function clearError() {
+ if(errorTimer!==null){clearTimeout(errorTimer);errorTimer=null;}
+ errorAreas=[];$('app').classList.remove('screen-shake');
+}
+function chooseArea(index) {
+ if(!Number.isInteger(index)||index<0||index>5||colors.every(Boolean))return;
+ hoveredArea=-1;suppressHoverUntilMove=true;
+ clearError();
+ if(mode===2){commitMove(index);return;}
+ if(pendingArea<0){
+  pendingArea=index;
+  $('feedback').textContent='①を選択しました。②として同じ正方形を作る、もう1つの三角形をタップしてください。';
+  render();return;
+ }
+ const first=pendingArea;pendingArea=-1;
+ const selectedFace=first===index?undefined:CUBE_FACE_AREAS.find(areas=>areas.includes(first)&&areas.includes(index));
+ if(selectedFace){commitMove(first,selectedFace);return;}
+ errorAreas=[...new Set([first,index])];
+ $('feedback').textContent=`エリア${first+1}・${index+1}では正方形の面になりません。三角形を2つ選び直してください。`;
+ render();
+ void $('app').getBoundingClientRect();$('app').classList.add('screen-shake');
+ errorTimer=setTimeout(()=>{
+  errorTimer=null;errorAreas=[];$('app').classList.remove('screen-shake');
+  updateHover();
+ },650);
+}
+function bindHover(element,index) {
+ element.addEventListener('pointerenter',event=>{
+  if(event.pointerType==='touch'||suppressHoverUntilMove)return;
+  hoveredArea=index;updateHover();
+ });
+ element.addEventListener('pointermove',event=>{
+  if(event.pointerType==='touch'||!suppressHoverUntilMove)return;
+  suppressHoverUntilMove=false;hoveredArea=index;updateHover();
+ });
+ element.addEventListener('pointerleave',()=>{
+  if(hoveredArea===index){hoveredArea=-1;updateHover();}
+ });
+ element.addEventListener('pointercancel',()=>{hoveredArea=-1;updateHover();});
+}
+function createSvg(tag, attrs) { const el=document.createElementNS(svgNS,tag); for(const [k,v] of Object.entries(attrs))el.setAttribute(k,v); return el; }
+function draw() {
+ $('faces').replaceChildren();
+ const vertices=Array.from({length:6},(_,i)=>{const a=(-90+i*60)*Math.PI/180;return [300+158*Math.cos(a),190+158*Math.sin(a)];});
+ [0,1,2,3,4,5].forEach(i=>{
+  const pts=[[300,190],vertices[i],vertices[(i+1)%6]];
+  const polygon=createSvg('polygon',{points:pts.map(p=>p.join(',')).join(' '),fill:colors[i]?'#e9b97f':'#fffef7',class:'face',role:'button',tabindex:'0','data-face':i,'aria-label':`エリア${i+1}、${colors[i]?'色つき':'白'}。押すと${mode===2?'隣の三角形2つ':'2つ選んで面を確定し、残りの4エリア'}を反転`});
+  bindHover(polygon,i);
+  polygon.addEventListener('click',()=>chooseArea(i));
+  polygon.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();chooseArea(i);}});
+  $('faces').append(polygon);
+ });
+ // Fixed front view: hidden edges separate 1–6, 2–3, and 4–5.
+ $('edges').replaceChildren();
+ for(const i of [0,2,4,1,3,5]) {
+  $('edges').append(createSvg('line',{x1:300,y1:190,x2:vertices[i][0],y2:vertices[i][1],class:'edge'+(i%2===0?' hidden-edge':'')}));
+ }
+ $('edges').append(createSvg('polygon',{points:vertices.map(p=>p.join(',')).join(' '),class:'edge'}));
+}
+function render() {
+ draw();
+ $('move-count').textContent=moves+'手';
+ $('mode2').classList.toggle('active',mode===2);
+ $('mode3').classList.toggle('active',mode===3);
+ $('mode2').setAttribute('aria-current',String(mode===2));
+ $('mode3').setAttribute('aria-current',String(mode===3));
+ $('shape').setAttribute('aria-label',`向きが固定された図形。現在は${mode}D。${mode===2?'三角形を1つ選択。':'三角形を2つ選んで正方形の面を確定。'}`);
+ updateHover();
+ if(colors.every(Boolean))$('feedback').textContent='クリア！ すべてのエリアに色がつきました。';
+}
+function commitMove(index, selectedFace) {
+ if(colors.every(Boolean))return;
+ if(mode===3&&!CUBE_FACE_AREAS.includes(selectedFace))return;
+ const kept=mode===3?selectedFace:[index];
+ const changed=neighbors(index,mode,kept);changed.forEach(i=>colors[i]=!colors[i]);mode=mode===2?3:2;moves++;
+ $('feedback').textContent=`エリア${kept.map(i=>i+1).join('・')}はそのまま。エリア${changed.map(i=>i+1).join('・')}を反転しました。次は${mode}Dです。`;
+ render();
+}
+function reset() {
+ clearError();pendingArea=-1;hoveredArea=-1;suppressHoverUntilMove=false;
+ colors=[...INITIAL];mode=3;moves=0;
+ $('feedback').textContent='初期状態に戻しました。3Dからスタート。';render();
+}
+function cancelSelection() {
+ if(pendingArea<0)return;
+ clearError();hoveredArea=-1;pendingArea=-1;suppressHoverUntilMove=true;
+ $('feedback').textContent='仮選択を取り消しました。';render();
+}
+$('reset').addEventListener('click',reset);
+document.addEventListener('keydown',e=>{
+ if(e.repeat||e.ctrlKey||e.metaKey||e.altKey||e.target.matches('input,textarea,select,[contenteditable]'))return;
+ if(e.key==='Escape'&&pendingArea>=0){e.preventDefault();cancelSelection();return;}
+ if(/^[1-6]$/.test(e.key)){e.preventDefault();chooseArea(Number(e.key)-1);}
+});
+render();
+</script>
+</body>
+</html>

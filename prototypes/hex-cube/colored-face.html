@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>控室の問題・真っ白な面は押せない（試作）</title>
+<style>
+:root{color-scheme:light;font-family:Inter,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;color:#203539;background:#f3f1e9}
+*{box-sizing:border-box}body{margin:0;overflow-x:hidden}main{max-width:960px;margin:0 auto;padding:48px 28px}.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:36px;align-items:start}.rules h1{font-size:17px;font-weight:650;margin:0 0 18px}.rules p{font-size:14px;line-height:1.95;margin:0 0 16px}.rules strong{font-weight:650}.play-area{min-width:0}.board{background:#fafbf5;border:1px solid #d9ded5;border-radius:22px;padding:22px 16px 24px}.mode-switch{display:flex;align-items:center;width:fit-content;gap:3px;padding:4px;margin:0 auto 12px;background:#e9eee3;border-radius:40px}.mode-switch span{font-size:13px;line-height:30px;padding:0 22px;border-radius:20px;color:#6b7876}.mode-switch .active{background:#203539;color:#fff}.stage{overflow:hidden}svg{display:block;width:100%;height:clamp(260px,50vh,440px);touch-action:pan-y;user-select:none;-webkit-user-select:none}#shape,#shape *{-webkit-tap-highlight-color:transparent}.face{stroke:none;cursor:pointer}.face:focus,.face:focus-visible{stroke:none;outline:none;box-shadow:none}.edge{fill:none;stroke:#183e50;stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round;pointer-events:none;vector-effect:non-scaling-stroke}.edge.hidden-edge{stroke-dasharray:5 7;stroke-width:1.9}#reset{display:block;margin:12px auto 0;min-width:150px;padding:12px 28px;border:1px solid #203539;border-radius:11px;background:#203539;color:#fff;font:inherit;font-size:14px;cursor:pointer;touch-action:manipulation}#reset:focus-visible{outline:3px solid #587b21;outline-offset:4px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:680px){main{padding:24px 18px 28px}.layout{grid-template-columns:1fr;gap:18px}.rules h1{margin-bottom:12px}.rules p{font-size:13px;line-height:1.85;margin-bottom:10px}.board{padding:16px 12px 20px}.mode-switch{margin-bottom:6px}#reset{margin-top:12px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.turn-counter,.game-status{text-align:center;font-variant-numeric:tabular-nums}.game-status{font-size:14px;line-height:1.65}.turn-counter{margin:6px 0}.face:focus-visible .hit-area{stroke:#183e50;stroke-width:5}.face[aria-disabled="false"]:active .hit-area{fill:#20353933}@media(hover:hover){.face[aria-disabled="false"]:hover .hit-area{fill:#20353922}}
+</style>
+</head>
+<body>
+<main id="app">
+ <div class="layout">
+  <section class="rules" aria-labelledby="rules-title">
+   <h1 id="rules-title">ルール</h1>
+   <p>すべての面に色をつけてください。</p><p>面を押すと、その面に隣接する面の色が反転します。</p><p><strong>真っ白な面は押せません。</strong></p>
+  </section>
+  <div class="play-area">
+   <section class="board" aria-label="パズルの表示エリア">
+    <div class="mode-row"><div class="mode-switch" aria-label="現在のモード"><span id="mode2" class="active" aria-current="true">2D</span><span id="mode3" aria-current="false">3D</span></div></div>
+    <div class="stage"><svg id="shape" viewBox="100 0 400 380" aria-label="向きが固定された図形。現在は2D。"><g id="faces"></g><g id="edges" aria-hidden="true"></g></svg></div>
+    <p id="turn-counter" class="turn-counter"></p><button id="reset" type="button">やり直す</button>
+   </section>
+  </div>
+ </div>
+ <p id="feedback" class="game-status" role="status" aria-live="polite">2Dからスタート。</p>
+</main>
+<script>
+(()=>{
+const INITIAL = [true, false, false, true, false, false];
+const CENTER = [300, 190];
+const vertices = INITIAL.map((_, i) => {
+  const angle = (-90 + i * 60) * Math.PI / 180;
+  return [300 + 158 * Math.cos(angle), 190 + 158 * Math.sin(angle)];
+});
+const triangles = INITIAL.map((_, i) => ({name: 'エリア' + (i + 1), areas: [i]}));
+const sides = [
+  {name: '上面', areas: [5, 0]},
+  {name: '右面', areas: [1, 2]},
+  {name: '左面', areas: [3, 4]},
+];
+let colors = [...INITIAL], moves = 0;
+const mode = () => moves % 2 === 0 ? 2 : 3;
+const targets = () => mode() === 2 ? triangles : sides;
+const root = document.getElementById('app');
+const $ = id => root.querySelector('#' + id);
+const points = vertices => vertices.map(p => p.join(',')).join(' ');
+function svg(tag, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  return el;
+}
+function hasColor(target) {
+  return target.areas.some(i => colors[i]);
+}
+function choose(target, keyboard = false) {
+  if (colors.every(Boolean) || !targets().includes(target)) return;
+  if (!hasColor(target)) {
+    $('feedback').textContent = '真っ白な面は押せません。色のある面を選んでください。';
+    return;
+  }
+  const [index] = target.areas;
+  const flipped = mode() === 2 ? [(index + 5) % 6, (index + 1) % 6]
+    : colors.map((_, i) => i).filter(i => !target.areas.includes(i));
+  for (const i of flipped) colors[i] = !colors[i];
+  moves++;
+  render();
+  persist();
+  if (keyboard) ($('faces').querySelector('[tabindex="0"]') || $('reset')).focus();
+}
+function drawEdges() {
+  vertices.forEach(([x, y], i) => {
+    $('edges').append(svg('line', {x1: CENTER[0], y1: CENTER[1], x2: x, y2: y,
+      class: i % 2 === 0 ? 'edge hidden-edge' : 'edge'}));
+  });
+  $('edges').append(svg('polygon', {points: points(vertices), class: 'edge'}));
+}
+function render() {
+  const flat = mode() === 2;
+  const complete = colors.every(Boolean);
+  $('faces').replaceChildren();
+  for (const target of targets()) {
+    const [first] = target.areas;
+    const corners = [CENTER, vertices[first], vertices[(first + 1) % 6]];
+    if (!flat) corners.push(vertices[(first + 2) % 6]);
+    const description = target.areas.map(i => colors[i] ? '色つき' : '白');
+    const group = svg('g', {class: 'face', role: 'button', tabindex: complete ? -1 : 0,
+      'aria-label': target.name + '、' + description.join('・'), 'aria-disabled': String(complete || !hasColor(target))});
+    for (const i of target.areas) {
+      group.append(svg('polygon', {points: points([CENTER, vertices[i], vertices[(i + 1) % 6]]),
+        fill: colors[i] ? '#e9b97f' : '#fffef7', 'pointer-events': 'none'}));
+    }
+    group.append(svg('polygon', {points: points(corners), fill: 'transparent', class: 'hit-area'}));
+    group.addEventListener('click', () => choose(target));
+    group.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      if (!event.repeat) choose(target, true);
+    });
+    $('faces').append(group);
+  }
+  for (const dimension of [2, 3]) {
+    const active = dimension === mode();
+    $('mode' + dimension).classList.toggle('active', active);
+    $('mode' + dimension).setAttribute('aria-current', String(active));
+  }
+  $('shape').setAttribute('aria-label', flat ? '六角形の6つの三角形' : '立方体の上面・右面・左面');
+  $('turn-counter').textContent = moves + '手';
+  $('feedback').textContent = complete ? 'クリア！ すべてのエリアに色がつきました。'
+    : '面を1つ選んでください。';
+}
+function persist() {
+  window.openai?.setWidgetState?.({modelContent: {moves, mode: mode()}, privateContent: {colors, moves}})?.catch(() => {});
+}
+function restore(snapshot) {
+  const saved = snapshot?.privateContent;
+  if (saved && Array.isArray(saved.colors) && saved.colors.length === 6 &&
+      saved.colors.every(c => typeof c === 'boolean') && Number.isSafeInteger(saved.moves) && saved.moves >= 0) {
+    colors = [...saved.colors];
+    moves = saved.moves;
+  } else {
+    colors = [...INITIAL];
+    moves = 0;
+  }
+  render();
+}
+$('reset').addEventListener('click', () => {restore(null); persist();});
+root.addEventListener('keydown', event => {
+  if (event.repeat || event.altKey || event.ctrlKey || event.metaKey || !/^[1-6]$/.test(event.key)) return;
+  const index = Number(event.key) - 1;
+  const target = targets().find(target => target.areas.includes(index));
+  event.preventDefault();
+  choose(target, true);
+});
+window.addEventListener('openai:set_globals', event => {
+  if (event.detail?.globals && 'widgetState' in event.detail.globals) restore(event.detail.globals.widgetState);
+});
+drawEdges();
+restore(window.openai?.widgetState);
+})();
+</script>
+</body>
+</html>

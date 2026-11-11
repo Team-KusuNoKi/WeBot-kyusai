@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="54" height="83" viewBox="0 0 54 83">
+  <title>仏像</title>
+  <g fill="#111">
+    <path d="M24 9c-1-4 1-6 3-8 3 3 4 5 3 8l5 4 2 9-4 3-1 10 8 8 2 14 10 12-3 5H5l-3-5 11-12 2-14 9-9-3-9-4-3 2-10z"/>
+    <ellipse cx="27" cy="21" rx="8" ry="11"/>
+    <path d="M8 74h38l6 5-2 3H4l-2-3z"/>
+  </g>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="1">
+    <path d="M22 11q5-5 10 0m-12 2 3-3m0 2 3-3m0 3 3-3m0 4 3-3M20 17q-3 9 3 13m12-13q3 9-3 13M23 23l2 1m4 0 2-1m-6 5q2 2 4 0M25 34q1 8-8 23m15-23-4 10 9 11m-20-9-1 12 12 4 10-5m-17-8 5 7 7 1m-18 6q8 8 24 1M9 68q13-4 20 3m17-3q-11-4-17 3M9 76q18 5 36 0"/>
+  </g>
+</svg>
