@@ -6,7 +6,7 @@ export function showHexSuccess(host) {
   dialog.innerHTML = `<div class="hex-confetti" aria-hidden="true"></div>
     <div class="hex-success-card">
       <h2 id="hex-success-title">成功</h2>
-      <button type="button">次へ</button>
+      <button type="button" class="primary-button">次へ</button>
     </div>`;
   host.append(dialog);
   let resolveFinished;
@@ -26,7 +26,7 @@ export function showHexSuccess(host) {
 }
 
 function burstConfetti(layer) {
-  const colors = ['#f5bd57', '#e47464', '#67bfaf', '#90bbec', '#d398c7', '#fff1c8'];
+  const colors = ['#f0782b', '#e8691d', '#ffd0ae', '#aa4008', '#cecece', '#fff'];
   const { width, height } = layer.getBoundingClientRect();
   for (const direction of [1, -1]) {
     for (let i = 0; i < 38; i++) {

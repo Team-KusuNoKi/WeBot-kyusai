@@ -24,7 +24,11 @@ const appUrl = `/${appPath}/`;
 const hash = data => createHash('sha256').update(data).digest('hex');
 const slash = path => path.split(sep).join('/');
 // Match module statements, so HTML such as class="room-from" inside a template is ignored.
-const moduleReferences = text => [...text.matchAll(/(?:^[ \t]*(?:import|export)\s+(?:[\w$*,{}\s]+?\bfrom\s*)?|\bimport\s*\(\s*)["']([^"'\n]+)["']/gm)].map(match => match[1]);
+const moduleReferences = text => [
+  ...text.matchAll(/(?:^[ \t]*(?:import|export)\s+(?:[\w$*,{}\s]+?\bfrom\s*)?|\bimport\s*\(\s*)["']([^"'\n]+)["']/gm),
+  // 動的ロードの CSS / 補助ファイル（new URL('./x', import.meta.url)）も配信物へ含める。
+  ...text.matchAll(/\bnew\s+URL\(\s*["'](\.\/[^"'\n]+)["']\s*,\s*import\.meta\.url\s*\)/g),
+].map(match => match[1]);
 const cssReferences = text => [...text.matchAll(/url\(\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|([^\s)"']+))\s*\)/gi)]
   .map(match => match[1] ?? match[2] ?? match[3]);
 const local = value => !/^(?:[a-z]+:|\/|#)/i.test(value);

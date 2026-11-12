@@ -4,12 +4,12 @@ import { showHexSuccess } from './hex-success.js';
 import { createPickMarkers } from './hex-pick-markers.js';
 
 export function mountHexCube(host, { onComplete, onFailure, canInteract }) {
-  host.innerHTML = `<section class="hex-game" aria-label="控室の問題"><div class="hex-layout"><section class="hex-rules"><h2>ルール</h2><p>①<span class="hex-shortest">最短</span>の手で、全ての面に色をつけてください。<br>②押した“面”に隣接する“面”の色が反転します。<br>③2Dと3Dは交互に切り替わります。</p></section><section class="hex-board" aria-label="パズルの表示エリア"><div class="hex-mode-row"><div class="hex-modes" aria-label="現在のモード"><span data-mode="2">2D</span><span data-mode="3">3D</span></div><div class="hex-pick-steps" aria-label="三角形を2回選択" hidden><span data-pick-step="1">①</span><span aria-hidden="true">→</span><span data-pick-step="2">②</span></div></div><svg class="hex-shape" viewBox="100 0 400 380" aria-label="向きが固定された図形"><g class="hex-faces"></g><g class="hex-edges" aria-hidden="true"></g><g class="hex-pick-number" text-anchor="middle" dominant-baseline="central" aria-hidden="true"></g></svg><button type="button" class="hex-reset">やり直す</button></section></div><p class="hex-status" role="status" aria-live="polite"></p></section>`;
+  host.innerHTML = `<section class="hex-game" aria-label="控室の問題"><div class="hex-layout"><section class="hex-rules"><h2>ルール</h2><p>①<span class="hex-shortest">最短</span>の手で、全ての面に色をつけてください。<br>②押した“面”に隣接する“面”の色が反転します。<br>③2Dと3Dは交互に切り替わります。</p></section><section class="hex-board" aria-label="パズルの表示エリア"><div class="hex-mode-row"><div class="hex-modes" aria-label="現在のモード"><span data-mode="2">2D</span><span data-mode="3">3D</span></div><div class="hex-pick-steps" aria-label="三角形を2回選択" hidden><span data-pick-step="1">①</span><span aria-hidden="true">→</span><span data-pick-step="2">②</span></div></div><svg class="hex-shape" viewBox="100 0 400 380" aria-label="向きが固定された図形"><g class="hex-faces"></g><g class="hex-edges" aria-hidden="true"></g><g class="hex-pick-number" text-anchor="middle" dominant-baseline="central" aria-hidden="true"></g></svg><button type="button" class="hex-reset primary-button">やり直す</button></section></div><p class="hex-status" role="status" aria-live="polite"></p></section>`;
   const root = host.querySelector('.hex-game'), svg = host.querySelector('svg'), faces = [], status = host.querySelector('.hex-status');
   root.insertAdjacentHTML('beforeend', `<dialog class="hex-failure" aria-labelledby="hex-failure-title" aria-describedby="hex-failure-detail">
     <h2 id="hex-failure-title">失敗</h2>
     <p id="hex-failure-detail">最短ではありません。<span class="hex-failure-hint" hidden><br>最短は${REQUIRED_MOVES}手です。</span></p>
-    <button type="button">やり直す</button>
+    <button type="button" class="primary-button">やり直す</button>
   </dialog>`);
   const failure = root.querySelector('.hex-failure');
   let puzzle = initialPuzzle(), moves = [], pending = -1, hovered = -1, invalid = [], errorTimer = null, suppressHover = false, disposed = false, submitting = false;
@@ -31,7 +31,7 @@ export function mountHexCube(host, { onComplete, onFailure, canInteract }) {
       el.setAttribute('aria-current', String(selecting && active));
     });
     faces.forEach((face,index) => {
-      face.setAttribute('fill', puzzle.colors[index] ? '#e9b97f' : '#fffef7');
+      face.classList.toggle('is-filled', puzzle.colors[index]);
       face.classList.toggle('hovered', index === hovered || index === pending);
       face.classList.toggle('invalid', invalid.includes(index));
       face.setAttribute('aria-pressed', String(index === pending));

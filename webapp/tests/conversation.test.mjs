@@ -150,7 +150,7 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
   };
   const context = vm.createContext({
     mountHexCube: minigameMount, scenario, MOTION, createHaptics, answerReadiness, isComposingSubmit, bindImageViewer, bindSheetDismiss, animateEmphasis, toggleDisclosure, animateCombination, copyWithFeedback, createOverlayHistory, sanitizeAnswerDraft, ...engine, latestSceneStart, normalizePlayCode, isConversationLine, restorePlayView, pendingConversation, bindVisualViewport, crypto: globalThis.crypto, AbortController,
-    createPlaySaveController: options => createPlaySaveController({ ...options, debounceMs: 60000, maxAutoRetries: 0,
+    createPlaySaveController: options => createPlaySaveController({ ...options, debounceMs: 60000, persistDebounceMs: 0, maxAutoRetries: 0,
       fetchImpl: async (url, init) => { networkCalls.push(JSON.parse(init.body)); if (fetchImpl) return fetchImpl(url, init); throw new Error('Harness network is offline'); } }),
     createConversationPlayer: options => createConversationPlayer({ ...options, schedule: timer.schedule, cancel: timer.cancel }),
     document: {
@@ -293,7 +293,7 @@ test('正解したフレームで最初の台詞と進行を保存し、二重�
     assert.equal(h.composer.hidden, true);
     const record = h.evaluate('playSaves.getRecord()');
     assert.ok(record.state.solved.includes('N1'));
-    assert.equal(record.view.displayedMessages.length, 1);
+    assert.equal(record.view.displayedCount, 1);
     assert.equal(h.evaluate("answer(['10']).status"), 'busy');
     h.click('start');
     assert.equal(h.evaluate('isPlaying'), false);
@@ -541,7 +541,7 @@ test('N1〜N3・N4.1の移動写真と説明は指示カード内にまとめ、
       assert.equal(legacyMarkup, '');
     }
     const photos = { N1: [2, 3, 4, 5], N2: [7, 8, 9, 10, 11], N3: [13, 14, 15, 16, 17, 18, 19], 'N4.1': [21, 22] };
-    assert.deepEqual(Array.from(markup.matchAll(/src="..\/assets\/travel\/(\d+)\.webp"/g), match => Number(match[1])), photos[id]);
+    assert.deepEqual(Array.from(markup.matchAll(/src="..\/assets\/travel\/(\d+)\.preview\.webp"/g), match => Number(match[1])), photos[id]);
     assert.ok(!markup.includes('仮の写真'));
     const before = h.snapshot();
     for (const [index, step] of problem.travelGuide.steps.entries()) {
@@ -569,9 +569,9 @@ test('メニューのトラブル欄からN5の補助写真を拡大し、一覧
   h.click('trouble');
   assert.match(h.panel.innerHTML, /<details class="trouble-photos"><summary>N5の現地資料が見られないとき/);
   for (const [index, number] of [24, 25, 26, 27].entries()) {
-    assert.ok(h.panel.innerHTML.includes(`src="../assets/travel/${number}.webp"`));
+    assert.ok(h.panel.innerHTML.includes(`src="../assets/travel/${number}.preview.webp"`));
     h.click('travel-image', 'trouble', index);
-    assert.ok(h.panel.innerHTML.includes(`class="puzzle-full-image" src="../assets/travel/${number}.jpeg"`));
+    assert.ok(h.panel.innerHTML.includes(`class="puzzle-full-image" src="../assets/travel/${number}.webp"`));
     h.click('close');
     assert.ok(h.panel.innerHTML.includes('class="trouble-photos"'));
   }
@@ -1683,7 +1683,7 @@ test('〇の旧本文で途中保存した会話は、改訂後の地の文か�
     const view = capturePlayView();
     enterPlay({ code: '000000', state: { ...state, messages: [...state.messages.map(oldLine),
       { problemId: 'Q3.3', kind: 'dialogue', speaker: '', text: '追加カード404を取得しN6に回答してください' }] },
-      view: { ...view, displayedMessages: view.displayedMessages.map(oldLine) } });
+      view: { ...view, displayedMessages: displayedMessages.map(oldLine), displayedCount: undefined } });
   }`);
   const paper = scenario.problems.find(p => p.id === 'Q3.3');
   assert.ok(h.app.innerHTML.includes(paper.dialogue[1].text));
@@ -2143,12 +2143,13 @@ test('N2・N3・N5は共通配置で画像の左に回答欄を置き、その�
   const h = appHarness();
   for (const [id, filename, answer] of [['N2', 'Slide3.jpg', '法経済学部北館'], ['N3', 'Slide5.jpg', '末'], ['N5', 'Slide12.jpg', 'お化け屋敷']]) {
     const p = scenario.problems.find(p => p.id === id);
-    assert.ok(readFileSync(new URL(`../dist/app/${p.image}`, import.meta.url)).equals(readFileSync(new URL(`../../Kyusai_materials/${filename}`, import.meta.url))), `${id}の元画像が${filename}と一致する`);
+    const original = `../assets/${id.toLowerCase()}-original.jpg`;
+    assert.ok(readFileSync(new URL(`../dist/app/${original}`, import.meta.url)).equals(readFileSync(new URL(`../../Kyusai_materials/${filename}`, import.meta.url))), `${id}の元画像が${filename}と一致する`);
     h.click('select', id);
     assert.equal(h.composer.hidden, false);
     assert.ok(h.app.innerHTML.includes(`aria-label="${id}の問題カード"`));
     assert.ok(h.app.innerHTML.includes(`src="${p.diagram}"`));
-    assert.ok(!h.app.innerHTML.includes(`src="${p.image}"`));
+    assert.ok(!h.app.innerHTML.includes(`src="${original}"`));
     assert.ok(h.app.innerHTML.includes(`aria-label="${id}の図を拡大表示"`));
     assert.ok(h.app.innerHTML.includes('class="puzzle-text-answer"'));
     assert.equal((h.app.innerHTML.match(/id="answer-form"/g) ?? []).length, 1);
@@ -2462,11 +2463,11 @@ test('Q6.2回答済みでもQ6.1の最後の台詞からQ6.2の回答欄を開�
   assert.equal(h.panel.open, false);
   assert.equal(h.evaluate('state.selected'), 'Q6.2');
   assert.equal(h.composer.hidden, false);
-  assert.ok(h.composer.innerHTML.includes('手がかりカードの番号'));
+  assert.ok(h.composer.innerHTML.includes('手がかり番号'));
   assert.equal(h.evaluate("answer(['ハナ', '003']).status"), 'correct');
 });
 
-test('Q4は人物4候補のプルダウンとカード番号の入力欄を表示する', t => {
+test('Q4は人物4候補のプルダウンと手がかり番号の入力欄を表示する', t => {
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'Q4');
@@ -2502,8 +2503,8 @@ test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒ
   assert.ok(h.composer.innerHTML.includes('<select id="answer" name="answer" required>'));
   assert.ok(h.composer.innerHTML.includes('時刻を選択…'));
   assert.equal((h.composer.innerHTML.match(/type="radio"/g) ?? []).length, 0);
-  assert.ok(h.composer.innerHTML.includes('手がかりカードの番号'));
-  assert.ok(h.composer.innerHTML.includes('カードの3桁の番号を入力…'));
+  assert.ok(h.composer.innerHTML.includes('手がかり番号'));
+  assert.ok(h.composer.innerHTML.includes('3桁の手がかり番号を入力…'));
   assert.ok(h.composer.innerHTML.includes('id="answer-1" name="answer" type="text" inputmode="numeric"'));
   assert.ok(!h.app.innerHTML.includes('幽煙の間：スタッフの証言'));
   assert.equal(h.evaluate("answer(['16:00', '203']).status"), 'incorrect');
@@ -2591,13 +2592,13 @@ test('Q7の保存済みの会場案内にもはさみとテープの注意書き
   assert.ok(h.evaluate(`messageMarkup(${JSON.stringify(legacy)})`).includes('お楽しみください。(ただし、はさみとテープが必要になるのでご注意ください)'));
 });
 
-test('カード番号を答える全4問の入力案内を統一し、番号の文字入力を維持する', t => {
+test('手がかり番号を答える全4問の入力案内を統一し、番号の文字入力を維持する', t => {
   const h = appHarness();
   t.after(() => h.dispose());
   for (const id of ['Q3.3', 'Q4', 'Q6.2', 'Q7']) {
     h.click('select', id);
     if (id === 'Q4') h.click('open-composer');
-    assert.ok(h.app.innerHTML.includes('placeholder="カードの3桁の番号を入力…"'));
+    assert.ok(h.app.innerHTML.includes('placeholder="3桁の手がかり番号を入力…"'));
     assert.ok(h.app.innerHTML.includes('inputmode="numeric"'));
   }
 });
@@ -2919,7 +2920,8 @@ test('保存済みの会話途中から未表示の次のセリフを再生し�
   assert.equal(h.evaluate('displayedMessages.length'), 3);
   assert.equal(h.evaluate('displayedMessages[2].text'), scene[2].text);
   const persisted = JSON.parse(h.storageItems.get(key));
-  assert.equal(persisted.view.displayedMessages.length, 3);
+  assert.equal(persisted.view.displayedCount, 3);
+  assert.equal(persisted.view.displayedMessages, undefined);
   assert.equal(persisted.view.chatScrollTop, 43);
   assert.equal(persisted.pending, true);
   finishScene(h);
@@ -3222,7 +3224,7 @@ test('明示したタイトル画面に留まり、URLを開き直したとき�
   assert.ok(reopened.renders.every(markup => !markup.includes('title-patchwork-v3.webp')));
 });
 
-test('手がかりボタンは空の縦長カード一覧を開き、中央に近いカードを拡大する', async t => {
+test('手がかりボタンはカード一覧を開き、選んだカードを拡大できる', async t => {
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'Q1');
@@ -3230,52 +3232,48 @@ test('手がかりボタンは空の縦長カード一覧を開き、中央に�
   h.click('clues');
   assert.equal(h.panel.open, true);
   assert.equal(h.panel.classList.contains('clue-gallery'), true);
-  assert.equal((h.panel.innerHTML.match(/class="clue-gallery-card"/g) ?? []).length, 4);
-  const listeners = {};
-  const cards = Array.from({ length: 4 }, (_, index) => ({
-    offsetLeft: 100 + index * 108, offsetWidth: 100, scale: 0, active: false,
-    style: { setProperty(name, value) { cards[index].scale = value; } },
-    setAttribute() { this.active = true; }, removeAttribute() { this.active = false; },
-  }));
-  const position = {};
-  const track = {
-    scrollLeft: 0, clientWidth: 300, style: {},
-    classList: { add() {}, remove() {} },
-    setPointerCapture() {},
-    querySelectorAll() { return cards; },
-    addEventListener(name, callback) { listeners[name] = callback; },
-    scrollTo(options) { this.scrollLeft = options.left; },
-  };
-  const originalQuery = h.panel.querySelector;
-  h.panel.querySelector = selector => selector === '.clue-carousel' ? track : selector === '.clue-gallery-position' ? position : originalQuery.call(h.panel, selector);
-  h.evaluate('bindClueCarousel()');
-  assert.equal(cards[0].scale, 1);
-  assert.equal(cards[1].scale, .86);
-  track.scrollLeft = 108;
-  listeners.scroll();
-  assert.equal(cards[1].scale, 1);
-  assert.equal(cards[0].active, false);
-  assert.equal(position.textContent, '2 / 4');
-  listeners.keydown({ key: 'ArrowRight', preventDefault() {} });
-  assert.equal(track.scrollLeft, 216);
-  listeners.pointerdown({ pointerType: 'mouse', button: 0, pointerId: 1, clientX: 200, target: { closest() { return {}; } } });
-  listeners.pointermove({ clientX: 92 });
-  listeners.pointerup();
-  assert.equal(track.scrollLeft, 216, 'カード内のボタンではドラッグを始めない');
-  listeners.pointerdown({ pointerType: 'mouse', button: 0, pointerId: 1, clientX: 200 });
-  listeners.pointermove({ clientX: 92 });
-  listeners.pointerup();
-  assert.equal(track.scrollLeft, 324);
-  assert.equal(position.textContent, '4 / 4');
-  listeners.wheel({ deltaX: 0, deltaY: -108, deltaMode: 0, preventDefault() {} });
-  assert.equal(track.scrollLeft, 216);
-  assert.equal(position.textContent, '3 / 4');
-  listeners.wheel({ ctrlKey: true, deltaY: 108 });
-  assert.equal(track.scrollLeft, 216);
+  assert.ok(h.panel.innerHTML.includes('class="clue-card-grid"'));
+  assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.clueGallery.length);
+  assert.ok(!h.panel.innerHTML.includes('data-minigame-entry'));
+  assert.ok(!h.panel.innerHTML.includes('装置を操作する'));
+  h.click('clue-card-open', 'clue-1');
+  assert.equal(h.evaluate('expandedClueId'), 'clue-1');
+  assert.ok(h.panel.innerHTML.includes('class="clue-card-expanded"'));
+  assert.ok(h.panel.innerHTML.includes('アサヒの調査結果'));
+  h.click('clue-card-close');
+  assert.equal(h.evaluate('expandedClueId'), null);
+  assert.ok(h.panel.innerHTML.includes('class="clue-card-grid"'));
   h.click('close');
   await Promise.resolve();
   await Promise.resolve();
   assert.equal(h.panel.open, false);
+});
+
+
+test('カード長押しで合成選択になり2枚で合成できる', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.click('select', 'Q1');
+  h.click('clues');
+  assert.equal(h.evaluate('combineSelecting'), false);
+  h.evaluate('beginCombineSelecting("clue-1")');
+  h.evaluate('openPanel("clues", { keepFocus: true })');
+  assert.equal(h.evaluate('combineSelecting'), true);
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1']);
+  assert.ok(h.panel.innerHTML.includes('合成 1/2'));
+  assert.ok(h.panel.innerHTML.includes('data-action="combine-select-run"'));
+  assert.match(h.panel.innerHTML, /data-action="combine-select-run"[^>]*\sdisabled/);
+  h.evaluate('toggleCombineCard("clue-2")');
+  h.evaluate('openPanel("clues", { keepFocus: true })');
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
+  assert.ok(h.panel.innerHTML.includes('合成 2/2'));
+  assert.doesNotMatch(h.panel.innerHTML, /data-action="combine-select-run"[^>]*\sdisabled/);
+  h.click('combine-select-run');
+  assert.equal(h.evaluate('clueTab'), 'combine');
+  assert.equal(h.evaluate('combineSelecting'), false);
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
+  assert.ok(h.panel.innerHTML.includes('class="combine-stage"'));
+  assert.ok(h.panel.innerHTML.includes('id="combine-feedback"'));
 });
 
 test('手がかり画面のカード・キャラ情報・合成タブを切り替えられる', async t => {
@@ -3289,15 +3287,16 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes(`class="brand-title">${scenario.title}</span>`));
   assert.ok(!h.panel.innerHTML.includes('>手がかり</h2>'));
   assert.ok(h.panel.innerHTML.includes('id="clue-tab-cards"'));
-  const chooseTab = tab => h.documentEvent('click', { target: { closest: selector => selector === '[data-action]' ? { dataset: { action: 'clue-tab', tab } } : null } });
-  chooseTab('characters');
-  assert.equal((h.panel.innerHTML.match(/class="character-tile"/g) ?? []).length, 4);
+  h.evaluate('switchClueTab("characters")');
+  assert.equal((h.panel.innerHTML.match(/clue-gallery-card/g) ?? []).length, scenario.characterCards.length);
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
-  chooseTab('combine');
-  assert.ok(h.panel.innerHTML.includes('id="combine-form"'));
+  assert.ok(h.panel.innerHTML.includes('マヤ'));
+  h.evaluate('switchClueTab("combine")');
+  assert.ok(h.panel.innerHTML.includes('class="combine-stage"'));
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-combine"'));
-  chooseTab('cards');
-  assert.equal((h.panel.innerHTML.match(/class="clue-gallery-card"/g) ?? []).length, 4);
+  h.evaluate('switchClueTab("cards")');
+  assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.clueGallery.length);
+  assert.equal((h.panel.innerHTML.match(/data-minigame-entry/g) ?? []).length, 0);
   h.click('close');
   await Promise.resolve();
   await Promise.resolve();
@@ -3305,26 +3304,36 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.equal(h.evaluate('state.selected'), 'Q1');
 });
 
-test('キャラ情報は選んだ枠を拡大し、枠外タップと戻るで一覧へ戻る', async t => {
+test('キャラ情報は横スクロールで切り替えられる', async t => {
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'Q1');
   h.click('clues');
-  h.documentEvent('click', { target: { closest: selector => selector === '[data-action]' ? { dataset: { action: 'clue-tab', tab: 'characters' } } : null } });
-  h.click('character-open', '2');
-  assert.equal(h.evaluate('expandedCharacter'), 2);
-  assert.ok(h.panel.innerHTML.includes('3 / 4'));
-  assert.equal((h.panel.innerHTML.match(/class="clue-gallery-card"/g) ?? []).length, 4);
-  h.documentEvent('click', { target: { closest: selector => selector === '[data-action]' ? { dataset: { action: 'character-dismiss' } } : selector === '.clue-gallery-card' ? {} : null } });
-  assert.equal(h.evaluate('expandedCharacter'), 2);
-  h.click('character-dismiss');
-  assert.equal(h.evaluate('expandedCharacter'), null);
-  assert.equal((h.panel.innerHTML.match(/class="character-tile"/g) ?? []).length, 4);
-  assert.equal(h.panel.open, true);
-  h.click('character-open', '1');
-  h.click('close');
-  assert.equal(h.evaluate('expandedCharacter'), null);
-  assert.equal(h.panel.open, true);
+  h.evaluate('switchClueTab("characters")');
+  assert.equal((h.panel.innerHTML.match(/clue-gallery-card/g) ?? []).length, scenario.characterCards.length);
+  assert.ok(h.panel.innerHTML.includes('class="clue-carousel"'));
+  const listeners = {};
+  const cards = scenario.characterCards.map((_, index) => ({
+    offsetLeft: 100 + index * 108, offsetWidth: 100, scale: 0, active: false,
+    style: { setProperty(name, value) { cards[index].scale = value; } },
+    setAttribute() { this.active = true; }, removeAttribute() { this.active = false; },
+  }));
+  const track = {
+    scrollLeft: 0, clientWidth: 300, style: {},
+    classList: { add() {}, remove() {} },
+    setPointerCapture() {},
+    querySelectorAll() { return cards; },
+    addEventListener(name, callback) { listeners[name] = callback; },
+    scrollTo(options) { this.scrollLeft = options.left; },
+  };
+  const originalQuery = h.panel.querySelector;
+  h.panel.querySelector = selector => selector === '.clue-carousel' ? track : originalQuery.call(h.panel, selector);
+  h.evaluate('bindClueCarousel(0)');
+  assert.equal(cards[0].scale, 1);
+  track.scrollLeft = 108;
+  listeners.scroll();
+  assert.equal(cards[1].scale, 1);
+  assert.equal(h.evaluate('expandedCharacter'), 1);
   h.click('close');
   await Promise.resolve();
   await Promise.resolve();
@@ -3332,12 +3341,21 @@ test('キャラ情報は選んだ枠を拡大し、枠外タップと戻るで�
 });
 
 
-test('11月の救祭の手がかりカード下部に装置ボタンを配置し取得カードを追加する', t=>{
-  const h=appHarness();t.after(()=>h.dispose());h.click('clues');
-  assert.ok(h.panel.innerHTML.includes('控室の問題'));assert.ok(h.panel.innerHTML.includes('data-action="hex-open"'));
-  assert.equal((h.panel.innerHTML.match(/class="clue-gallery-card"/g)||[]).length,4);
-  h.evaluate('state=completeMinigame(scenario,state,"hex-cube",[[4],[3,4]]).state');h.click('clues');
-  assert.equal((h.panel.innerHTML.match(/class="clue-gallery-card"/g)||[]).length,5);assert.ok(h.panel.innerHTML.includes('装置から出てきたメモ（仮）'));
+test('控室カードのカプセルから六角形を開き、デバッグでは解答後も押せる', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.click('clues');
+  assert.ok(!h.panel.innerHTML.includes('data-minigame-entry'));
+  assert.ok(!h.panel.innerHTML.includes('装置を操作する'));
+  h.click('clue-card-open', 'clue-9');
+  assert.match(h.panel.innerHTML, /class="clue-hex-entry"[^>]*data-action="hex-open"/);
+  assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
+  h.evaluate('state=completeMinigame(scenario,state,"hex-cube",[[4],[3,4]]).state');
+  h.click('clues');
+  assert.equal((h.panel.innerHTML.match(/data-minigame-reward/g) ?? []).length, 1);
+  assert.ok(h.panel.innerHTML.includes('装置から出てきたメモ（仮）'));
+  h.click('clue-card-open', 'clue-9');
+  assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
 });
 test('装置クリア後は物語の会話ではなくシステムメッセージで仮カードを取得する',async t=>{
   const h=appHarness();t.after(()=>h.dispose());const before=JSON.parse(h.snapshot());
@@ -3368,9 +3386,11 @@ test('000000ではクリア画面と手がかりから六角形を何度でも�
     assert.ok(h.panel.innerHTML.includes('もう一度解く'));
     if (attempt === 2) {
       h.click('hex-card');
-      assert.ok(h.panel.innerHTML.includes('装置を操作する'));
+      h.click('clue-card-open', 'clue-9');
+      assert.match(h.panel.innerHTML, /class="clue-hex-entry"/);
+      assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
     }
-    if (attempt < 3) h.click('hex-open');
+    if (attempt < 3) await h.evaluate('openHexCube()');
   }
   const state = JSON.parse(h.snapshot());
   assert.deepEqual(state.minigames, ['hex-cube']);
@@ -3385,7 +3405,7 @@ test('QR入口で記録がなければ6桁入力を表示し復元後に同じ�
   await h.evaluate('beginPlay("code","001234")');assert.equal(h.evaluate('gateVisible'),false);assert.equal(h.panel.classList.contains('hex-cube-panel'),true);assert.equal(mounts,1);
 });
 test('装置の保存待ち中に別画面へ移動したらシステム通知で開き直さない',async t=>{
-  const h=appHarness();t.after(()=>h.dispose());h.click('hex-open');
+  const h=appHarness();t.after(()=>h.dispose());await h.evaluate('openHexCube()');
   const pending=h.evaluate('finishHexCube([[4],[3,4]])');h.click('clues');await pending;
   assert.equal(h.panel.classList.contains('clue-gallery'),true);
   assert.ok(h.panel.innerHTML.includes('装置から出てきたメモ（仮）'));
@@ -3460,9 +3480,10 @@ test('QRで未送信のクリア記録を再開し、通信復帰後に重複せ
   assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
   assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="hex-cube-note").length'),1);
   h.click('hex-card');
-  assert.ok(h.panel.innerHTML.includes('取得した手がかりを見る'));
+  h.click('clue-card-open', 'clue-9');
+  assert.match(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
   h.click('hex-open');
-  assert.ok(h.panel.innerHTML.includes('この手がかりは取得済みです。'));
+  assert.equal(h.panel.classList.contains('clue-gallery'), true);
   assert.ok(!h.panel.innerHTML.includes('もう一度解く'));
 });
 

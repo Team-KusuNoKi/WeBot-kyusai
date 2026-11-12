@@ -1,5 +1,4 @@
 import { scenario } from './scenario.js';
-import { mountHexCube } from './hex-cube.js';
 import { initialState, restoreState, submitAnswer, chooseBranch, unlockedCards, findCombination, canOpenProblem, investigationComplete, availableNavigationProblems, completeMinigame, readMinigameEntry } from './engine.js';
 import { createConversationPlayer, latestSceneStart } from './conversation.js';
 import { createPlaySaveController, normalizePlayCode } from './play-save.js';
@@ -45,6 +44,12 @@ let miniView=null, miniSaving=false, miniRewardAlready=false;
 let playSessionRevision=0;
 let requestedMinigame=readMinigameEntry(window.location?.href);
 let expandedCharacter = null;
+let expandedClueId = null;
+let combineSelection = [];
+let combineReplaceAt = null;
+let combinePicker = false;
+let combineSelecting = false;
+let suppressCombineClick = false;
 let historyChatScrollTop = 0;
 let historyScrollTop = 0;
 let historyOpenProblems = new Set();
@@ -804,8 +809,19 @@ function setComposerExpanded(expanded) {
 function closePanel() {
   if (!panel.open || panel.classList.contains('is-closing')) return;
   miniView?.destroy();miniView=null;
-  if (panel.classList.contains('clue-gallery') && expandedCharacter !== null) {
-    closeCharacterPreview();
+  if (panel.classList.contains('clue-gallery') && combinePicker) {
+    combinePicker = false;
+    combineReplaceAt = null;
+    openPanel('clues');
+    return;
+  }
+  if (panel.classList.contains('clue-gallery') && combineSelecting) {
+    clearCombineSelecting();
+    openPanel('clues');
+    return;
+  }
+  if (panel.classList.contains('clue-gallery') && expandedClueId !== null) {
+    closeClueCardPreview();
     return;
   }
   if (panel.dataset?.kind === 'travel-image' && imageReturnElement?.dataset.id === 'trouble') {
@@ -856,7 +872,8 @@ function closePanel() {
 function capturePlayView() {
   return { startView, yoiEndView, showVenueDirections, investigationView, ...(investigationClosing ? { investigationClosing: true } : {}), investigationScrollTop, investigationReturnId,
     ...(scenario.investigation.entries.some(id => investigationEntryStatus(id, state.solved) === 2) ? { seenConclusions: [...seenConclusions] } : {}),
-    repeatAnswer, composerExpanded, ...(answerOrigin ? { answerOrigin: { ...answerOrigin } } : {}), sceneStart, displayedMessages: [...displayedMessages], isPlaying,
+    repeatAnswer, composerExpanded, ...(answerOrigin ? { answerOrigin: { ...answerOrigin } } : {}), sceneStart,
+    displayedCount: displayedMessages.length, isPlaying,
     puzzleImageIndex, chatScrollTop: historyView ? historyChatScrollTop : document.querySelector('.chat-area')?.scrollTop ?? 0,
     selectedPuzzleAnswer, selectedSymbols: [...selectedSymbols], answerDrafts: Object.fromEntries(Object.entries(answerDrafts).map(([id, values]) => [id, [...values]])) };
 }
@@ -1009,8 +1026,11 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
       if (!record && legacyState) record = playSaves.adoptLegacy(legacyState, restorePlayView(scenario, legacyState, null));
       if (!record) throw new Error('このブラウザには保存された記録がありません。');
       if (record.code && !record.pending) {
-        try { record = await playSaves.loadCode(record.code); }
-        catch (error) { if (error.status && error.status < 500 && error.status !== 429) throw error; }
+        try {
+          record = await playSaves.loadCode(record.code, {
+            sinceRevision: record.revision, localState: record.state, localView: record.view,
+          });
+        } catch (error) { if (error.status && error.status < 500 && error.status !== 429) throw error; }
       }
       announcedCode = Boolean(record.code);
     } else if (kind === 'code') {
@@ -1027,7 +1047,7 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
     if (!record) throw new Error('再開番号が見つかりません。');
     if (automatic) { enterPlay(record); viewportLayout.update(); }
     else await transitionToPlay(record);
-    if (requestedMinigame) {const id=requestedMinigame;requestedMinigame=null;openHexCube(id);}
+    if (requestedMinigame) {const id=requestedMinigame;requestedMinigame=null;await openHexCube(id);}
     if (kind === 'continue') void playSaves.retry();
   } catch (error) {
     gateBusy = false;
@@ -1288,7 +1308,7 @@ function composerContentMarkup(p) {
     ? `<div class="answer-composer-heading"><h2>${esc(problemLabel(p))}</h2></div>`
     : `<div class="answer-composer-heading"><h2>${esc(problemLabel(p))}</h2><button class="composer-close" data-action="close-composer" aria-label="回答エリアを閉じる">${icon('close')}</button></div>`;
   if (p.type === 'pending') return `${heading}<div class="answer-problem"><p>${esc(p.prompt)}</p></div>`;
-  const content = p.image ? puzzleCardMarkup(p) : `<div class="answer-problem" data-problem-id="${esc(p.id)}"><p>${problemPromptMarkup(p)}</p>${p.answerTemplate ? `<p class="answer-template">${esc(p.answerTemplate)}</p>` : ''}${p.wordBank ? `<div class="word-bank"><span>語群</span><p>${p.wordBank.map(esc).join('、')}</p></div>` : ''}</div>
+  const content = (p.diagram || p.image || p.images) ? puzzleCardMarkup(p) : `<div class="answer-problem" data-problem-id="${esc(p.id)}"><p>${problemPromptMarkup(p)}</p>${p.answerTemplate ? `<p class="answer-template">${esc(p.answerTemplate)}</p>` : ''}${p.wordBank ? `<div class="word-bank"><span>語群</span><p>${p.wordBank.map(esc).join('、')}</p></div>` : ''}</div>
     ${answerFormMarkup(p)}
     ${['text', 'fields'].includes(p.type) ? '' : `<div class="composer-meta"><span>${p.type === 'multiple' ? p.selectionCount ? `${p.selectionCount}つ選んでください。` : '当てはまるものをすべて選んでください。' : 'ひとつ選んでください。'}</span></div>`}`;
   return `${heading}${content}<div id="answer-readiness" class="answer-readiness" role="status"></div><div id="answer-error" class="answer-error" role="status"></div><div class="feedback" role="status">${esc(feedback || storageWarning)}</div>`;
@@ -1413,15 +1433,18 @@ function historyProblems() {
   return scenario.problems.filter(item => state.solved.includes(item.id) && !item.advanceTo).reverse();
 }
 
-function secondaryScreenHeader(backAction) {
-  return `<header class="topbar clue-screen-header"><div class="brand"><button class="menu-button clue-back" data-action="${backAction}" aria-label="戻る">${icon('arrow')}</button><span${backAction === 'close' ? ' id="panel-title"' : ''} class="brand-title">${esc(scenario.title)}</span></div><button class="hint-button" data-action="hints" aria-label="ヒント">${icon('hint')}<span>ヒント</span></button></header>`;
+function secondaryScreenHeader(backAction, { showHint = true } = {}) {
+  const trailing = showHint
+    ? `<button class="hint-button" data-action="hints" aria-label="ヒント">${icon('hint')}<span>ヒント</span></button>`
+    : '<span class="header-spacer" aria-hidden="true"></span>';
+  return `<header class="topbar clue-screen-header"><div class="brand"><button class="menu-button clue-back" data-action="${backAction}" aria-label="戻る">${icon('arrow')}</button><span${backAction === 'close' ? ' id="panel-title"' : ''} class="brand-title">${esc(scenario.title)}</span></div>${trailing}</header>`;
 }
 
 function historyScreenMarkup() {
   const visibleMessages = isPlaying ? [...state.messages.slice(0, sceneStart), ...displayedMessages] : state.messages;
   const entries = historyProblems().map(item =>
     `<details class="history-entry" data-history-problem="${esc(item.id)}" ${historyOpenProblems.has(item.id) ? 'open' : ''}><summary><span class="history-question">${esc(problemLabel(item))}</span><span class="history-title">${esc(problemTitle(item))}</span>${icon('chevron')}</summary><div class="history-messages">${visibleMessages.filter(m => m.problemId === item.id && isConversationLine(m)).map(messageMarkup).join('')}</div></details>`).join('');
-  return `<section class="history-screen" aria-labelledby="history-heading">${secondaryScreenHeader('history-back')}<div class="history-body"><h1 id="history-heading" tabindex="-1">会話履歴</h1><p class="history-intro">問題を開くと、これまでの会話を読み返せます。</p>${entries || '<div class="history-empty"><p>まだ会話履歴はありません。</p><p>問題に正解すると、ここに会話が届きます。</p></div>'}</div></section>`;
+  return `<section class="history-screen" aria-labelledby="history-heading">${secondaryScreenHeader('history-back', { showHint: false })}<div class="history-body"><h1 id="history-heading" tabindex="-1">会話履歴</h1><p class="history-intro">問題を開くと、これまでの会話を読み返せます。</p>${entries || '<div class="empty-state history-empty"><p>まだ会話履歴はありません。</p><p>問題に正解すると、ここに会話が届きます。</p></div>'}</div></section>`;
 }
 
 function openHistoryScreen() {
@@ -1591,10 +1614,116 @@ function switchClueTab(nextTab) {
   const direction = tabs.indexOf(nextTab) > tabs.indexOf(clueTab) ? 1 : -1;
   clueTab = nextTab;
   expandedCharacter = null;
+  expandedClueId = null;
+  combinePicker = false;
+  combineReplaceAt = null;
+  if (nextTab === 'combine') combineSelecting = false;
   haptics.trigger();
   openPanel('clues');
   animateSurface(panel.querySelector('#clue-tab-content'), true, direction * 40, 'X', MOTION.enter);
   panel.querySelector(`#clue-tab-${clueTab}`)?.focus({ preventScroll: true });
+}
+
+function clueGalleryItems() {
+  return scenario.clueGallery ?? [];
+}
+
+function allPlayCards() {
+  return [...(scenario.characterCards ?? []), ...clueGalleryItems()];
+}
+
+function clearCombineSelecting() {
+  combineSelecting = false;
+  combineSelection = [];
+  combineReplaceAt = null;
+}
+
+function toggleCombineCard(id) {
+  if (!allPlayCards().some(card => card.id === id)) return false;
+  if (combineSelection.includes(id)) {
+    combineSelection = combineSelection.filter(item => item !== id);
+    if (!combineSelection.length) combineSelecting = false;
+  } else if (combineSelection.length < 2) {
+    combineSelection = [...combineSelection, id];
+    combineSelecting = true;
+  } else {
+    return false;
+  }
+  return true;
+}
+
+function beginCombineSelecting(id) {
+  if (!allPlayCards().some(card => card.id === id)) return false;
+  combineSelecting = true;
+  if (!combineSelection.includes(id) && combineSelection.length < 2) combineSelection = [...combineSelection, id];
+  return true;
+}
+
+function combineSelectBarMarkup() {
+  if (!combineSelecting || combinePicker || clueTab === 'combine') return '';
+  const count = combineSelection.length;
+  return `<button type="button" class="primary-button combine-select-bar" data-action="combine-select-run" ${count === 2 ? '' : 'disabled'} aria-label="合成 ${count}枚中2枚">合成 ${count}/2</button>`;
+}
+
+function applyCombineResult(ids) {
+  const result = findCombination(scenario, ids);
+  if (!result) {
+    haptics.trigger('error');
+    const message = panel.querySelector('#combine-feedback');
+    if (message) message.textContent = 'この組み合わせからは、まだ新しい情報を見つけられません。';
+    return;
+  }
+  if (!state.combinations.includes(result.id)) {
+    state.combinations.push(result.id);
+    save();
+    openPanel('clues', { revealSelector: `[data-finding-id="${result.id}"]` });
+  } else {
+    const message = panel.querySelector('#combine-feedback');
+    if (message) message.textContent = '';
+  }
+  haptics.trigger('success');
+}
+
+function clueCardMarkup(card) {
+  const selected = combineSelecting && combineSelection.includes(card.id);
+  const label = combineSelecting
+    ? `${card.title}（手がかり番号 ${card.number}）${selected ? '、選択中' : 'を選択'}`
+    : `${card.title}（手がかり番号 ${card.number}）を拡大`;
+  return `<button type="button" class="clue-card-tile" data-action="clue-card-open" data-id="${esc(card.id)}"${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(label)}">
+    <span class="clue-card-thumb"><img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span>
+    <span class="clue-card-meta"><strong>${esc(card.title)}</strong><small>No.${esc(card.number)}</small></span>
+  </button>`;
+}
+
+function hexEntryLocked() {
+  return playSaves.getStatus().mode !== 'debug' && state.minigames?.includes('hex-cube');
+}
+
+function hexEntryButton() {
+  const locked = hexEntryLocked();
+  return `<button type="button" class="clue-hex-entry" data-action="hex-open"${locked ? ' disabled' : ''} aria-label="${locked ? '控室のパズルは解答済み' : '控室のパズルを解く'}"></button>`;
+}
+
+function cluePhotoCardMarkup(card, { current = false } = {}) {
+  const selected = combineSelecting && combineSelection.includes(card.id);
+  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）"><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}</article>`;
+}
+
+function clueCardExpandedMarkup(gallery, index) {
+  const cards = gallery.map((card, i) => cluePhotoCardMarkup(card, { current: i === index })).join('');
+  return `<div class="clue-card-expanded">
+    <div class="clue-card-expanded-header">
+      <button type="button" class="icon-button" data-action="clue-card-close" aria-label="カード一覧に戻る">${icon('close')}</button>
+    </div>
+    <div class="clue-carousel" tabindex="0" role="region" aria-label="手がかりカード。横スクロールで前後のカードに切り替え">${cards}</div>
+  </div>`;
+}
+
+function closeClueCardPreview() {
+  const id = expandedClueId;
+  expandedClueId = null;
+  openPanel('clues');
+  panel.querySelector(`[data-action="clue-card-open"][data-id="${globalThis.CSS?.escape?.(id) ?? id}"]`)?.focus({ preventScroll: true });
 }
 
 function animateCharacterCard(element, sourceRect) {
@@ -1640,22 +1769,46 @@ function hexEntryOpensReward(id) {
 }
 
 function clueGalleryCards() {
-  const game=scenario.minigames?.find(game=>game.id==='hex-cube');
-  const cards=Array.from({length:4},(_,index)=>index===0&&game
-    ? `<article class="clue-gallery-card" data-minigame-entry aria-label="${esc(game.title)}" aria-current="true"><span class="hex-card-label">手がかり・仮</span><h2>${esc(game.title)}</h2><p>${esc(game.body)}</p><button class="primary-button full" data-action="hex-open">${hexEntryOpensReward(game.id)?'取得した手がかりを見る':'装置を操作する'}</button></article>`
-    : `<article class="clue-gallery-card" aria-label="手がかりカード ${index+1}"></article>`);
-  for(const mini of scenario.minigames??[])if(state.minigames?.includes(mini.id)){
-    const card=scenario.cards.find(card=>card.id===mini.rewardCard);
-    cards.push(`<article class="clue-gallery-card" data-minigame-reward="${esc(mini.id)}" aria-label="${esc(card.title)}"><span class="hex-card-label">手がかり・仮</span><h2>${esc(card.title)}</h2><p>${esc(card.text)}</p></article>`);
+  const cards = [];
+  for (const mini of scenario.minigames ?? []) if (state.minigames?.includes(mini.id)) {
+    const card = scenario.cards.find(item => item.id === mini.rewardCard);
+    if (card) cards.push(`<article class="clue-gallery-card" data-minigame-reward="${esc(mini.id)}" aria-label="${esc(card.title)}"><span class="hex-card-label">手がかり・仮</span><h2>${esc(card.title)}</h2><p>${esc(card.text)}</p></article>`);
   }
   return cards;
 }
-function openHexCube(id='hex-cube') {
+let resolvedMountHexCube = null;
+function ensureHexSuccessCss() {
+  if (typeof document?.createElement !== 'function') return;
+  if (document.querySelector('link[data-hex-success-css]')) return;
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  // app/index.html からの相対パス。テストVMでは import.meta が使えない。
+  link.href = '../hex-success.css';
+  link.dataset.hexSuccessCss = '1';
+  document.head.appendChild(link);
+}
+// packaging-ref: new URL('./hex-success.css', import.meta.url)
+async function ensureHexCube() {
+  ensureHexSuccessCss();
+  if (resolvedMountHexCube) return resolvedMountHexCube;
+  // テストハーネスは mountHexCube を注入する。本番は初回だけ動的 import する。
+  if (typeof mountHexCube === 'function') {
+    resolvedMountHexCube = mountHexCube;
+    return resolvedMountHexCube;
+  }
+  resolvedMountHexCube = (await import('./hex-cube.js')).mountHexCube;
+  return resolvedMountHexCube;
+}
+async function openHexCube(id='hex-cube') {
   if(gateVisible)return;
   if(!(scenario.minigames??[]).some(game=>game.id===id))return;
   miniRewardAlready=Boolean(state.minigames?.includes(id));
   expandedCharacter=null;
-  if (playSaves.getStatus().phase !== 'conflict') openPanel(hexEntryOpensReward(id)?hexRewardPanel():'hex-cube');
+  if (playSaves.getStatus().phase === 'conflict') return;
+  const panelKind = hexEntryOpensReward(id) ? hexRewardPanel() : 'hex-cube';
+  if (panelKind === 'hex-cube') await ensureHexCube();
+  if (gateVisible || playSaves.getStatus().phase === 'conflict') return;
+  openPanel(panelKind);
 }
 function hexRewardPanel() {
   if(playSaves.getStatus().phase==='conflict')return 'hex-pending';
@@ -1703,8 +1856,12 @@ function bindClueCarousel(initialIndex = 0) {
       if (index === activeIndex) card.setAttribute('aria-current', 'true');
       else card.removeAttribute('aria-current');
     });
-    position.textContent = `${activeIndex + 1} / ${cards.length}`;
-    if (clueTab === 'characters' && expandedCharacter !== null) expandedCharacter = activeIndex;
+    if (position) position.textContent = `${activeIndex + 1} / ${cards.length}`;
+    if (clueTab === 'characters') expandedCharacter = activeIndex;
+    if (clueTab === 'cards' && expandedClueId !== null) {
+      const id = clueGalleryItems()[activeIndex]?.id;
+      if (id) expandedClueId = id;
+    }
     if (activeIndex !== previousIndex) haptics.trigger('selection');
   };
   const snapToNearest = () => {
@@ -1771,14 +1928,94 @@ function bindClueCarousel(initialIndex = 0) {
   update();
 }
 
+function bindCombineCardGestures() {
+  const root = panel.querySelector('#clue-tab-content');
+  if (!root || root.dataset.combineGestures === '1') return;
+  root.dataset.combineGestures = '1';
+  const longPressMs = 480;
+  const moveCancelPx = 12;
+  let press = null;
+
+  const targetFromEvent = event => {
+    if (event.target?.closest?.('[data-action="clue-card-close"], .combine-select-bar, .clue-tabs, .icon-button')) return null;
+    const tile = event.target?.closest?.('[data-action="clue-card-open"][data-id]');
+    if (tile) return { id: tile.dataset.id, kind: 'tile' };
+    const card = event.target?.closest?.('.clue-gallery-card[data-combine-id]');
+    if (card) return { id: card.dataset.combineId, kind: 'gallery' };
+    return null;
+  };
+
+  const clearPress = () => {
+    if (press?.timer) clearTimeout(press.timer);
+    press = null;
+  };
+
+  root.addEventListener('pointerdown', event => {
+    if (event.button != null && event.button !== 0) return;
+    const target = targetFromEvent(event);
+    if (!target) return;
+    clearPress();
+    press = {
+      id: target.id,
+      x: event.clientX,
+      y: event.clientY,
+      pointerId: event.pointerId,
+      timer: setTimeout(() => {
+        const id = press?.id;
+        press = null;
+        if (!id || !beginCombineSelecting(id)) return;
+        suppressCombineClick = true;
+        haptics.trigger();
+        openPanel('clues', { keepFocus: true });
+      }, longPressMs),
+    };
+  });
+
+  root.addEventListener('pointermove', event => {
+    if (!press || event.pointerId !== press.pointerId) return;
+    if (Math.hypot(event.clientX - press.x, event.clientY - press.y) > moveCancelPx) clearPress();
+  });
+
+  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    root.addEventListener(name, event => {
+      if (!press || (event.pointerId != null && event.pointerId !== press.pointerId)) return;
+      clearPress();
+    });
+  }
+
+  root.addEventListener('click', event => {
+    if (suppressCombineClick) {
+      event.preventDefault();
+      event.stopPropagation();
+      suppressCombineClick = false;
+      return;
+    }
+    if (!combineSelecting) return;
+    const target = targetFromEvent(event);
+    if (!target || target.kind !== 'gallery') return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!toggleCombineCard(target.id)) return;
+    haptics.trigger();
+    openPanel('clues', { keepFocus: true });
+  }, true);
+
+  root.addEventListener('contextmenu', event => {
+    if (targetFromEvent(event)) event.preventDefault();
+  });
+}
+
+
 function hintReaderMarkup(subject) {
   const { hints, explanation } = subject;
   const count = hints.length;
   const index = Math.max(0, (state.hints[subject.id] || 1) - 1);
   const answer = explanation ? `<details class="answer-reveal hint-answer"${index + 1 < count ? ' hidden' : ''}><summary>答えと解説を見る</summary><p>${esc(explanation)}</p></details>` : '';
-  if (!count) return `<p class="muted">この問題のヒントはまだありません。</p>${answer}`;
+  if (!count) {
+    return `<div class="hint-reader hint-reader-empty"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-ema-stage"><div class="hint-ema"><p class="hint-ema-empty">この問題のヒントはまだありません。</p></div></div>${answer}</div>`;
+  }
   const cards = hints.map((hint, i) => `<section class="hint-card"${i === index ? '' : ' inert'}><span class="eyebrow">ヒント ${i + 1} / ${count}</span><p>${esc(hint)}</p></section>`).join('');
-  return `<div class="hint-reader"><div class="hint-pager"><button type="button" class="hint-prev" aria-label="前のヒント"${index === 0 ? ' disabled' : ''}>${icon('chevron')}</button><div class="hint-window"><div class="hint-track" style="transform:translateX(-${index * 100}%)">${cards}</div></div><button type="button" class="hint-next" aria-label="次のヒント"${index === count - 1 ? ' disabled' : ''}>${icon('chevron')}</button></div><span class="sr-only" role="status"></span>${answer}</div>`;
+  return `<div class="hint-reader"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-pager"><button type="button" class="hint-prev" aria-label="前のヒント"${index === 0 ? ' disabled' : ''}>${icon('chevron')}</button><div class="hint-ema-stage"><div class="hint-ema"><div class="hint-window"><div class="hint-track" style="transform:translateX(-${index * 100}%)">${cards}</div></div></div></div><button type="button" class="hint-next" aria-label="次のヒント"${index === count - 1 ? ' disabled' : ''}>${icon('chevron')}</button></div><span class="sr-only" role="status"></span>${answer}</div>`;
 }
 
 function bindHintReader(subject) {
@@ -1788,6 +2025,7 @@ function bindHintReader(subject) {
   const prev = reader.querySelector('.hint-prev');
   const next = reader.querySelector('.hint-next');
   const answer = reader.querySelector('.hint-answer');
+  if (!track || !prev || !next) return;
   let index = Math.max(0, (state.hints[subject.id] || 1) - 1);
   function markRead() {
     if ((state.hints[subject.id] ?? 0) >= index + 1) return;
@@ -1846,6 +2084,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   panel.classList.toggle('image-viewer', isImagePanel);
   panel.classList.toggle('clue-gallery', kind === 'clues');
   panel.classList.toggle('hex-cube-panel', kind === 'hex-cube');
+  panel.classList.toggle('hint-panel', kind === 'hints');
   panel.classList.toggle('answer-choice-dialog', ['answer-choices', 'symbol-choices'].includes(kind));
   panel.classList.toggle('symbol-choice-dialog', kind === 'symbol-choices');
   panel.classList.toggle('resume-sheet', kind === 'resume');
@@ -1903,17 +2142,38 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     content = hintReaderMarkup(p);
   } else if (kind === 'clues' && clueTab === 'cards') {
     title = '手がかり';
-    const cards=clueGalleryCards();
-    content=`<div class="clue-carousel" tabindex="0" role="region" aria-label="手がかりカード。横スクロールまたは左右キーで切り替え">${cards.join('')}</div><p class="clue-gallery-position" role="status">1 / ${cards.length}</p>`;
+    const gallery = clueGalleryItems();
+    const openedIndex = gallery.findIndex(card => card.id === expandedClueId);
+    if (openedIndex >= 0) {
+      content = clueCardExpandedMarkup(gallery, openedIndex);
+    } else {
+      const hexCards = clueGalleryCards();
+      content = `<div class="clue-card-grid" role="list">${gallery.map(card => `<div role="listitem">${clueCardMarkup(card)}</div>`).join('')}</div>${hexCards.length ? `<div class="clue-card-hex">${hexCards.join('')}</div>` : ''}`;
+    }
   } else if (kind === 'clues' && clueTab === 'characters') {
     title = '手がかり';
-    content = expandedCharacter === null
-      ? `<div class="character-grid">${Array.from({ length: 4 }, (_, index) => `<button class="character-tile" data-action="character-open" data-index="${index}" aria-label="キャラ情報 ${index + 1}を拡大"></button>`).join('')}</div>`
-      : `<div class="character-expanded" data-action="character-dismiss"><div class="clue-carousel" tabindex="0" role="region" aria-label="キャラ情報。横スクロールまたは左右キーで切り替え">${Array.from({ length: 4 }, (_, index) => `<article class="clue-gallery-card" aria-label="キャラ情報 ${index + 1}"${index === expandedCharacter ? ' aria-current="true"' : ''}></article>`).join('')}</div><p class="clue-gallery-position" role="status">${expandedCharacter + 1} / 4</p></div>`;
+    const people = scenario.characterCards ?? [];
+    const index = Math.max(0, Math.min(people.length - 1, expandedCharacter ?? 0));
+    content = `<div class="clue-card-expanded character-sheet"><div class="clue-carousel" tabindex="0" role="region" aria-label="キャラ情報。横スクロールで切り替え">${people.map((card, i) => cluePhotoCardMarkup(card, { current: i === index })).join('')}</div></div>`;
+  } else if (kind === 'clues' && combinePicker) {
+    title = '手がかり';
+    const catalog = allPlayCards();
+    const remaining = 2 - combineSelection.length;
+    content = `<div class="combine-picker"><button type="button" class="icon-button combine-picker-close" data-action="combine-picker-close" aria-label="合成に戻る">${icon('close')}</button><div class="clue-card-grid" role="list">${catalog.map(card => {
+      const selected = combineSelection.includes(card.id);
+      const label = selected ? `${card.title}を入れ替える` : `${card.title}（手がかり番号 ${card.number}）`;
+      return `<div role="listitem"><button type="button" class="clue-card-tile" data-action="combine-toggle" data-id="${esc(card.id)}" aria-pressed="${selected}" aria-label="${esc(label)}"><span class="clue-card-thumb"><img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span><span class="clue-card-meta"><strong>${esc(card.title)}</strong><small>No.${esc(card.number)}</small></span></button></div>`;
+    }).join('')}</div><button type="button" class="answer-fab" data-action="combine-confirm" ${remaining === 0 ? '' : 'disabled'}>${icon('edit')}<span>${remaining === 0 ? '次へ' : `あと${remaining}枚`}</span></button></div>`;
   } else if (kind === 'clues') {
     title = '手がかり';
-    const cards = unlockedCards(scenario, state);
-    content = `<p class="panel-intro">集めた手がかりを2枚選んで、組み合わせてみましょう。</p><form id="combine-form"><div class="card-grid">${cards.map(c => `<label class="evidence-card"><input type="checkbox" name="card" value="${esc(c.id)}"><span class="card-code">${esc(c.id)}</span><span class="card-mark">${esc(c.mark)}</span><strong>${esc(c.title)}</strong><span class="card-copy">${esc(c.text)}</span></label>`).join('') || '<div class="empty-state">問題に正解すると、ここに<br>手がかりが届きます。</div>'}</div>${cards.length >= 2 ? '<button class="primary-button full" type="submit">2枚の手がかりを組み合わせる</button>' : ''}</form><div id="combine-feedback" role="status"></div><div class="findings">${scenario.combinations.filter(c => state.combinations.includes(c.id)).map(c => `<section class="finding" data-finding-id="${esc(c.id)}"><span class="eyebrow">DISCOVERY · ${esc(c.cards.join(' + '))}</span><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></section>`).join('')}</div>`;
+    const slot = index => {
+      const card = allPlayCards().find(item => item.id === combineSelection[index]);
+      const inner = card
+        ? `<img src="${esc(card.image)}" alt=""><span class="clue-card-meta"><strong>${esc(card.title)}</strong><small>No.${esc(card.number)}</small></span>`
+        : '<span class="combine-slot-empty"><span aria-hidden="true">＋</span><small>カードを選ぶ</small></span>';
+      return `<button type="button" class="combine-slot" data-action="combine-pick" data-filled="${Boolean(card)}" aria-label="${card ? `${card.title}を変更` : `${index === 0 ? '左' : '右'}のカードを選ぶ`}">${inner}</button>`;
+    };
+    content = `<div class="combine-stage" role="group" aria-label="組み合わせる2枚">${slot(0)}${slot(1)}</div><p id="combine-feedback" class="combine-feedback" role="status"></p><div class="findings">${scenario.combinations.filter(c => state.combinations.includes(c.id)).map(c => `<section class="finding" data-finding-id="${esc(c.id)}"><span class="eyebrow">DISCOVERY · ${esc(c.cards.join(' + '))}</span><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></section>`).join('')}</div>`;
   } else if (kind === 'save-info') {
     const record = playSaves.getRecord();
     const status = playSaves.getStatus();
@@ -1952,13 +2212,13 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   }
   const clueTabs = [['cards', 'カード'], ['characters', 'キャラ情報'], ['combine', '合成']];
   panel.innerHTML = kind === 'clues'
-    ? `${secondaryScreenHeader('close')}<div class="clue-screen-content"><div class="clue-tabs" role="tablist" aria-label="手がかりの表示">${clueTabs.map(([id, label]) => `<button id="clue-tab-${id}" role="tab" data-action="clue-tab" data-tab="${id}" aria-selected="${clueTab === id}" aria-controls="clue-tab-content" tabindex="${clueTab === id ? 0 : -1}">${label}</button>`).join('')}</div><div id="clue-tab-content" class="panel-body" role="tabpanel" aria-labelledby="clue-tab-${clueTab}">${content}</div></div>`
+    ? `${secondaryScreenHeader('close', { showHint: false })}<div class="clue-screen-content${combineSelecting && !combinePicker && clueTab !== 'combine' ? ' is-combine-selecting' : ''}"><div class="clue-tabs" role="tablist" aria-label="手がかりの表示">${clueTabs.map(([id, label]) => `<button id="clue-tab-${id}" role="tab" data-action="clue-tab" data-tab="${id}" aria-selected="${clueTab === id}" aria-controls="clue-tab-content" tabindex="${clueTab === id ? 0 : -1}">${label}</button>`).join('')}</div><div id="clue-tab-content" class="panel-body" role="tabpanel" aria-labelledby="clue-tab-${clueTab}">${content}</div>${combineSelectBarMarkup()}</div>`
     : pageTurnDialog ? content
     : ['answer-choices', 'symbol-choices'].includes(kind)
     ? `<div class="answer-choice-header"><h2 id="panel-title">${title}</h2><button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button></div>${content}`
     : isImagePanel
     ? `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button image-viewer-close" data-action="close" aria-label="${imageLabel}を閉じる">${icon('close')}</button><div class="image-viewer-stage" tabindex="0" aria-label="${imageLabel}。ピンチまたはプラス・マイナスで拡大縮小。拡大中はドラッグで移動できます。">${content}</div><div class="image-zoom-controls" role="group" aria-label="画像の拡大縮小"><button data-action="image-zoom-out" aria-label="画像を縮小">−</button><button data-action="image-zoom-reset" aria-label="画像の倍率をリセット"><span data-zoom-label>100%</span></button><button data-action="image-zoom-in" aria-label="画像を拡大">＋</button></div>${kind === 'puzzle-image' ? puzzlePagesMarkup(p) : ''}`
-    : `<div class="panel-header"><div><h2 id="panel-title"${saveInfo ? ' tabindex="-1"' : ''}>${title}</h2></div>${saveInfo || kind === 'start-answer' ? '' : `<button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button>`}</div><div class="panel-body">${content}</div>`;
+    : `<div class="panel-header"><div><h2 id="panel-title"${saveInfo ? ' tabindex="-1"' : ''}>${title}</h2></div><button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button></div><div class="panel-body">${content}</div>`;
   const draggableSheet = !isImagePanel && !pageTurnDialog && !['start-answer', 'answer-choices', 'symbol-choices', 'clues', 'hex-cube'].includes(kind);
   panel.classList.toggle('draggable-sheet', draggableSheet);
   if (draggableSheet) {
@@ -1979,10 +2239,16 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     });
     imageViewer?.revealFrom(imageOrigin);
   }
-  if (kind === 'hex-cube') miniView=mountHexCube(panel.querySelector('#hex-cube-host'),{onComplete:finishHexCube,onFailure:recordHexFailure,canInteract:()=>!gateVisible&&!miniSaving&&playSaves.getStatus().phase!=='conflict'});
+  if (kind === 'hex-cube') {
+    if (!resolvedMountHexCube) throw new Error('六角形の装置を読み込めていません。');
+    miniView=resolvedMountHexCube(panel.querySelector('#hex-cube-host'),{onComplete:finishHexCube,onFailure:recordHexFailure,canInteract:()=>!gateVisible&&!miniSaving&&playSaves.getStatus().phase!=='conflict'});
+  }
   if (kind === 'hints') bindHintReader(p);
   if (kind === 'hex-cube') bindHintReader(scenario.minigames.find(game => game.id === 'hex-cube'));
-  if (kind === 'clues') bindClueCarousel(expandedCharacter ?? 0);
+  if (kind === 'clues' && clueTab === 'cards' && expandedClueId && panel.querySelector('.clue-carousel')) {
+    bindClueCarousel(Math.max(0, clueGalleryItems().findIndex(card => card.id === expandedClueId)));
+  } else if (kind === 'clues' && clueTab === 'characters' && panel.querySelector('.clue-carousel')) bindClueCarousel(Math.max(0, expandedCharacter ?? 0));
+  if (kind === 'clues' && ['cards', 'characters'].includes(clueTab) && !combinePicker) bindCombineCardGestures();
   viewportLayout.schedule();
   if (kind === 'clues') {
     if (revealSelector) animateSurface(panel.querySelector(revealSelector), true, 8);
@@ -2199,9 +2465,9 @@ document.addEventListener('click', event => {
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
   if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'close-composer', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'yoi-next', 'continue-at-venue', 'continue-online', 'history', 'history-back', 'hints', 'clues'].includes(action)) haptics.trigger();
-  if (action === 'hex-open') {openHexCube();return;}
+  if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
   if (action === 'hex-save-retry') {if(!miniSaving){miniSaving=true;void confirmHexReward().finally(()=>{miniSaving=false;});}return;}
-  if (action === 'hex-card') {clueTab='cards';expandedCharacter=null;openPanel('clues');bindClueCarousel(4);return;}
+  if (action === 'hex-card') {clueTab='cards';expandedCharacter=null;expandedClueId=null;clearCombineSelecting();openPanel('clues');return;}
   if (action === 'toggle-haptics') {
     haptics.setEnabled(!haptics.enabled);
     button.setAttribute('aria-pressed', String(haptics.enabled));
@@ -2400,6 +2666,7 @@ document.addEventListener('click', event => {
     if (!Number.isInteger(index) || index < 0 || index > 3) return;
     const sourceRect = button.getBoundingClientRect?.();
     expandedCharacter = index;
+    expandedClueId = null;
     haptics.trigger();
     openPanel('clues');
     panel.querySelector('.clue-carousel')?.focus({ preventScroll: true });
@@ -2408,11 +2675,86 @@ document.addEventListener('click', event => {
   else if (action === 'character-dismiss' && !event.target.closest('.clue-gallery-card')) {
     closeCharacterPreview();
   }
+  else if (action === 'clue-card-open' && clueTab === 'cards') {
+    if (suppressCombineClick) {
+      suppressCombineClick = false;
+      return;
+    }
+    if (combineSelecting) {
+      if (!toggleCombineCard(button.dataset.id)) return;
+      haptics.trigger();
+      openPanel('clues', { keepFocus: true });
+      return;
+    }
+    const card = clueGalleryItems().find(item => item.id === button.dataset.id);
+    if (!card) return;
+    expandedClueId = card.id;
+    expandedCharacter = null;
+    haptics.trigger();
+    openPanel('clues');
+    panel.querySelector('[data-action="clue-card-close"]')?.focus({ preventScroll: true });
+  }
+  else if (action === 'clue-card-close' && clueTab === 'cards') {
+    haptics.trigger();
+    closeClueCardPreview();
+  }
   else if (action === 'clue-tab' && ['cards', 'characters', 'combine'].includes(button.dataset.tab)) {
     switchClueTab(button.dataset.tab);
   }
+  else if (action === 'combine-pick' && clueTab === 'combine') {
+    combinePicker = true;
+    combineReplaceAt = null;
+    haptics.trigger();
+    openPanel('clues');
+  }
+  else if (action === 'combine-picker-close' && combinePicker) {
+    combinePicker = false;
+    combineReplaceAt = null;
+    haptics.trigger();
+    openPanel('clues');
+  }
+  else if (action === 'combine-toggle' && combinePicker) {
+    const id = button.dataset.id;
+    if (!allPlayCards().some(card => card.id === id)) return;
+    haptics.trigger();
+    const index = combineSelection.indexOf(id);
+    if (index >= 0) {
+      combineReplaceAt = index;
+      combineSelection = combineSelection.filter((_, itemIndex) => itemIndex !== index);
+    } else if (combineSelection.length < 2) {
+      const next = [...combineSelection];
+      const at = combineReplaceAt == null ? next.length : Math.min(combineReplaceAt, next.length);
+      next.splice(at, 0, id);
+      combineSelection = next;
+      combineReplaceAt = null;
+    }
+    openPanel('clues', { keepFocus: true });
+  }
+  else if (action === 'combine-confirm' && combinePicker && combineSelection.length === 2) {
+    combinePicker = false;
+    combineReplaceAt = null;
+    combineSelecting = false;
+    openPanel('clues');
+    applyCombineResult(combineSelection);
+  }
+  else if (action === 'combine-select-run' && combineSelecting && combineSelection.length === 2) {
+    combineSelecting = false;
+    combinePicker = false;
+    combineReplaceAt = null;
+    expandedClueId = null;
+    expandedCharacter = null;
+    clueTab = 'combine';
+    openPanel('clues');
+    applyCombineResult(combineSelection);
+  }
   else if (['hints', 'clues', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'answer-choices'].includes(action)) {
-    if (action === 'clues') { clueTab = 'cards'; expandedCharacter = null; }
+    if (action === 'clues') {
+      clueTab = 'cards';
+      expandedCharacter = null;
+      expandedClueId = null;
+      combinePicker = false;
+      clearCombineSelecting();
+    }
     openPanel(action);
   }
   else if (action === 'close') closePanel();

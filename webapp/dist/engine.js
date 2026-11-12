@@ -6,8 +6,16 @@ export function normalizeAnswer(value) {
 
 export function checkAnswer(problem, answer) {
   if (problem.type === 'pending') return false;
-  if (problem.type === 'fields') return Array.isArray(answer) && answer.length === problem.fields.length
-    && problem.fields.every((field, index) => typeof answer[index] === 'string' && field.answers.some(item => normalizeAnswer(item) === normalizeAnswer(answer[index])));
+  if (problem.type === 'fields') {
+    if (!Array.isArray(answer) || answer.length !== problem.fields.length
+      || answer.some(value => typeof value !== 'string')) return false;
+    // 組み合わせ単位の正解がある場合は、欄ごとの候補の直積ではなく組だけを認める。
+    if (Array.isArray(problem.answerCombos)) {
+      return problem.answerCombos.some(combo => Array.isArray(combo) && combo.length === answer.length
+        && combo.every((item, index) => normalizeAnswer(item) === normalizeAnswer(answer[index])));
+    }
+    return problem.fields.every((field, index) => field.answers.some(item => normalizeAnswer(item) === normalizeAnswer(answer[index])));
+  }
   if (problem.type === 'text') return problem.answers.some(item => normalizeAnswer(item) === normalizeAnswer(answer));
   if (!Array.isArray(answer)) return false;
   const selected = new Set(answer);

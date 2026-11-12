@@ -68,8 +68,9 @@ test('11月の救祭の既存保存APIでカード取得を保存し6桁番号�
     const response=await handlePlaySave(new Request('https://example.test/api/play-saves',{method:'POST',headers:{Origin:'https://example.test','Content-Type':'application/json','CF-Connecting-IP':'127.0.0.1'},body:JSON.stringify({scenarioId:scenario.id,...body})}),env);
     const result=await response.json();assert.equal(response.status,200,JSON.stringify(result));return result;
   };
-  const created=await request({action:'create',creationId:crypto.randomUUID(),state:initialState(scenario),view});
-  const cleared=completeMinigame(scenario,created.state,'hex-cube',solution).state;
+  const start=initialState(scenario);
+  const created=await request({action:'create',creationId:crypto.randomUUID(),state:start,view});
+  const cleared=completeMinigame(scenario,start,'hex-cube',solution).state;
   const saved=await request({action:'save',code:created.code,revision:created.revision,state:cleared,view});
   const loaded=await request({action:'load',code:created.code});assert.equal(loaded.revision,saved.revision);
   const state=restoreState(scenario,JSON.stringify(loaded.state));assert.deepEqual(state.minigames,['hex-cube']);assert.equal(unlockedCards(scenario,state).filter(card=>card.id==='hex-cube-note').length,1);

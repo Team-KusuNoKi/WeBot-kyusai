@@ -40,8 +40,14 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
     sceneStart = sourceState.messages.slice(0, oldStart).filter(m => !m.problemId || rename(m.problemId)).length;
   }
   const scene = state.messages.slice(sceneStart).filter(m => m.problemId === p.id && isConversationLine(m));
-  const displayedMessages = resumeDialogue ? [] : Array.isArray(raw.displayedMessages)
-    ? raw.displayedMessages.filter(m => !m?.problemId || rename(m.problemId)).map(m => m && m.problemId ? { ...m, problemId: rename(m.problemId) } : m).filter(validMessage).filter(isConversationLine).filter(m => p.conversationBackground !== 'empty' || m.problemId === p.id).filter(m => !m.problemId || scenario.problems.find(item => item.id === m.problemId)?.chapter === p.chapter).slice(0, 2000) : [];
+  let displayedMessages = [];
+  if (resumeDialogue) displayedMessages = [];
+  else if (Number.isInteger(raw.displayedCount) && raw.displayedCount >= 0) {
+    // 新形式: 表示件数だけを保存し、本文は state.messages から復元する。
+    displayedMessages = scene.slice(0, Math.min(raw.displayedCount, scene.length, 2000));
+  } else if (Array.isArray(raw.displayedMessages)) {
+    displayedMessages = raw.displayedMessages.filter(m => !m?.problemId || rename(m.problemId)).map(m => m && m.problemId ? { ...m, problemId: rename(m.problemId) } : m).filter(validMessage).filter(isConversationLine).filter(m => p.conversationBackground !== 'empty' || m.problemId === p.id).filter(m => !m.problemId || scenario.problems.find(item => item.id === m.problemId)?.chapter === p.chapter).slice(0, 2000);
+  }
   const answerDrafts = restoreAnswerDrafts(scenario, raw.answerDrafts, sourceRevision, sourceState?.version);
   const origin = raw.answerOrigin;
   const problemId = origin && rename(origin.problemId);
@@ -79,8 +85,13 @@ export function pendingConversation(state, view) {
   const scene = state.messages.slice(view.sceneStart).filter(m => m.problemId === state.selected && isConversationLine(m));
   // 表示済みの件数を超えて、次の会話へ飛ばさない。
   let shown = 0;
-  while (shown < view.displayedMessages.length && shown < scene.length
-    && scene[shown].text === view.displayedMessages[shown].text && scene[shown].speaker === view.displayedMessages[shown].speaker) shown++;
+  if (Number.isInteger(view.displayedCount) && view.displayedCount >= 0 && !view.displayedMessages?.length) {
+    shown = Math.min(view.displayedCount, scene.length);
+  } else {
+    const displayed = view.displayedMessages ?? [];
+    while (shown < displayed.length && shown < scene.length
+      && scene[shown].text === displayed[shown].text && scene[shown].speaker === displayed[shown].speaker) shown++;
+  }
   return scene.slice(shown);
 }
 

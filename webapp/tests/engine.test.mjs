@@ -222,6 +222,8 @@ test('Q1は17:20～17:40のみ正解で会話を追加せずQ1.1へ進み、Q1.1
   assert.deepEqual(second.state.solved, ['Q1', 'Q1.1']);
   const dialogue = second.state.messages.filter(m => m.problemId === 'Q1.1' && m.kind === 'dialogue');
   assert.deepEqual(dialogue.map(m => m.speaker), ['タツ', 'マヤ', 'マヤ', 'タツ', '']);
+  assert.ok(dialogue[0].text.includes('女子高生たちの証言によると、17時半に入館した子はミサメを目撃している'));
+  assert.ok(dialogue[0].text.includes('犯行時刻は、17:20～17:40だろう'));
   assert.equal(dialogue.at(-1).text, '指示：冊子の次のページをめくろう');
   assert.equal(dialogue.at(-1).emphasis, true);
 });
@@ -472,17 +474,22 @@ test('Q5は16:30とカード番号203が揃った場合だけ正解し、会話�
   assert.equal(submitAnswer(scenario, result.state, ['16:30', card]).status, 'already-solved');
 });
 
-test('Q7はDと302の両方で正解し、前問の記録と推理・会場案内を保存する', () => {
+test('Q7はA+203またはD+302の組で正解し、前問の記録と推理・会場案内を保存する', () => {
   const problem = scenario.problems.find(p => p.id === 'Q7');
+  assert.equal(problem.prompt, '矛盾があるブロックを全て指摘せよ');
+  assert.deepEqual(problem.answerCombos, [['A', '203'], ['D', '302']]);
   const start = restoreState(scenario, JSON.stringify({ ...initialState(scenario), selected: 'Q6.2', solved: scenario.problems.slice(0, scenario.problems.indexOf(problem)).map(p => p.id) }));
   const state = { ...start, selected: 'Q7' };
   assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['D', '302']).status, 'correct');
-  for (const answer of [['C', '302'], ['D', '003'], ['302', 'D'], ['D', '302', '余分'], ['D', ''], ['', '302'], ['D'], 'D&302']) {
+  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['A', '203']).status, 'correct');
+  for (const answer of [['C', '302'], ['D', '003'], ['A', '302'], ['D', '203'], ['302', 'D'], ['D', '302', '余分'], ['D', ''], ['', '302'], ['D'], 'D&302']) {
     const result = submitAnswer(scenario, state, answer);
     assert.notEqual(result.status, 'correct');
     assert.equal(result.state, state);
   }
-  for (const answer of [['D', '302'], [' d ', '３０２'], ['Ｄ', '302']]) assert.equal(checkAnswer(problem, answer), true);
+  for (const answer of [['D', '302'], [' d ', '３０２'], ['Ｄ', '302'], ['A', '203'], [' ａ ', '２０３'], ['Ａ', '203']]) {
+    assert.equal(checkAnswer(problem, answer), true);
+  }
   const result = submitAnswer(scenario, state, ['Ｄ', '３０２']);
   assert.equal(result.status, 'correct');
   assert.deepEqual(result.state.solved, [...start.solved, 'Q7']);

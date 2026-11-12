@@ -101,6 +101,8 @@ function validatePayload(body, env) {
     if (body.code !== undefined) invalid();
   } else if (typeof body.code !== 'string' || !/^\d{6}$/.test(body.code)) invalid('再開番号は数字6桁で入力してください。');
   if (['save', 'delete'].includes(body.action) && (!Number.isSafeInteger(body.revision) || body.revision < 1)) invalid();
+  if (body.action === 'load' && body.sinceRevision !== undefined
+    && (!Number.isSafeInteger(body.sinceRevision) || body.sinceRevision < 0)) invalid();
   if (['create', 'save'].includes(body.action)) validateProgress(body.state, body.view);
 }
 
@@ -180,7 +182,7 @@ async function createSave(db, body, sign, now, ipKey) {
       (scenario_id, code_hash, creation_hash, allocation_nonce, state_json, view_json, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`)
       .bind(body.scenarioId, codeHash, creationHash, nonce, JSON.stringify(body.state), JSON.stringify(body.view), timestamp, timestamp).run();
-    if (result.meta.changes) return { code, revision: 1, updatedAt: timestamp, state: body.state, view: body.view };
+    if (result.meta.changes) return { code, revision: 1, updatedAt: timestamp };
     // Also handles another request committing the same creationId concurrently.
     const winner = await db.prepare('SELECT * FROM play_saves WHERE scenario_id = ? AND creation_hash = ?')
       .bind(body.scenarioId, creationHash).first();
@@ -205,11 +207,19 @@ async function accessSave(db, body, sign, now, ipKey) {
     if (attempts >= max) rateLimited(rate.retryAfter);
     notFound();
   }
-  if (body.action === 'load') return envelope(row, body.code);
+  if (body.action === 'load') {
+    // 端末の revision と一致するときは進行本文を返さず、再開時の下りを小さくする。
+    if (Number.isSafeInteger(body.sinceRevision) && body.sinceRevision === row.revision) {
+      return { code: body.code, revision: row.revision, updatedAt: row.updated_at, unchanged: true };
+    }
+    return envelope(row, body.code);
+  }
   // A lost successful save response may be retried. Only an exactly equal snapshot can be acknowledged.
   const stateJson = body.action === 'save' ? JSON.stringify(body.state) : null;
   const viewJson = body.action === 'save' ? JSON.stringify(body.view) : null;
-  if (body.action === 'save' && body.revision < row.revision && row.state_json === stateJson && row.view_json === viewJson) return envelope(row, body.code);
+  if (body.action === 'save' && body.revision < row.revision && row.state_json === stateJson && row.view_json === viewJson) {
+    return { code: body.code, revision: row.revision, updatedAt: row.updated_at };
+  }
   if (body.revision !== row.revision) throw new ApiError(409, 'conflict', '別の端末で進行が更新されています。', { remote: envelope(row, body.code) });
   const timestamp = new Date(now).toISOString();
   const result = body.action === 'delete'
@@ -223,11 +233,13 @@ async function accessSave(db, body, sign, now, ipKey) {
     row = await db.prepare('SELECT * FROM play_saves WHERE scenario_id = ? AND code_hash = ?').bind(body.scenarioId, codeHash).first();
     if (deletedRetry(row, body)) return deletedEnvelope(row, body.code);
     if (!activeRow(row)) notFound();
-    if (body.action === 'save' && row.state_json === stateJson && row.view_json === viewJson) return envelope(row, body.code);
+    if (body.action === 'save' && row.state_json === stateJson && row.view_json === viewJson) {
+      return { code: body.code, revision: row.revision, updatedAt: row.updated_at };
+    }
     throw new ApiError(409, 'conflict', '別の端末で進行が更新されています。', { remote: envelope(row, body.code) });
   }
   if (body.action === 'delete') return { code: body.code, revision: body.revision + 1, updatedAt: timestamp, deleted: true };
-  return { code: body.code, revision: body.revision + 1, updatedAt: timestamp, state: body.state, view: body.view };
+  return { code: body.code, revision: body.revision + 1, updatedAt: timestamp };
 }
 
 export async function handlePlaySave(request, env, { now = () => Date.now() } = {}) {

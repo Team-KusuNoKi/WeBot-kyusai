@@ -14,31 +14,25 @@ dialog.hex-success {
   scrollbar-gutter: auto;
 }
 .hex-success[open] { display: grid; place-items: center; }
-.hex-success::backdrop { background: rgba(19, 37, 41, .66); }
+.hex-success::backdrop { background: #20202080; }
 .hex-confetti { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .hex-confetti i { position: absolute; top: 68%; border-radius: 1px; }
 .hex-success-card {
   position: relative;
   width: min(288px, 100%);
   padding: 32px 24px 24px;
-  border: 1px solid #d8c390;
+  border: 1px solid var(--accent-soft);
   border-radius: 18px;
-  background: #fffaf0;
-  color: #203b39;
+  background: var(--white);
+  color: var(--ink);
   text-align: center;
-  box-shadow: 0 8px 36px #15232230;
+  box-shadow: 0 8px 36px #20202026;
 }
-.hex-success-card h2 { margin: 0 0 22px; font-size: 36px; line-height: 1.25; }
-.hex-success-card button {
-  min-height: 44px;
-  min-width: 132px;
-  padding: 10px 24px;
-  border: 0;
-  border-radius: 11px;
-  background: #203b39;
-  color: white;
-  font: inherit;
-  cursor: pointer;
+.hex-success-card h2 {
+  margin: 0 0 22px;
+  font: 32px var(--serif);
+  letter-spacing: .06em;
+  line-height: 1.25;
 }
-.hex-success-card button:focus-visible { outline: 3px solid #a7712a; outline-offset: 3px; }
+.hex-success-card .primary-button { margin: 0 auto; min-width: 132px; }
 @media (prefers-reduced-motion: reduce) { .hex-confetti { display: none; } }

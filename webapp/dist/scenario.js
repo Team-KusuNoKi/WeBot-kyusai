@@ -23,7 +23,6 @@ const destinationChoices = [
 ];
 const n4Visuals = {
   answerLayout: 'compact',
-  image: '../assets/n4-original.jpg',
   diagram: '../assets/n4-diagram.svg',
   diagramAlt: '上から見た図への変換例と方位記号、数字と黒い線を配置した格子の図。',
   cardHeading: '次の場所へ行け',
@@ -33,8 +32,10 @@ const n4Visuals = {
     { src: '../assets/n4-map.jpg', alt: 'N4の資料3。吉田南構内の地図。建物番号84〜97と、赤い①〜⑤の位置を表示。' },
   ],
 };
-function routePhoto(image, preview, title, directions) {
-  return { title, directions, image, preview, imageAlt: directions };
+function routePhoto(id, title, directions) {
+  // 一覧は軽量 preview、拡大は同系統の WebP（JPEG 原寸は配信しない）。
+  const base = `../assets/travel/${id}`;
+  return { title, directions, image: `${base}.webp`, preview: `${base}.preview.webp`, imageAlt: directions };
 }
 
 const finalAnswerParts = [
@@ -59,10 +60,10 @@ export const scenario = {
   troubleGuide: {
     destination: 'N5の現地資料',
     steps: [
-      routePhoto('../assets/travel/24.jpeg', '../assets/travel/24.webp', '左上', '案内板の写真。'),
-      routePhoto('../assets/travel/25.jpeg', '../assets/travel/25.webp', '右上', '石碑に貼られた紙の写真。'),
-      routePhoto('../assets/travel/26.jpeg', '../assets/travel/26.webp', '右下', '建物前の外灯の写真。'),
-      routePhoto('../assets/travel/27.jpeg', '../assets/travel/27.webp', '左下', '石碑に刻まれた文章の写真。'),
+      routePhoto('24', '左上', '案内板の写真。'),
+      routePhoto('25', '右上', '石碑に貼られた紙の写真。'),
+      routePhoto('26', '右下', '建物前の外灯の写真。'),
+      routePhoto('27', '左下', '石碑に刻まれた文章の写真。'),
     ],
   },
   venueGuide: {
@@ -72,7 +73,7 @@ export const scenario = {
       { title: '会場へ向かう', directions: 'ここに会場までの道順が入ります。' },
       { title: '目印を確認する', directions: 'ここに途中の目印と会場入口の案内が入ります。' },
       { title: '会場に着いたら', directions: '会場で印刷した資料を受け取ったら、下の「推理パートの進め方」をお読みください。' },
-    ].map(step => ({ ...step, image: '../assets/travel-placeholder.jpg', preview: '../assets/travel-placeholder.webp', imageAlt: '仮写真：京都大学の時計台。' })),
+    ].map(step => ({ ...step, image: '../assets/travel-placeholder.webp', preview: '../assets/travel-placeholder.webp', imageAlt: '仮写真：京都大学の時計台。' })),
   },
   investigation: {
     id: 'Q3', entries: ['Q3.2', 'Q3', 'Q3.3'],
@@ -100,7 +101,6 @@ export const scenario = {
       id: 'N1', title: '問題1', chapter: '第一章', type: 'single',
       answerLayout: 'compact',
       prompt: '冊子の問題1の答えを、①〜⑩からひとつ選んでください。',
-      image: '../assets/n1-original.jpg',
       imageAlt: 'N1の問題原本。仏像はどこにいる？ 答えの数字をA1の？に入れよ。A1. 総合研究？号館へ行け。',
       diagram: '../assets/n1-diagram.svg',
       diagramAlt: '赤・白・青の3つの円に①〜⑩、太陽、E、稲穂を配置した図。',
@@ -121,10 +121,10 @@ export const scenario = {
       travelGuide: {
         destination: '総合研究10号館',
         steps: [
-          routePhoto('../assets/travel/02.jpeg', '../assets/travel/02.webp', '右へ曲がる', '駐輪場の先で、並木に沿って右へ曲がってください。'),
-          routePhoto('../assets/travel/03.jpeg', '../assets/travel/03.webp', '通路を直進', '建物の間の通路をまっすぐ進んでください。'),
-          routePhoto('../assets/travel/04.jpeg', '../assets/travel/04.webp', '道路を渡る', '道路を渡り、写真の矢印に沿って右へ曲がってください。'),
-          routePhoto('../assets/travel/05.jpeg', '../assets/travel/05.webp', 'N2の掲示', '総合研究10号館の入口階段の手前にある柵で「N2」を探してください。'),
+          routePhoto('02', '右へ曲がる', '駐輪場の先で、並木に沿って右へ曲がってください。'),
+          routePhoto('03', '通路を直進', '建物の間の通路をまっすぐ進んでください。'),
+          routePhoto('04', '道路を渡る', '道路を渡り、写真の矢印に沿って右へ曲がってください。'),
+          routePhoto('05', 'N2の掲示', '総合研究10号館の入口階段の手前にある柵で「N2」を探してください。'),
         ],
       },
       dialogue: [
@@ -148,7 +148,6 @@ export const scenario = {
       answerLayout: 'compact',
       answerChoices: destinationChoices,
       prompt: '京都大学新聞を読み、新聞の指し示す場所へ向かえ。',
-      image: '../assets/n2-original.jpg',
       imageAlt: 'N2の問題原本。「次の場所へ行け」。京都大学新聞11月号の、今月のスローガンと今月の寄稿「門出」が掲載された紙面。',
       diagram: '../assets/n2-newspaper.svg',
       diagramAlt: '京都大学新聞11月号。今月のスローガンと寄稿「門出」の紙面。',
@@ -165,11 +164,11 @@ export const scenario = {
       travelGuide: {
         destination: '法経済学部北館',
         steps: [
-          routePhoto('../assets/travel/07.jpeg', '../assets/travel/07.webp', '角を右へ', '建物の角で、木の手前を右へ曲がってください。'),
-          routePhoto('../assets/travel/08.jpeg', '../assets/travel/08.webp', '並木道を進む', '左手の建物に沿って、道なりに進んでください。'),
-          routePhoto('../assets/travel/09.jpeg', '../assets/travel/09.webp', '広い道を直進', '並木の続く道をまっすぐ進んでください。'),
-          routePhoto('../assets/travel/10.jpeg', '../assets/travel/10.webp', '自転車の手前を左へ', '正面の建物に着く前に、左手の通路へ曲がってください。'),
-          routePhoto('../assets/travel/11.jpeg', '../assets/travel/11.webp', 'N3の掲示', '法経済学部北館の、写真で赤く囲まれた入口脇で「N3」を探してください。'),
+          routePhoto('07', '角を右へ', '建物の角で、木の手前を右へ曲がってください。'),
+          routePhoto('08', '並木道を進む', '左手の建物に沿って、道なりに進んでください。'),
+          routePhoto('09', '広い道を直進', '並木の続く道をまっすぐ進んでください。'),
+          routePhoto('10', '自転車の手前を左へ', '正面の建物に着く前に、左手の通路へ曲がってください。'),
+          routePhoto('11', 'N3の掲示', '法経済学部北館の、写真で赤く囲まれた入口脇で「N3」を探してください。'),
         ],
       },
       dialogue: [
@@ -190,7 +189,6 @@ export const scenario = {
       id: 'N3', title: '問題3', chapter: '第一章', type: 'text',
       answerLayout: 'compact',
       prompt: '問題3の答えを漢字で入力してください。', placeholder: '漢字で入力…',
-      image: '../assets/n3-original.jpg',
       imageAlt: 'N3の問題原本。？に入る漢字は？ 答えの漢字をA3の？に入れよ。おみくじの巻物と、ひもで結ばれた札の図。A3. ？席同好会を探せ。',
       diagram: '../assets/n3-diagram.svg',
       diagramAlt: '大・空欄・中・小・？の巻物と、ひもに結ばれた大小2枚の札の図。',
@@ -207,13 +205,13 @@ export const scenario = {
         destination: '吉田南・総人広場の先にある掲示板',
         pageTurnText: '「末席同好会のチラシ」を見つけたら、次のページへ進もう。',
         steps: [
-          routePhoto('../assets/travel/13.jpeg', '../assets/travel/13.webp', '突き当たりを左へ', '駐輪場の間を進み、正面の建物の手前で左へ曲がってください。'),
-          routePhoto('../assets/travel/14.jpeg', '../assets/travel/14.webp', '並木道を直進', '左手に建物、右手に並木がある道をまっすぐ進んでください。'),
-          routePhoto('../assets/travel/15.jpeg', '../assets/travel/15.webp', '広場の手前を左へ', '自転車が並ぶ建物の角で左へ曲がってください。'),
-          routePhoto('../assets/travel/16.jpeg', '../assets/travel/16.webp', '広場を右寄りに進む', '写真右手の建物に沿って、矢印の方向へ進んでください。'),
-          routePhoto('../assets/travel/17.jpeg', '../assets/travel/17.webp', '横断歩道を渡る', '写真の横断歩道で道路を渡ってください。'),
-          routePhoto('../assets/travel/18.jpeg', '../assets/travel/18.webp', '広場を直進', '木々の間を通り、吉田南の総人広場を奥へ進んでください。'),
-          routePhoto('../assets/travel/19.jpeg', '../assets/travel/19.webp', '左右の掲示板', '写真で赤く囲まれた左右の掲示板から「末席同好会のチラシ」を探してください。'),
+          routePhoto('13', '突き当たりを左へ', '駐輪場の間を進み、正面の建物の手前で左へ曲がってください。'),
+          routePhoto('14', '並木道を直進', '左手に建物、右手に並木がある道をまっすぐ進んでください。'),
+          routePhoto('15', '広場の手前を左へ', '自転車が並ぶ建物の角で左へ曲がってください。'),
+          routePhoto('16', '広場を右寄りに進む', '写真右手の建物に沿って、矢印の方向へ進んでください。'),
+          routePhoto('17', '横断歩道を渡る', '写真の横断歩道で道路を渡ってください。'),
+          routePhoto('18', '広場を直進', '木々の間を通り、吉田南の総人広場を奥へ進んでください。'),
+          routePhoto('19', '左右の掲示板', '写真で赤く囲まれた左右の掲示板から「末席同好会のチラシ」を探してください。'),
         ],
       },
       dialogue: [
@@ -258,8 +256,8 @@ export const scenario = {
       travelGuide: {
         destination: '人間・環境学研究科棟・南西の角',
         steps: [
-          routePhoto('../assets/travel/21.jpeg', '../assets/travel/21.webp', '⑤の横を進む', '⑤の表示がある建物脇の通路を、矢印の方向へ進んでください。'),
-          routePhoto('../assets/travel/22.jpeg', '../assets/travel/22.webp', 'N5の掲示', '人間・環境学研究科棟の南西の角で、写真の赤丸の位置にある「N5」を探してください。'),
+          routePhoto('21', '⑤の横を進む', '⑤の表示がある建物脇の通路を、矢印の方向へ進んでください。'),
+          routePhoto('22', 'N5の掲示', '人間・環境学研究科棟の南西の角で、写真の赤丸の位置にある「N5」を探してください。'),
         ],
       },
       dialogue: [
@@ -279,7 +277,6 @@ export const scenario = {
       answerLayout: 'compact',
       answerChoices: destinationChoices,
       prompt: 'チラシが指し示す最期の場所はどこ？',
-      image: '../assets/n5-original.jpg',
       imageAlt: 'N5の問題原本。最期の場所へ行け。4つの地図断片、石碑の裏の文章、縦書きの詩と丸・矢印の図。',
       diagram: '../assets/n5-diagram.svg',
       diagramAlt: 'N5の図。4つの地図断片と、空欄を含む文章、丸と矢印。',
@@ -365,7 +362,7 @@ export const scenario = {
         '容疑者のプロフィールから、アリバイを確認してみよう。',
       ], explanation: '答えは「マヤ」です。',
       dialogue: [
-        { speaker: 'タツ', text: '「女子大生たちの証言によると、17:20に入館したAはミサメの死体を目撃しておらず、17:30に入館したBは目撃している。入館から鏡の間までは約10分かかるため、遺体が吊るされたのは17:30～17:40の間と考えられる。この時間帯にアリバイがなかったのは、トイレに行っていたというマヤだけだ」' },
+        { speaker: 'タツ', text: '「女子高生たちの証言によると、17時半に入館した子はミサメを目撃しているが、その10分前に入館した子はミサメを見ていないそうだ。鏡の間までは約10分かかるため、遺体が吊るされたのは17:30～17:40の間と考えられる。ミサメを襲った時間まで含めれば犯行時刻は、17:20～17:40だろう。この時間帯にアリバイがなかったのは、トイレに行っていたというマヤだけだ」' },
         { speaker: 'マヤ', text: '「はぁ何でトイレに行ってるだけで犯人扱いされなきゃいけないわけ !?」' },
         { speaker: 'マヤ', text: '「そもそも、物理的に無理だわ。だって私が鏡の間に行くまで、悪夢の間を通るのよ！あんなに明るい部屋を通ったらサダヲたちに見られるじゃない！出口の方から入ったりもしてないわよ！」' },
         { speaker: 'タツ', text: '（確かに…。時間的には可能でも物理的にはマヤには不可能だ。きっと何か根本的な見落としをしている…もっと調査を進めなければ…）' },
@@ -462,8 +459,8 @@ export const scenario = {
       listSymbol: '〇',
       listPrompt: '幽煙の間の北壁に貼られていた紙は今どこに？',
       conclusion: '幽煙の間にあった紙は、N6の問題用紙であり、答えは「かべおせ」だった。',
-      prompt: '幽煙の間の北壁に貼られていた紙は今どこに？紙があると考えられる場所を、手がかりカードの番号で答えよ',
-      placeholder: 'カードの3桁の番号を入力…', inputMode: 'numeric',
+      prompt: '幽煙の間の北壁に貼られていた紙は今どこに？紙があると考えられる場所を、手がかり番号で答えよ',
+      placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric',
       answers: ['102'], hints: [
         '「幽煙の間：北壁」によると、貼られていた紙からは「N」の文字が読み取れるようだ。今日一日、この文字を何度も見たような気がする。',
         '「N」は今日解いた謎の問題用紙にも書かれていたはずだ。だとすると、残りの部分は誰が剥がしたのだろうか。',
@@ -482,7 +479,6 @@ export const scenario = {
       displayId: 'N6',
       listSymbol: '〇',
       prompt: '通過順に並べよ', placeholder: '答えを入力…',
-      image: '../assets/n6-original.jpg',
       imageAlt: 'N6の問題原本。線を通過する順に並べよ。ヒント：赤、黄、青は今見た色。5つの空欄と、色の付いた文字の札。',
       diagram: '../assets/n6-diagram.svg',
       diagramAlt: 'N6の図。左に5つの空欄。右に黄色の「か・の・も」、緑色の「せ・お・べ」、赤紫色の「は・す・し」の札。',
@@ -516,14 +512,14 @@ export const scenario = {
       id: 'Q4', title: 'Q4', chapter: '第二章', type: 'fields',
       openAnswerOnEntry: false, conversationBackground: 'empty',
       answerFieldsLayout: 'row',
-      prompt: '「秘密裏に隠し部屋が造られていた」という事実から、非常に疑わしくなる人物がいる。それは誰か？証拠となる手がかりカードの番号と共に答えよ',
+      prompt: '「秘密裏に隠し部屋が造られていた」という事実から、非常に疑わしくなる人物がいる。それは誰か？証拠となる手がかり番号と共に答えよ',
       fields: [
         { label: '人物名', placeholder: '人物を選択…', answerChoices: personChoices, answers: ['マヤ'] },
-        { label: '手がかりカードの番号', placeholder: 'カードの3桁の番号を入力…', inputMode: 'numeric', answers: ['002'] },
+        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['002'] },
       ],
       hints: [
         'この隠し部屋のトリックには、事前に相当大がかりな準備が必要だろう。容疑者の中に、このような準備ができる人物はいなかっただろうか。',
-      ], explanation: '答えは「マヤ」と手がかりカード「002」です。',
+      ], explanation: '答えは「マヤ」と手がかり番号「002」です。',
       dialogue: [
         { speaker: 'タツ', text: '「秘密裏に隠し部屋が造られていた」この事実は揺るぎない。そういえば、マヤは連日夜遅くまで1人残ってお化け屋敷で作業をしていたそうじゃないか。この隠し部屋を作っていたのか？問いただしてみる価値はあるだろう。' },
         { speaker: '', text: '指示：冊子の次のページをめくろう', emphasis: true },
@@ -533,7 +529,7 @@ export const scenario = {
     {
       id: 'Q5', title: 'Q5', chapter: '第二章', type: 'fields',
       answerFieldsLayout: 'row',
-      prompt: 'ミサメがお化け屋敷に入場した時間は何時頃と考えられるか。選択肢から選び、証拠となる手がかりカードの番号と共に答えよ。',
+      prompt: 'ミサメがお化け屋敷に入場した時間は何時頃と考えられるか。選択肢から選び、証拠となる手がかり番号と共に答えよ。',
       fields: [
         {
           label: '入場した時間', placeholder: '時刻を選択…', answers: ['16:30'],
@@ -544,13 +540,13 @@ export const scenario = {
             { id: '17:30', label: '17:30' },
           ],
         },
-        { label: '手がかりカードの番号', placeholder: 'カードの3桁の番号を入力…', inputMode: 'numeric', answers: ['203'] },
+        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['203'] },
       ],
       hints: [
         'ミサメが入った時間を覚えている係員やスタッフはいなかったはずだ。ほかに、ミサメがお化け屋敷に入った時間を推測できる情報があるはずだ。',
         '犯人は、ミサメが隠し部屋に入ったタイミングを何らかの方法で知っていたに違いない。隠し部屋に何か細工がされていなかっただろうか。',
         'おそらく犯人は、鈴の音でミサメが隠し部屋に入ったタイミングを知ったのだろう。確か、あるスタッフがお化け屋敷の中で鈴の音を聞いたと言っていたはずだ。',
-      ], explanation: '答えは16:30と手がかりカード「203」（幽煙の間：スタッフの証言）です。',
+      ], explanation: '答えは16:30と手がかり番号「203」（幽煙の間：スタッフの証言）です。',
       dialogue: [
         { speaker: 'アサヒ', text: '「そうです。幽煙の間のスタッフは、16時40分頃に鈴の音を聞き、その直後に来場者の気配が消えたと証言しています。先輩が隠し部屋の入り口で聞いた鈴の音と一致します。つまり、ミサメ先輩は16時30分頃に入場し、10分ほどで幽煙の間に到達、そこで謎を解いて隠し部屋に入ったと考えられます。一般の来場者より注意深く周囲を観察していたため、通常より時間がかかったのでしょう。一方、その頃マヤは既に窃盗を終え、深紅の間にいたはずです。ミサメ先輩を殺害するには、隠し部屋に入った直後を狙う必要があります。隠し部屋を一通り調べれば、元の順路へ戻ってしまうはずですから」' },
         { speaker: '', text: '指示：冊子の次のページをめくろう', emphasis: true },
@@ -580,15 +576,15 @@ export const scenario = {
     {
       id: 'Q6.2', title: 'Q6.2', chapter: '第二章', type: 'fields',
       answerFieldsLayout: 'row',
-      prompt: '犯人は誰か？そして「血まみれの軍手」がなぜ犯人特定の決め手となるのか、関連する手がかりカード(「隠し部屋について」以外のカード)の番号を示して答えよ。',
+      prompt: '犯人は誰か？そして「血まみれの軍手」がなぜ犯人特定の決め手となるのか、関連する手がかり番号(「隠し部屋について」以外)を示して答えよ。',
       fields: [
         { label: '人物名', placeholder: '人物を選択…', answerChoices: personChoices, answers: ['ハナ'] },
-        { label: '手がかりカードの番号', placeholder: 'カードの3桁の番号を入力…', inputMode: 'numeric', answers: ['003'] },
+        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['003'] },
       ],
       hints: [
         '発見された軍手をよく見てみよう。何か特徴的な部分はないだろうか。',
         '軍手にはチューリップの刺繍がされている。確か、容疑者の中にチューリップと関係のある人物がいたはずだ。',
-      ], explanation: '答えは「ハナ」と手がかりカード「003」（ハナの人物カード）です。',
+      ], explanation: '答えは「ハナ」と手がかり番号「003」（ハナの人物カード）です。',
       dialogue: [
         { speaker: 'タツ', text: '現場に残されていた、血まみれの軍手にはチューリップの刺繍があった。そして、ハナは自分の持ち物にチューリップの刺繍を入れている。この軍手はハナのものに間違いない！！！犯人はハナだ！！！' },
         { speaker: '', text: '冊子の次のページをめくろう', emphasis: true },
@@ -598,16 +594,21 @@ export const scenario = {
     {
       id: 'Q7', title: 'Q7', chapter: '第二章', type: 'fields',
       answerFieldsLayout: 'row',
-      prompt: '矛盾のあるブロックとそれを裏付ける証拠(手がかりカード)を提示しろ！',
+      prompt: '矛盾があるブロックを全て指摘せよ',
+      // 組単位で判定し、回答欄は1組のままにして正解の個数を画面から隠す。
+      answerCombos: [
+        ['A', '203'],
+        ['D', '302'],
+      ],
       fields: [
-        { label: '矛盾のあるブロック', placeholder: 'ブロックを選択…', answerChoices: ['A', 'B', 'C', 'D'], answers: ['D'] },
-        { label: '手がかりカードの番号', placeholder: 'カードの3桁の番号を入力…', inputMode: 'numeric', answers: ['302'] },
+        { label: '矛盾のあるブロック', placeholder: 'ブロックを選択…', answerChoices: ['A', 'B', 'C', 'D'], answers: ['A', 'D'] },
+        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['203', '302'] },
       ],
       hints: [
         'ハナのプロフィールや評判をおさらいしてみよう。何か特徴的なものはないだろうか。',
         'もしハナが犯人だったとすると、これまでの謎解きや犯行のトリックは、すべてハナが考え、実行したことになる。ハナが犯人だといえる証拠はないか探ってみよう。',
         'そういえば、謎解きをしているときに違和感のある問題はなかっただろうか。例えば、ハナがその謎を作ったからこそ生まれた違和感が……。',
-      ], explanation: '答えはブロック「D」と手がかりカード「302」です。',
+      ], explanation: '答えはブロック「A」と手がかり番号「203」、およびブロック「D」と手がかり番号「302」です。',
       dialogue: [
         { speaker: 'タツ', text: '「ずっと違和感があったんだ。あのN6の問題……信号機が題材のはずなのに、配色がおかしい。信号機の赤・黄・青は、あんな色じゃない。そもそも普通の人間なら、『赤・黄・青』と言われて、あんなちぐはぐな配色にはしないはずだ。ハナの後輩の証言によれば、ハナは半年前の転倒事故以来、メイクの色合わせがおかしくなったらしい。服に合わないリップやチークを使うようになった、とも言っていた。……つまり、あの事故を境に、ハナの色彩感覚には何らかの変化が生じた可能性がある。そして、あのN6の奇妙な配色にも、その特徴が表れている。あの問題を作ったのは、ハナ。お前しかいない！！」' },
         { speaker: '', text: '冊子の次のページをめくろう', emphasis: true },
@@ -656,6 +657,43 @@ export const scenario = {
     { id: '404', title: '追加カード404', text: '手元の追加カード404を確認してください。', mark: '404' },
     { id: 'A1', title: '11月のしるし', text: 'タイトルに刻まれた、11という数字。', mark: '11' },
     { id: 'B1', title: '次の月', text: '11の次に続く数字は、12。', mark: '12' },
+  ],
+  // 手がかり画面のカード一覧（人物カードはキャラ情報タブ側）。image は app/ からの相対パス。
+  clueGallery: [
+    { id: 'clue-1', number: '100', title: 'アサヒの調査結果', image: '../assets/clue-cards/clue-1.webp' },
+    { id: 'clue-2', number: '101', title: '女子高生たちの会話', image: '../assets/clue-cards/clue-2.webp' },
+    { id: 'clue-3', number: '102', title: 'ミサメの遺体', image: '../assets/clue-cards/clue-3.webp' },
+    { id: 'clue-4', number: '103', title: 'お化け屋敷の地図', image: '../assets/clue-cards/clue-4.webp' },
+    { id: 'clue-5', number: '104', title: '「鏡の間」について', image: '../assets/clue-cards/clue-5.webp' },
+    { id: 'clue-6', number: '105', title: '鏡の間：鏡', image: '../assets/clue-cards/clue-6.webp' },
+    { id: 'clue-7', number: '106', title: '「悪夢の間」について', image: '../assets/clue-cards/clue-7.webp' },
+    { id: 'clue-8', number: '107', title: '悪夢の間：スタッフの話', image: '../assets/clue-cards/clue-8.webp' },
+    { id: 'clue-9', number: '108', title: '控室について', image: '../assets/clue-cards/clue-9.webp', puzzle: 'hex-cube' },
+    { id: 'clue-11', number: '109', title: '蝋人形の間：謎の紙', image: '../assets/clue-cards/clue-11.webp' },
+    { id: 'clue-10', number: '110', title: '嘆くスタッフ', image: '../assets/clue-cards/clue-10.webp' },
+    { id: 'clue-12', number: '200', title: '鏡の間：布', image: '../assets/clue-cards/clue-12.webp' },
+    { id: 'clue-13', number: '201', title: '「深紅の間」について', image: '../assets/clue-cards/clue-13.webp' },
+    { id: 'clue-14', number: '202', title: '「幽煙の間」について', image: '../assets/clue-cards/clue-14.webp' },
+    { id: 'clue-15', number: '203', title: '鈴の音', image: '../assets/clue-cards/clue-15.webp' },
+    { id: 'clue-16', number: '204', title: 'お化け屋敷の設計者', image: '../assets/clue-cards/clue-16.webp' },
+    { id: 'clue-17', number: '205', title: '深紅の間：トンカチ', image: '../assets/clue-cards/clue-17.webp' },
+    { id: 'clue-18', number: '206', title: 'サダヲとアツヤ', image: '../assets/clue-cards/clue-18.webp' },
+    { id: 'clue-19', number: '300', title: '「蝋人形の間」について', image: '../assets/clue-cards/clue-19.webp' },
+    { id: 'clue-20', number: '301', title: '幽煙の間：北壁', image: '../assets/clue-cards/clue-20.webp' },
+    { id: 'clue-21', number: '302', title: 'マヤとハナについて', image: '../assets/clue-cards/clue-21.webp' },
+    { id: 'clue-22', number: '303', title: '悪夢の間：チラシ', image: '../assets/clue-cards/clue-22.webp' },
+    { id: 'clue-23', number: '400', title: '控室について', image: '../assets/clue-cards/clue-23.webp' },
+    { id: 'clue-24', number: '401', title: '鏡の間：違和感', image: '../assets/clue-cards/clue-24.webp' },
+    { id: 'clue-25', number: '402', title: '布について', image: '../assets/clue-cards/clue-25.webp' },
+    { id: 'clue-26', number: '403', title: '蝋人形の間：違和感', image: '../assets/clue-cards/clue-26.webp' },
+    { id: 'clue-27', number: '404', title: 'N6の問題用紙', image: '../assets/clue-cards/clue-27.webp' },
+    { id: 'clue-28', number: '405', title: '隠し部屋について', image: '../assets/clue-cards/clue-28.webp' },
+  ],
+  characterCards: [
+    { id: 'clue-29', number: '001', title: 'マヤ', image: '../assets/clue-cards/clue-29.webp' },
+    { id: 'clue-30', number: '001', title: 'ハナ', image: '../assets/clue-cards/clue-30.webp' },
+    { id: 'clue-31', number: '002', title: 'アツヤ', image: '../assets/clue-cards/clue-31.webp' },
+    { id: 'clue-32', number: '003', title: 'サダヲ', image: '../assets/clue-cards/clue-32.webp' },
   ],
   combinations: [{ cards: ['A1', 'B1'], title: '月をつなぐ', text: '11月から12月へ。このように2枚のカードを組み合わせると、新しい情報を表示できます。', id: 'months' }],
 };

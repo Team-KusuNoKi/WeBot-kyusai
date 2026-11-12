@@ -87,6 +87,10 @@ test('会話途中では表示済みの会話の次から再生する', () => {
   const scene = state.messages.filter(m => m.problemId === 'N1' && m.kind === 'dialogue');
   const view = restorePlayView(scenario, state, { sceneStart: 0, isPlaying: true, displayedMessages: scene.slice(0, 3) });
   assert.deepEqual(pendingConversation(state, view), scene.slice(3));
+  const counted = restorePlayView(scenario, state, { sceneStart: 0, isPlaying: true, displayedCount: 3 });
+  assert.equal(counted.displayedMessages.length, 3);
+  assert.deepEqual(pendingConversation(state, counted), scene.slice(3));
+  assert.deepEqual(pendingConversation(state, { isPlaying: true, sceneStart: 0, displayedCount: 3 }), scene.slice(3));
 });
 test('保存された不正な表示位置や廃止された問題を採用しない', () => {
   const state = initialState(scenario);

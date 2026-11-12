@@ -8,13 +8,26 @@ export function normalizePlayCode(value) {
 const copy = value => value == null ? value : JSON.parse(JSON.stringify(value));
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item)
   ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
-const equal = (left, right) => canonical(left) === canonical(right);
+// 旧保存の displayedMessages 配列と、新形式の displayedCount を同じ進行として比較する。
+function normalizeComparable(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  if (!('displayedMessages' in value) && !('displayedCount' in value)) return value;
+  const next = { ...value };
+  if (Array.isArray(next.displayedMessages)) {
+    if (!Number.isInteger(next.displayedCount)) next.displayedCount = next.displayedMessages.length;
+    delete next.displayedMessages;
+  }
+  return next;
+}
+const equal = (left, right) => canonical(normalizeComparable(left)) === canonical(normalizeComparable(right));
 const identifier = () => globalThis.crypto.randomUUID();
 
 export function createPlaySaveController(options) {
   const {
     scenarioId, fetchImpl = globalThis.fetch?.bind(globalThis), onStatus = () => {},
     onCloudRestore = () => {}, onRecord = () => {}, debounceMs = 700,
+    // 入力のたびに localStorage へ全文を書かない。通信デバウンスより短く、pagehide/flush では即書きする。
+    persistDebounceMs = 400,
     requestTimeoutMs = 12000, maxAutoRetries = 2,
     endpoint = '/api/play-saves',
   } = options;
@@ -32,6 +45,7 @@ export function createPlaySaveController(options) {
   let storageReady = Boolean(storage);
   let epoch = 0;
   let timer;
+  let persistTimer;
   let retryCount = 0;
   let disposed = false;
   let flight = null;
@@ -60,6 +74,17 @@ export function createPlaySaveController(options) {
       && (allowDebug || value.code !== '000000') && Number.isInteger(value.revision) && value.revision >= 0
       && value.state && typeof value.state === 'object' && !Array.isArray(value.state)
       && value.view && typeof value.view === 'object' && !Array.isArray(value.view);
+  }
+  function validSaveAck(value) {
+    return value && typeof value === 'object' && normalizePlayCode(value.code) === value.code
+      && value.code !== '000000' && Number.isInteger(value.revision) && value.revision >= 0
+      && typeof value.updatedAt === 'string'
+      && (value.state === undefined || value.state && typeof value.state === 'object' && !Array.isArray(value.state))
+      && (value.view === undefined || value.view && typeof value.view === 'object' && !Array.isArray(value.view));
+  }
+  function validLoadAck(value) {
+    return value && typeof value === 'object' && value.unchanged === true
+      && normalizePlayCode(value.code) === value.code && Number.isInteger(value.revision) && value.revision >= 0;
   }
   function parseRecord(raw) {
     try {
@@ -107,11 +132,28 @@ export function createPlaySaveController(options) {
   function cancelOperations() {
     epoch++;
     clearTimeout(timer);
+    clearTimeout(persistTimer);
+    persistTimer = undefined;
     abort?.abort();
     abort = null;
     flight = null;
     recovery = null;
     retryCount = 0;
+  }
+  function schedulePersist(delay = persistDebounceMs) {
+    clearTimeout(persistTimer);
+    persistTimer = undefined;
+    if (!disposed && mode === 'normal' && record && !conflict) {
+      if (delay <= 0) {
+        persist();
+        return;
+      }
+      persistTimer = setTimeout(() => {
+        persistTimer = undefined;
+        if (!disposed && mode === 'normal' && record && !conflict) persist();
+      }, delay);
+      persistTimer.unref?.();
+    }
   }
   function schedule(delay = debounceMs) {
     clearTimeout(timer);
@@ -146,6 +188,15 @@ export function createPlaySaveController(options) {
       if (!response.ok) throw Object.assign(new Error(data.message || '保存サーバーに接続できません。'), { status: response.status, data });
       if (payload.action === 'delete' && (!data || data.deleted !== true || data.code !== undefined && data.code !== payload.code))
         throw new Error('削除の完了を確認できません。記録は端末に保持しています。');
+      if (payload.action === 'load' && validLoadAck(data)) {
+        if (payload.code && data.code !== payload.code) throw new Error('保存番号が一致しません。');
+        return data;
+      }
+      if (['create', 'save'].includes(payload.action) && validSaveAck(data) && !validEnvelope(data)) {
+        if (payload.code && data.code !== payload.code) throw new Error('保存番号が一致しません。');
+        // 成功ACKは revision のみ返すことがある。送った進行を補って以降の処理を共通化する。
+        return { ...data, state: data.state ?? payload.state, view: data.view ?? payload.view };
+      }
       if (payload.action !== 'delete' && !validEnvelope(data)) throw new Error('保存データの形式を確認できません。');
       if (payload.code && payload.action !== 'delete' && data.code !== payload.code) throw new Error('保存番号が一致しません。');
       return data;
@@ -212,19 +263,31 @@ export function createPlaySaveController(options) {
       throw error;
     }
   }
-  async function loadCode(input) {
+  async function loadCode(input, { sinceRevision = null, localState = null, localView = null } = {}) {
     const code = normalizePlayCode(input);
     if (!code) throw Object.assign(new Error('数字6桁の再開番号を入力してください。'), { code: 'invalid-code' });
     if (code === '000000') return enterDebug();
     if (disposed) throw new Error('保存処理は終了しています。');
     const prior = mode === 'normal' ? copy(record) : null;
+    const cachedState = localState ?? prior?.state;
+    const cachedView = localView ?? prior?.view;
+    const cachedRevision = Number.isInteger(sinceRevision) ? sinceRevision : prior?.code === code ? prior.revision : null;
     cancelOperations();
     const operationEpoch = epoch;
     setStatus('saving', '進行を読み込んでいます。');
     try {
-      const value = await request({ action: 'load', code }, operationEpoch);
+      const payload = { action: 'load', code };
+      if (Number.isInteger(cachedRevision) && cachedState && cachedView) payload.sinceRevision = cachedRevision;
+      const value = await request(payload, operationEpoch);
       if (operationEpoch !== epoch || disposed) return null;
       if (prior?.pending) archive(prior, 'load-other-play');
+      if (value.unchanged) {
+        if (!cachedState || !cachedView) throw new Error('保存データの形式を確認できません。');
+        return beginSession({
+          code: value.code, revision: value.revision, updatedAt: value.updatedAt ?? null,
+          state: cachedState, view: cachedView,
+        });
+      }
       return beginSession(value);
     } catch (error) {
       if (operationEpoch !== epoch || disposed) return null;
@@ -253,11 +316,9 @@ export function createPlaySaveController(options) {
       archive(record, 'conflict-local-update');
       notify(); return copy(record);
     }
-    const stored = persist();
-    if (!conflict) {
-      setStatus(stored ? 'saving' : 'local-only', stored ? '保存中' : '端末に保存できません。通信中はCloudflareへ保存します。');
-      schedule();
-    }
+    setStatus(storageReady ? 'saving' : 'local-only', storageReady ? '保存中' : '端末に保存できません。通信中はCloudflareへ保存します。');
+    schedulePersist();
+    schedule();
     notify();
     return copy(record);
   }
@@ -282,7 +343,7 @@ export function createPlaySaveController(options) {
         }
         if (operationEpoch !== epoch || disposed) return null;
         record = { ...record, code: remote.code, revision: remote.revision, updatedAt: remote.updatedAt,
-          pending: record.generation !== sent.generation || !equal(remote.state, sent.state) || !equal(remote.view, sent.view) };
+          pending: record.generation !== sent.generation };
         retryCount = 0;
         persist();
         if (conflict) return recoverCloud();
@@ -303,8 +364,17 @@ export function createPlaySaveController(options) {
   }
   function flush() {
     clearTimeout(timer);
+    const hadPersistTimer = Boolean(persistTimer);
+    clearTimeout(persistTimer);
+    persistTimer = undefined;
     if (conflict && mode === 'normal' && !disposed) return recoverCloud();
-    if (disposed || mode !== 'normal' || !record?.pending) return Promise.resolve(copy(record));
+    if (disposed || mode !== 'normal' || !record?.pending) {
+      // デバウンス中の端末書き込みだけを確定する。変更がなければ触らない。
+      if (hadPersistTimer && mode === 'normal' && record && !conflict) persist();
+      return Promise.resolve(copy(record));
+    }
+    persist();
+    if (conflict) return recoverCloud();
     if (flight) return flight;
     const operationEpoch = epoch;
     const operation = sendPending(operationEpoch);

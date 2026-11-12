@@ -67,9 +67,19 @@ test('六桁の番号を発行し、別ブラウザ相当の要求で進行と�
   assert.match(created.body.code, /^\d{6}$/);
   assert.notEqual(created.body.code, '000000');
   assert.equal(created.body.revision, 1);
+  assert.equal(created.body.state, undefined);
+  assert.equal(created.body.view, undefined);
   assert.equal(created.headers.get('cache-control'), 'no-store');
   const loaded = await call(env, { action: 'load', code: created.body.code }, { headers: { 'CF-Connecting-IP': '192.0.2.2' } });
-  assert.deepEqual(loaded.body, created.body);
+  assert.equal(loaded.body.code, created.body.code);
+  assert.equal(loaded.body.revision, 1);
+  assert.deepEqual(loaded.body.state, state());
+  assert.deepEqual(loaded.body.view, view());
+  const unchanged = await call(env, { action: 'load', code: created.body.code, sinceRevision: 1 });
+  assert.equal(unchanged.status, 200);
+  assert.equal(unchanged.body.unchanged, true);
+  assert.equal(unchanged.body.revision, 1);
+  assert.equal(unchanged.body.state, undefined);
   const stored = env.PLAY_SAVES.sqlite.prepare('SELECT * FROM play_saves').get();
   assert.equal(stored.code_hash.length, 64);
   assert.equal(stored.creation_hash.length, 64);
@@ -82,7 +92,10 @@ test('作成成功の応答が失われても同じcreationIdで同じ保存先�
   const first = await create(env, { creationId });
   const retry = await create(env, { creationId, state: { ...state(), solved: ['N1'] } });
   assert.equal(retry.status, 200);
-  assert.deepEqual(retry.body, first.body);
+  assert.equal(retry.body.code, first.body.code);
+  assert.equal(retry.body.revision, first.body.revision);
+  // 再取得は保存済みの進行本文を返し、送信し直した別スナップショットでは上書きしない。
+  assert.deepEqual(retry.body.state, state());
   assert.equal(env.PLAY_SAVES.sqlite.prepare('SELECT COUNT(*) AS total FROM play_saves').get().total, 1);
 });
 
@@ -126,7 +139,9 @@ test('番号候補が使用済み・削除済みなら別番号を発行し、�
   const created = await create(env, { creationId });
   assert.equal(created.status, 200);
   assert.notEqual(created.body.code, occupied.body.code);
-  assert.deepEqual((await create(env, { creationId })).body, created.body);
+  const recovered = await create(env, { creationId });
+  assert.equal(recovered.body.code, created.body.code);
+  assert.equal(recovered.body.revision, created.body.revision);
   assert.equal(env.PLAY_SAVES.sqlite.prepare('SELECT allocation_nonce FROM play_saves WHERE deleted_at IS NULL').get().allocation_nonce, 1);
 });
 
@@ -149,11 +164,17 @@ test('更新番号で同時更新を検出し、古い進行を上書きしな�
   const saved = await call(env, { action: 'save', code, revision: 1, state: changed, view: changedView });
   assert.equal(saved.status, 200);
   assert.equal(saved.body.revision, 2);
+  assert.equal(saved.body.state, undefined);
+  assert.equal(saved.body.view, undefined);
   const stale = await call(env, { action: 'save', code, revision: 1, state: state(), view: view() });
   assert.equal(stale.status, 409);
-  assert.deepEqual(stale.body.remote, saved.body);
+  assert.equal(stale.body.remote.revision, 2);
+  assert.deepEqual(stale.body.remote.state, changed);
+  assert.deepEqual(stale.body.remote.view, changedView);
   const loaded = await call(env, { action: 'load', code });
-  assert.deepEqual(loaded.body, saved.body);
+  assert.equal(loaded.body.revision, 2);
+  assert.deepEqual(loaded.body.state, changed);
+  assert.deepEqual(loaded.body.view, changedView);
   const staleDelete = await call(env, { action: 'delete', code, revision: 1 });
   assert.equal(staleDelete.status, 409);
 });
@@ -206,7 +227,9 @@ test('新規作成の大量要求を制限するが同じ作成IDの回復は許
   const created = await create(env, { creationId });
   env.PLAY_SAVES.sqlite.prepare("UPDATE play_save_rate_limits SET attempts = 1500 WHERE kind = 'create'").run();
   assert.equal((await create(env)).status, 429);
-  assert.deepEqual((await create(env, { creationId })).body, created.body);
+  const recovered = await create(env, { creationId });
+  assert.equal(recovered.body.code, created.body.code);
+  assert.equal(recovered.body.revision, created.body.revision);
 });
 
 test('異なるOrigin・不正形式・別作品・過大データを保存前に拒否する', async t => {
