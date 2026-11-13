@@ -11,15 +11,29 @@ export function showHexSuccess(host) {
   host.append(dialog);
   let resolveFinished;
   const finished = new Promise(resolve => { resolveFinished = resolve; });
-  function close() {
+  const card = dialog.querySelector('.hex-success-card');
+  const reduced = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  let closing = false;
+  function remove() {
     if (dialog.open) dialog.close();
     dialog.remove();
     resolveFinished();
   }
+  function close() {
+    if (closing) return;
+    closing = true;
+    if (!card?.animate || reduced() || !dialog.isConnected) { remove(); return; }
+    dialog.classList.add('is-closing');
+    card.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'scale(.96)' }],
+      { duration: 180, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'forwards' })
+      .finished.catch(() => {}).finally(remove);
+  }
   dialog.querySelector('button').addEventListener('click', close);
   dialog.addEventListener('cancel', event => event.preventDefault());
   dialog.showModal();
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  if (!reduced()) {
+    card?.animate?.([{ opacity: 0, transform: 'scale(.86) translateY(8px)' }, { opacity: 1, transform: 'scale(1.03)', offset: .7 }, { opacity: 1, transform: 'none' }],
+      { duration: 420, delay: 60, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
     burstConfetti(dialog.querySelector('.hex-confetti'));
   }
   return { finished, close };
