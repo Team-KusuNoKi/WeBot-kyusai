@@ -95,7 +95,7 @@ if (!backendOnly) {
         await collect(resolve(dist, match[1].replace(/^\.\.\//, '')));
       }
     } else if (extname(path) === '.css') {
-      for (const ref of cssReferences(data.toString('utf8')).filter(local)) await collect(resolve(dirname(path), ref));
+      for (const ref of cssReferences(data.toString('utf8')).filter(local)) await collect(resolve(dirname(path), referencePath(ref)));
     }
   }
   for (const match of html.matchAll(/(?:src|href)=["']([^"']+)["']/g)) {
