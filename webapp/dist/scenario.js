@@ -38,6 +38,59 @@ function routePhoto(id, title, directions) {
   return { title, directions, image: `${base}.webp`, preview: `${base}.preview.webp`, imageAlt: directions };
 }
 
+function destinationMove({ destination, placeName, approach = '向かおう', findLabel, findPhrase = `${findLabel}と書かれた問題` }, steps) {
+  const pageTurnText = `以下の写真を参考にしてください。現地で${findPhrase}を見つけたら上部の「次へ」ボタンを押しましょう。`;
+  return {
+    instruction: `指示：${placeName}へ${approach}。${pageTurnText}`,
+    guide: { destination, placeName, approach, findLabel, pageTurnText, steps },
+  };
+}
+
+const n1Move = destinationMove({
+  destination: '総合研究10号館',
+  placeName: '総合研究10号館',
+  findLabel: 'N2',
+}, [
+  routePhoto('02', '右へ曲がる', '駐輪場の先で、並木に沿って右へ曲がってください。'),
+  routePhoto('03', '通路を直進', '建物の間の通路をまっすぐ進んでください。'),
+  routePhoto('04', '道路を渡る', '道路を渡り、写真の矢印に沿って右へ曲がってください。'),
+  routePhoto('05', 'N2の掲示', '総合研究10号館の入口階段の手前にある柵で「N2」を探してください。'),
+]);
+const n2Move = destinationMove({
+  destination: '法経済学部北館',
+  placeName: '法経済学部北館',
+  findLabel: 'N3',
+}, [
+  routePhoto('07', '角を右へ', '建物の角で、木の手前を右へ曲がってください。'),
+  routePhoto('08', '並木道を進む', '左手の建物に沿って、道なりに進んでください。'),
+  routePhoto('09', '広い道を直進', '並木の続く道をまっすぐ進んでください。'),
+  routePhoto('10', '自転車の手前を左へ', '正面の建物に着く前に、左手の通路へ曲がってください。'),
+  routePhoto('11', 'N3の掲示', '法経済学部北館の、写真で赤く囲まれた入口脇で「N3」を探してください。'),
+]);
+const n3Move = destinationMove({
+  destination: '吉田南・総人広場の先にある掲示板',
+  placeName: '吉田南、総人広場を抜けた先にある掲示板',
+  approach: '行こう',
+  findLabel: '末席同好会のチラシ',
+  findPhrase: '末席同好会のチラシ',
+}, [
+  routePhoto('13', '突き当たりを左へ', '駐輪場の間を進み、正面の建物の手前で左へ曲がってください。'),
+  routePhoto('14', '並木道を直進', '左手に建物、右手に並木がある道をまっすぐ進んでください。'),
+  routePhoto('15', '広場の手前を左へ', '自転車が並ぶ建物の角で左へ曲がってください。'),
+  routePhoto('16', '広場を右寄りに進む', '写真右手の建物に沿って、矢印の方向へ進んでください。'),
+  routePhoto('17', '横断歩道を渡る', '写真の横断歩道で道路を渡ってください。'),
+  routePhoto('18', '広場を直進', '木々の間を通り、吉田南の総人広場を奥へ進んでください。'),
+  routePhoto('19', '左右の掲示板', '写真で赤く囲まれた左右の掲示板から「末席同好会のチラシ」を探してください。'),
+]);
+const n41Move = destinationMove({
+  destination: '人間・環境学研究科棟・南西の角',
+  placeName: '人間・環境学研究科棟、南西の角',
+  findLabel: 'N5',
+}, [
+  routePhoto('21', '⑤の横を進む', '⑤の表示がある建物脇の通路を、矢印の方向へ進んでください。'),
+  routePhoto('22', 'N5の掲示', '人間・環境学研究科棟の南西の角で、写真の赤丸の位置にある「N5」を探してください。'),
+]);
+
 const finalAnswerParts = [
   '一昨年、去年と続けて起きたNF連続失踪事件は、すべて',
   'によるものだった。1人で謎解きをしていた人物が標的となったのは、問題を通じて人目の少ない場所へ自然に誘導し、拉致を容易にするためだ。そして何より儀式に「',
@@ -78,8 +131,13 @@ export const scenario = {
   investigation: {
     id: 'Q3', entries: ['Q3.2', 'Q3', 'Q3.3'],
     closing: {
-      more: 'これで違和感のある部屋についてはだいぶ整理ができた気がする。他の違和感を整理しに行こう。',
-      last: 'これで違和感のある部屋についてはだいぶ整理ができた気がする。これですべての違和感を整理できた',
+      byEntry: {
+        'Q3.2': 'これで違和感のある部屋についてはだいぶ整理ができた気がする。',
+        'Q3': '犯人はおそらく脚立を使ってミサメを吊るした。しかし肝心の脚立の在処は分からないままだ。',
+        'Q3.3': 'これで幽煙の間に貼られていた紙については、だいぶ整理ができた気がする。',
+      },
+      more: '他の違和感を整理しに行こう。',
+      last: 'これで残された違和感については全て整理できた。これらの結論から考えると...',
     },
     problemIds: investigationSteps, next: 'Q3.1',
   },
@@ -118,15 +176,7 @@ export const scenario = {
         '国と色から連想されるのは国旗だろう。だとすると、フランスの国旗はどこに入るべきだろうか。',
       ],
       explanation: '答えは⑩です。国旗の色に関する問題です。',
-      travelGuide: {
-        destination: '総合研究10号館',
-        steps: [
-          routePhoto('02', '右へ曲がる', '駐輪場の先で、並木に沿って右へ曲がってください。'),
-          routePhoto('03', '通路を直進', '建物の間の通路をまっすぐ進んでください。'),
-          routePhoto('04', '道路を渡る', '道路を渡り、写真の矢印に沿って右へ曲がってください。'),
-          routePhoto('05', 'N2の掲示', '総合研究10号館の入口階段の手前にある柵で「N2」を探してください。'),
-        ],
-      },
+      travelGuide: n1Move.guide,
       dialogue: [
         { speaker: 'ミサメ', text: '「国旗の色に関する問題ですね。問題文のイラストは『仏』を表しています。『仏』はフランスを表す漢字です。フランスの国旗は赤・青・白の3色なので、答えは⑩というわけです！」' },
         { speaker: 'タツ', text: '「凄いな、ミサメ。よくこんな一瞬で分かったな」' },
@@ -136,7 +186,10 @@ export const scenario = {
         { speaker: '', text: 'そう言うと、ミサメはアサヒにも分かるように、手元のメモに10号館までの道順を丁寧に書き記していった。' },
         { speaker: 'アサヒ', text: '「凄い！めっちゃ分かりやすいです！ミサ先、あざっす！」' },
         { speaker: 'ミサメ', text: '「ミサ先って……。意外に悪くない響きね」' },
-        { speaker: '', text: '指示：総合研究10号館へ向かおう。以下の写真を参考に向かい、現地で「N2」を見つけたら、次のページへ進もう。', emphasis: true },
+        { speaker: '', text: '二人の腕には、遠くからでも分かる色の腕章が巻かれていた。' },
+        { speaker: 'ミサメ', text: '「先輩、その腕章、外さないでくださいね。今年こそ失踪事件を止めるって、約束したじゃないですか」' },
+        { speaker: 'タツ', text: '「わかってるよ。パトロール、サボったりしない」' },
+        { speaker: '', text: n1Move.instruction, emphasis: true },
         { speaker: '', text: '〈ここに、総合研究10号館までの行き方を写真付きで分かりやすく解説する。解いている人が図書館前にいないかもしれないことにも留意〉', travelGuidePart: 'photo' },
         { speaker: '', text: '〈N2が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
       ],
@@ -161,16 +214,7 @@ export const scenario = {
         '地図上には西門、北門、百万遍門、正門がある。先ほどと同じ組み合わせで門を結んでみよう。',
       ],
       explanation: '答えは「法経済学部北館」です。線が交差する場所を示しています。',
-      travelGuide: {
-        destination: '法経済学部北館',
-        steps: [
-          routePhoto('07', '角を右へ', '建物の角で、木の手前を右へ曲がってください。'),
-          routePhoto('08', '並木道を進む', '左手の建物に沿って、道なりに進んでください。'),
-          routePhoto('09', '広い道を直進', '並木の続く道をまっすぐ進んでください。'),
-          routePhoto('10', '自転車の手前を左へ', '正面の建物に着く前に、左手の通路へ曲がってください。'),
-          routePhoto('11', 'N3の掲示', '法経済学部北館の、写真で赤く囲まれた入口脇で「N3」を探してください。'),
-        ],
-      },
+      travelGuide: n2Move.guide,
       dialogue: [
         { speaker: 'タツ', text: '「うん、線が交差するところは、法経済学部北館だね」' },
         { speaker: 'アサヒ', text: '「タツパイ流石っす！僕全然分かんなかったっすよ」' },
@@ -179,7 +223,7 @@ export const scenario = {
         { speaker: 'ミサメ', text: '「そ、そんなことないですよ！ほら、早く行きますよ！」' },
         { speaker: 'ミサメ', text: '「もう！こんな問題の紙も規約違反なので回収します！」' },
         { speaker: '', text: 'ミサメはN2の問題用紙を壁から剥がすとクシャクシャに丸めポケットに入れた。' },
-        { speaker: '', text: '指示：法経済学部北館へ向かおう。以下の写真を参考に向かい、現地で「N3」を見つけたら、次のページへ進もう。', emphasis: true },
+        { speaker: '', text: n2Move.instruction, emphasis: true },
         { speaker: '', text: '〈ここに、法経済学部北館までの行き方を写真付きで分かりやすく解説する〉', travelGuidePart: 'photo' },
         { speaker: '', text: '〈N3が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
       ],
@@ -201,19 +245,7 @@ export const scenario = {
         'イラストはおみくじを表しているようだ。どうやら、ある順番に従って並べられている。小吉の隣に来るものといえば何だろう。',
       ],
       explanation: '答えは「末」です。おみくじの「末吉」の「末」です。',
-      travelGuide: {
-        destination: '吉田南・総人広場の先にある掲示板',
-        pageTurnText: '「末席同好会のチラシ」を見つけたら、次のページへ進もう。',
-        steps: [
-          routePhoto('13', '突き当たりを左へ', '駐輪場の間を進み、正面の建物の手前で左へ曲がってください。'),
-          routePhoto('14', '並木道を直進', '左手に建物、右手に並木がある道をまっすぐ進んでください。'),
-          routePhoto('15', '広場の手前を左へ', '自転車が並ぶ建物の角で左へ曲がってください。'),
-          routePhoto('16', '広場を右寄りに進む', '写真右手の建物に沿って、矢印の方向へ進んでください。'),
-          routePhoto('17', '横断歩道を渡る', '写真の横断歩道で道路を渡ってください。'),
-          routePhoto('18', '広場を直進', '木々の間を通り、吉田南の総人広場を奥へ進んでください。'),
-          routePhoto('19', '左右の掲示板', '写真で赤く囲まれた左右の掲示板から「末席同好会のチラシ」を探してください。'),
-        ],
-      },
+      travelGuide: n3Move.guide,
       dialogue: [
         { speaker: 'ミサメ', text: '「おみくじ！おみくじがモチーフの問題ね！だから答えは末吉の末！」' },
         { speaker: '', text: 'ミサメは満足げに答えると、今度も問題用紙を剥がして回収した。まったく、仕事に関しては抜かりのないやつだ。' },
@@ -224,7 +256,7 @@ export const scenario = {
         { speaker: 'ミサメ', text: '「それはそうと、サークルとか同好会を探すなら、吉田南の総人広場を抜けた先にある掲示板ね。あそこには色んな団体が部員募集のチラシを貼っているわ」' },
         { speaker: 'タツ', text: '「うん、確かにそこしかないかもね。とりあえず行ってみるか」' },
         { speaker: 'アサヒ', text: '「出発進行～！」' },
-        { speaker: '', text: '指示：吉田南、総人広場を抜けた先にある掲示板へ行こう。以下の写真を参考に向かい、現地で「末席同好会のチラシ」を見つけたら、次のページへ進もう。', emphasis: true },
+        { speaker: '', text: n3Move.instruction, emphasis: true },
         { speaker: '', text: '〈ここに、吉田南、総人広場先掲示板までの行き方を写真付きで分かりやすく解説する〉', travelGuidePart: 'photo' },
         { speaker: '', text: '〈N4が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
       ],
@@ -253,20 +285,14 @@ export const scenario = {
       cardInstruction: '建物名を選んでください。',
       prompt: '「89」はどこを意味する？',
       answers: ['人間・環境学研究科棟'], hints: [], explanation: '答えは「人間・環境学研究科棟」です。',
-      travelGuide: {
-        destination: '人間・環境学研究科棟・南西の角',
-        steps: [
-          routePhoto('21', '⑤の横を進む', '⑤の表示がある建物脇の通路を、矢印の方向へ進んでください。'),
-          routePhoto('22', 'N5の掲示', '人間・環境学研究科棟の南西の角で、写真の赤丸の位置にある「N5」を探してください。'),
-        ],
-      },
+      travelGuide: n41Move.guide,
       dialogue: [
         { speaker: 'タツ', text: '「正解は89の↙だね。散々見てきた標識を参考にすると、89は人間・環境学研究科棟に割り振られた数字だ。 そして、 ↙ は南西の角を意味すると考えるのが自然かな」' },
         { speaker: 'アサヒ', text: '「つまり、『人間・環境学研究科棟の南西の角』ってことですね」' },
         { speaker: 'ミサメ', text: '「今回はいっぱい歩きましたね。疲れました～」' },
         { speaker: 'タツ', text: '「そこのミサメ君、文句を言わない！さっさと歩く」' },
         { speaker: 'ミサメ', text: '「ど、どういうキャラですか？」' },
-        { speaker: '', text: '指示：人間・環境学研究科棟、南西の角へ向かおう。以下の写真を参考に向かおう。現地で「N5」を見つけたら、次のページへ進もう。', emphasis: true },
+        { speaker: '', text: n41Move.instruction, emphasis: true },
         { speaker: '', text: '〈ここに、人間・環境学研究科棟、南西の角までの行き方を写真付きで分かりやすく解説する〉', travelGuidePart: 'photo' },
         { speaker: '', text: '〈N5が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
       ],
@@ -373,7 +399,7 @@ export const scenario = {
     {
       id: 'Q2', title: 'Q2', chapter: '第二章', type: 'single',
       answerSubmitLayout: 'beside-options',
-      prompt: 'ミサメが吊るされたのが17時半頃ではないとしたら\nそのような状況を実現できる方法はあるだろうか？',
+      prompt: '犯行時刻を偽装する方法はあるだろうか？',
       options: [{ id: '1', label: 'ある' }, { id: '2', label: 'ない' }],
       optionColumns: 2,
       answers: ['1'], hints: [], explanation: '答えは「ある」です。',
@@ -444,9 +470,9 @@ export const scenario = {
       answerSubmitLayout: 'beside-options',
       listSymbol: '□',
       selectionCount: 2, promptEmphasis: '2つ',
-      listPrompt: '未だに違和感が残る部屋はあるか？',
+      listPrompt: '大きな謎が残る部屋はあるか',
       conclusion: '蝋人形の間と幽煙の間に、何か違和感がある。',
-      prompt: '未だに違和感が残る部屋はあるか？ 以下の選択肢から2つ選べ。',
+      prompt: '大きな謎が残る部屋はあるか？ 以下の選択肢から2つ選べ。',
       options: [{ id: '1', label: '深紅の間' }, { id: '2', label: '蝋人形の間' }, { id: '3', label: '幽煙の間' }, { id: '4', label: '悪夢の間' }],
       answers: ['2', '3'], hints: [
         '各部屋について、不審な点はないか見直してみよう。情報が足りなければ、合成を活用してみるのもいいかもしれない。',
@@ -529,7 +555,7 @@ export const scenario = {
     {
       id: 'Q5', title: 'Q5', chapter: '第二章', type: 'fields',
       answerFieldsLayout: 'row',
-      prompt: 'ミサメがお化け屋敷に入場した時間は何時頃と考えられるか。選択肢から選び、証拠となる手がかり番号と共に答えよ。',
+      prompt: 'ミサメはお化け屋敷にいつ入場した？証拠となる手がかり番号と共に答えよ',
       fields: [
         {
           label: '入場した時間', placeholder: '時刻を選択…', answers: ['16:30'],
@@ -559,6 +585,13 @@ export const scenario = {
       placeholder: '1単語で入力…', answers: ['ドライアイス'],
       // 差し替え待ちの原稿：①（空欄） ②「軍手を」
       hints: [], explanation: '答えは「ドライアイス」です。',
+      answerResponses: {
+        トンカチ: [
+          { speaker: 'タツ', text: '「凶器は、深紅の間にあったトンカチだ。あれでミサメを殴ったに違いない」' },
+          { speaker: 'アサヒ', text: '「先輩、ちょっと待ってください！　トンカチが凶器なら、犯人はなぜ隠し部屋まで作ったのに、わざわざトンカチを深紅の間に持ち込んだのでしょうか？　隠し部屋に置いておく方が、見つかる可能性はずっと低いはずです。深紅の間に置けば、スタッフに見られる危険もあります。犯人がそんな不合理な行動を取ったとは思えません。紛らわしいですが、トンカチは凶器ではないと思います」' },
+          { speaker: 'タツ', text: '「……。アサヒ、君の言うとおりだ」' },
+        ],
+      },
       dialogue: [{ speaker: 'タツ', text: 'そうだ。凶器は鏡の間のトリックでも使われていたドライアイスだった。ドライアイスならば、自然に昇華するので凶器は現場に残らない…!!　凶器がドライアイスならば、あれが必ず必要になるはず。そして、あれこそ犯人を指し示す証拠だったんだ！！' }],
       instruction: '', unlock: [], continueTo: 'Q6.1', autoOpenContinuation: 'after-dialogue',
     },
@@ -595,7 +628,7 @@ export const scenario = {
       id: 'Q7', title: 'Q7', chapter: '第二章', type: 'fields',
       answerFieldsLayout: 'row',
       prompt: '矛盾があるブロックを全て指摘せよ',
-      // 組単位で判定し、回答欄は1組のままにして正解の個数を画面から隠す。
+      // 組単位で判定し、回答欄は1組のままにして正解の個数を画面から隠す。全組が揃うまで次へ進まない。
       answerCombos: [
         ['A', '203'],
         ['D', '302'],
@@ -640,6 +673,60 @@ export const scenario = {
         { speaker: '', text: '次のページへ進もう', emphasis: true },
       ],
       instruction: '冊子の次のページをめくろう', unlock: [],
+    },
+    {
+      id: 'Q9', title: 'Q9', chapter: '第二章', type: 'text',
+      prompt: '示された文字を使って、言葉を入力せよ。',
+      placeholder: '言葉を入力…',
+      showWordBank: false,
+      wordBankLabel: 'カタカナ',
+      wordBank: ['神', 'ハ', 'カ', 'エ', 'ッ', 'タ', 'セ', 'イ', 'ス', 'ク', 'ワ', 'レ', 'ベ', 'テ', 'ガ'],
+      answers: ['神ハカエッタ', 'セカイハスクワレタ', 'スベテガスクワレタ'],
+      answerBranches: [
+        { id: 'god-returned', answer: '神ハカエッタ', dialogue: [
+          { speaker: '', text: '俺はあのとき、見返りがほしかっただけなんじゃないかって思う。ミサメが死に、悲しさと虚しさを埋めるためハナの野望を打ち砕く、そんな復讐に似た感情に身を任せた。' },
+          { speaker: '', text: '俺は儀式を中断した。神は天に還り、失意に沈んだハナは抵抗することなく拘束された。' },
+          { speaker: '', text: '俺は骸となったミサメの傍らに駆け寄る。全部終わったよと語りかける。こぼれ落ちた涙がミサメのほほを濡らすも、彼女が目を開くことはなかった。' },
+          { speaker: '', text: '事件から半年近くが経った。ひときわ賑わうクスノキ前の喧騒から逃げるように俺は哲学の道にふらり立ち寄った。' },
+          { speaker: '', text: '視界を埋め尽くす桜の花に、1年前NF委員としてここを訪れた記憶を、ミサメとの思い出を重ねる。' },
+          { speaker: 'ミサメ', text: '「先輩、絶対にNFを成功させましょう。今年こそ失踪事件を止めるんです。」' },
+          { speaker: 'タツ', text: '「そうはいうが、こんな事件、俺らにはどうしようもないだろう。」' },
+          { speaker: 'ミサメ', text: '「確かに…そうだ！パトロールするんです。みんなで目立つ腕章を付けて、そうしたら犯人も誘拐しようとは思わないはずです。」' },
+          { speaker: 'タツ', text: '「パトロールって。NFに何人来ると思って…」' },
+          { speaker: 'ミサメ', text: '「それでもやるんです。サボったりしないでくださいね。私たちがNFを救うんです。」' },
+          { speaker: 'タツ', text: '「わかったよ」' },
+          { speaker: 'ミサメ', text: '「約束ですよ」' },
+          { speaker: '', text: 'ハナは言っていた。京都を大地震が襲う、そして生贄を捧げる儀式こそがNFのあるべき姿だと。' },
+          { speaker: '', text: 'その話が本当だとしたら、俺達のこの1年は何だったのだろうか。俺の選択は正しかったのか、そんな答えのない自問にすがりついている自分を嫌悪せざるを得なかった。' },
+          { speaker: 'アサヒ', text: '「何してるんですか、こんなところで。」' },
+          { speaker: '', text: '聞き慣れた調子のいい声に思わず顔を上げると、桃色に滲んだ眼前にアサヒが立っていた。' },
+          { speaker: 'アサヒ', text: '「手伝ってくださいよ。新入生の勧誘、大変なんですから。」' },
+          { speaker: 'タツ', text: '「…NF委員はもう引退さ。忙しいんだ。卒論も控えてるし、実は単位もヤバい。」' },
+          { speaker: '', text: '二人の間を沈黙が流れた。' },
+          { speaker: 'アサヒ', text: '「先輩、少し話しませんか。」' },
+          { speaker: 'アサヒ', text: '「最近、時折感じるんです。不思議だなって。入部してくる1回生の子はミサ先のこともNFの事件のことも知らない。あの事件から半年も経ってないのに、僕たちの負った傷は癒えてはくれないのに、次のNFは否応なく始まっていきます。」' },
+          { speaker: 'アサヒ', text: '「先輩、あの時選択を間違えたとか思ってませんよね？」' },
+          { speaker: 'タツ', text: '「！！」' },
+          { speaker: 'タツ', text: '「いや、でももしかしたら…」' },
+          { speaker: 'アサヒ', text: '「神の慈悲でミサ先が蘇るかもしれない、ですか？ 可能性はあります。でもハナの言うことが正しいとは限らないし、今よりもっと悲惨な状況になっていた可能性だってあるじゃないですか。」' },
+          { speaker: 'アサヒ', text: '「ミサ先、いやミサメ先輩が昔言ってました。タツ先輩は普段はそっけないけど、1度真剣に約束したり、決めたことは貫き通す人だって。」' },
+          { speaker: 'アサヒ', text: '「だらしないところはあるけど、面倒見が良くて、失敗したときは実は人一倍悩んでる。そういうまっすぐで人間らしいところが結構好きだって。」' },
+          { speaker: '', text: 'アサヒはポケットから何かを取り出して俺に向かって放り投げた。俺は受け取って広げてみる。腕章だ。' },
+          { speaker: 'アサヒ', text: '「約束あるんじゃないですか。先に待ってますから」' },
+          { speaker: '', text: 'アサヒと別れ、手元の腕章を見つめた。' },
+          { speaker: 'タツ', text: '「約束だもんな」' },
+          { speaker: '', text: '帰り道、俺は通ると決めた道をゆく。' },
+          { speaker: '', text: '愛宕山を見る。泰然として京都の西で沈み込む夕日を待ち構えている。どんな過酷な運命にも立ち向かうような力強さを感じた。' },
+          { speaker: '', text: '雲の裏に夕日が隠れ、辺りが一瞬暗く沈む。その時、足元が揺らいだ気がした。' },
+          { speaker: '', text: 'ただ、それでも俺は前を向く。' },
+        ] },
+        { id: 'world-saved', answer: 'セカイハスクワレタ', dialogue: [{ speaker: '', text: '世界は救われた。' }] },
+        { id: 'all-saved', answer: 'スベテガスクワレタ', dialogue: [{ speaker: '', text: '全てが救われた。' }] },
+      ],
+      hints: [], explanation: '',
+      completionScreen: 'booklet',
+      dialogue: [],
+      instruction: '', unlock: [],
     },
   ],
   minigames: [{

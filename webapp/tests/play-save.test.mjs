@@ -348,3 +348,15 @@ test('deletion needs explicit matching acknowledgement before removing the brows
   assert.equal(storage.items.has(controller.storageKey), false);
   assert.equal(controller.getRecord(), null);
 });
+
+test('deletion clears a local record even when the cloud save is already missing', async t => {
+  const { controller, storage } = setup(body => body.action === 'delete'
+    ? response({ error: 'not_found', message: 'この番号の進行記録が見つかりません。' }, 404)
+    : response(envelope()));
+  t.after(() => controller.dispose());
+  await controller.loadCode('001234');
+  assert.equal(await controller.deleteCurrent(), true);
+  assert.equal(storage.items.has(controller.storageKey), false);
+  assert.equal(controller.getRecord(), null);
+  assert.equal(controller.getStatus().phase, 'idle');
+});

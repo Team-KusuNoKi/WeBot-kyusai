@@ -4,22 +4,36 @@ export function normalizeAnswer(value) {
   return String(value ?? '').normalize('NFKC').trim().toLocaleLowerCase('ja-JP');
 }
 
+export function matchingAnswerCombo(problem, answer) {
+  if (!Array.isArray(problem.answerCombos) || !Array.isArray(answer)) return -1;
+  return problem.answerCombos.findIndex(combo => Array.isArray(combo) && combo.length === answer.length
+    && combo.every((item, index) => normalizeAnswer(item) === normalizeAnswer(answer[index])));
+}
+
 export function checkAnswer(problem, answer) {
   if (problem.type === 'pending') return false;
   if (problem.type === 'fields') {
     if (!Array.isArray(answer) || answer.length !== problem.fields.length
       || answer.some(value => typeof value !== 'string')) return false;
     // 組み合わせ単位の正解がある場合は、欄ごとの候補の直積ではなく組だけを認める。
-    if (Array.isArray(problem.answerCombos)) {
-      return problem.answerCombos.some(combo => Array.isArray(combo) && combo.length === answer.length
-        && combo.every((item, index) => normalizeAnswer(item) === normalizeAnswer(answer[index])));
-    }
+    if (Array.isArray(problem.answerCombos)) return matchingAnswerCombo(problem, answer) >= 0;
     return problem.fields.every((field, index) => field.answers.some(item => normalizeAnswer(item) === normalizeAnswer(answer[index])));
   }
   if (problem.type === 'text') return problem.answers.some(item => normalizeAnswer(item) === normalizeAnswer(answer));
   if (!Array.isArray(answer)) return false;
   const selected = new Set(answer);
   return selected.size === answer.length && selected.size === problem.answers.length && problem.answers.every(item => selected.has(item));
+}
+
+function incorrectAnswerResponse(problem, answer) {
+  if (Array.isArray(answer) && answer.length === 1 && problem.options?.some(option => option.id === answer[0])) {
+    return problem.optionResponses?.[answer[0]] ?? null;
+  }
+  if (problem.type === 'text' && problem.answerResponses) {
+    const key = Object.keys(problem.answerResponses).find(item => normalizeAnswer(item) === normalizeAnswer(answer));
+    return key ? problem.answerResponses[key] : null;
+  }
+  return null;
 }
 
 export function canOpenProblem(problem, state) {
@@ -45,7 +59,7 @@ export function findCombination(scenario, ids) {
 }
 
 export function initialState(scenario) {
-  return { version: 2, scenarioRevision: scenario.progressRevision ?? 0, selected: scenario.problems[0].id, solved: [], branches: {}, hints: {}, combinations: [], minigames: [], hexCubeFailures: 0, messages: scenario.opening.map(line => ({ ...line, kind: 'dialogue' })) };
+  return { version: 2, scenarioRevision: scenario.progressRevision ?? 0, selected: scenario.problems[0].id, solved: [], branches: {}, hints: {}, combinations: [], answerCombos: {}, minigames: [], hexCubeFailures: 0, messages: scenario.opening.map(line => ({ ...line, kind: 'dialogue' })) };
 }
 
 export function restoreProblemId(scenario, id, revision = 0, version = 2, { selection = false } = {}) {
@@ -74,7 +88,7 @@ export function restoreState(scenario, raw) {
     const branches = {};
     const hints = {};
     for (const p of scenario.problems) {
-      if (solved.includes(p.id) && p.branches?.some(b => b.id === saved.branches?.[p.id])) branches[p.id] = saved.branches[p.id];
+      if (solved.includes(p.id) && [...(p.branches ?? []), ...(p.answerBranches ?? [])].some(b => b.id === saved.branches?.[p.id])) branches[p.id] = saved.branches[p.id];
     }
     for (const p of [...scenario.problems, ...(scenario.minigames ?? [])]) {
       const count = saved.hints?.[p.id];
@@ -92,7 +106,15 @@ export function restoreState(scenario, raw) {
       }
     }
     const hexCubeFailures = Number.isSafeInteger(saved.hexCubeFailures) && saved.hexCubeFailures > 0 ? saved.hexCubeFailures : 0;
-    return { version: 2, hexCubeFailures, scenarioRevision: scenario.progressRevision ?? 0, selected: validIds.has(saved.selected) ? saved.selected : scenario.problems[0].id, solved, branches, hints, minigames: [...new Set((Array.isArray(saved.minigames)?saved.minigames:[]).filter(id=>(scenario.minigames??[]).some(game=>game.id===id)))], combinations: (saved.combinations ?? []).filter(id => scenario.combinations.some(c => c.id === id)), messages: messages.length ? messages : initialState(scenario).messages };
+    const answerCombos = {};
+    for (const problem of scenario.problems) {
+      if (!Array.isArray(problem.answerCombos) || problem.answerCombos.length <= 1) continue;
+      const raw = saved.answerCombos?.[problem.id];
+      if (!Array.isArray(raw)) continue;
+      const found = [...new Set(raw.filter(index => Number.isInteger(index) && index >= 0 && index < problem.answerCombos.length))].sort((a, b) => a - b);
+      if (found.length) answerCombos[problem.id] = found;
+    }
+    return { version: 2, hexCubeFailures, scenarioRevision: scenario.progressRevision ?? 0, selected: validIds.has(saved.selected) ? saved.selected : scenario.problems[0].id, solved, branches, hints, answerCombos, minigames: [...new Set((Array.isArray(saved.minigames)?saved.minigames:[]).filter(id=>(scenario.minigames??[]).some(game=>game.id===id)))], combinations: (saved.combinations ?? []).filter(id => scenario.combinations.some(c => c.id === id)), messages: messages.length ? messages : initialState(scenario).messages };
   } catch { return initialState(scenario); }
 }
 
@@ -109,8 +131,7 @@ export function submitAnswer(scenario, state, answer) {
   if (!labels) return { state, status: 'empty' };
   const correct = checkAnswer(problem, answer);
   if (!correct) {
-    const response = Array.isArray(answer) && answer.length === 1 && problem.options?.some(option => option.id === answer[0])
-      ? problem.optionResponses?.[answer[0]] : null;
+    const response = incorrectAnswerResponse(problem, answer);
     if (!response) return { state, status: 'incorrect' };
     return {
       state: { ...state, messages: [...state.messages,
@@ -120,15 +141,33 @@ export function submitAnswer(scenario, state, answer) {
       status: 'incorrect', response: true,
     };
   }
-  if (correct && problem.advanceTo) {
+  // 複数組の正解は1組ずつ受け取り、全組が揃うまで次へ進めない（個数は画面に出さない）。
+  if (Array.isArray(problem.answerCombos) && problem.answerCombos.length > 1) {
+    const comboIndex = matchingAnswerCombo(problem, answer);
+    const previous = state.answerCombos?.[problem.id] ?? [];
+    if (previous.includes(comboIndex)) return { state, status: 'incorrect' };
+    const found = [...previous, comboIndex].sort((a, b) => a - b);
+    const withProgress = {
+      ...state,
+      answerCombos: { ...(state.answerCombos ?? {}), [problem.id]: found },
+      messages: [...state.messages, { speaker: 'あなた', text: labels, kind: 'answer', problemId: problem.id }],
+    };
+    if (found.length < problem.answerCombos.length) return { state: withProgress, status: 'progress' };
+    const messages = [
+      ...withProgress.messages,
+      { speaker: 'システム', text: `問${problem.id} 正解`, kind: 'success', problemId: problem.id },
+      ...problem.dialogue.map(line => ({ ...line, kind: 'dialogue', problemId: problem.id })),
+    ];
+    return { state: { ...withProgress, messages, solved: [...withProgress.solved, problem.id] }, status: 'correct' };
+  }
+  if (problem.advanceTo) {
     return { state: { ...state, selected: problem.advanceTo, solved: [...state.solved, problem.id] }, status: 'correct' };
   }
+  const branch = problem.answerBranches?.find(item => normalizeAnswer(item.answer) === normalizeAnswer(answer));
   const messages = [...state.messages, { speaker: 'あなた', text: labels, kind: 'answer', problemId: problem.id }];
-  if (correct) {
-    messages.push({ speaker: 'システム', text: `問${problem.id} 正解`, kind: 'success', problemId: problem.id });
-    messages.push(...problem.dialogue.map(line => ({ ...line, kind: 'dialogue', problemId: problem.id })));
-  }
-  return { state: { ...state, messages, solved: correct ? [...state.solved, problem.id] : state.solved }, status: correct ? 'correct' : 'incorrect' };
+  messages.push({ speaker: 'システム', text: `問${problem.id} 正解`, kind: 'success', problemId: problem.id });
+  messages.push(...(branch?.dialogue ?? problem.dialogue).map(line => ({ ...line, kind: 'dialogue', problemId: problem.id })));
+  return { state: { ...state, branches: branch ? { ...state.branches, [problem.id]: branch.id } : state.branches, messages, solved: [...state.solved, problem.id] }, status: 'correct' };
 }
 
 export function chooseBranch(scenario, state, problemId, branchId) {

@@ -37,11 +37,14 @@ test('N1正解後に指定の会話と地の文を順番に追加し、保存か
     ['', 'そう言うと、ミサメはアサヒにも分かるように、手元のメモに10号館までの道順を丁寧に書き記していった。'],
     ['アサヒ', '「凄い！めっちゃ分かりやすいです！ミサ先、あざっす！」'],
     ['ミサメ', '「ミサ先って……。意外に悪くない響きね」'],
-    ['', '指示：総合研究10号館へ向かおう。以下の写真を参考に向かい、現地で「N2」を見つけたら、次のページへ進もう。'],
+    ['', '二人の腕には、遠くからでも分かる色の腕章が巻かれていた。'],
+    ['ミサメ', '「先輩、その腕章、外さないでくださいね。今年こそ失踪事件を止めるって、約束したじゃないですか」'],
+    ['タツ', '「わかってるよ。パトロール、サボったりしない」'],
+    ['', '指示：総合研究10号館へ向かおう。以下の写真を参考にしてください。現地でN2と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'],
     ['', '〈ここに、総合研究10号館までの行き方を写真付きで分かりやすく解説する。解いている人が図書館前にいないかもしれないことにも留意〉'],
     ['', '〈N2が貼ってある場所の写真をここに挿入〉'],
   ]);
-  assert.equal(dialogue[8].emphasis, true);
+  assert.equal(dialogue[11].emphasis, true);
   assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
   assert.equal(scenario.problems[0].branches, undefined);
 });
@@ -136,7 +139,7 @@ test('N2は法経済学部北館の漢字入力で正解となり、指定の会
     ['ミサメ', '「そ、そんなことないですよ！ほら、早く行きますよ！」'],
     ['ミサメ', '「もう！こんな問題の紙も規約違反なので回収します！」'],
     ['', 'ミサメはN2の問題用紙を壁から剥がすとクシャクシャに丸めポケットに入れた。'],
-    ['', '指示：法経済学部北館へ向かおう。以下の写真を参考に向かい、現地で「N3」を見つけたら、次のページへ進もう。'],
+    ['', '指示：法経済学部北館へ向かおう。以下の写真を参考にしてください。現地でN3と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'],
     ['', '〈ここに、法経済学部北館までの行き方を写真付きで分かりやすく解説する〉'],
     ['', '〈N3が貼ってある場所の写真をここに挿入〉'],
   ]);
@@ -149,7 +152,7 @@ test('N3は末だけを正解とし、指定の会話・指示・写真の仮テ
   assert.equal(problem.type, 'text');
   assert.ok(checkAnswer(problem, ' 末 '));
   for (const answer of ['未', '末吉', 'すえ', '']) assert.equal(checkAnswer(problem, answer), false);
-  assert.deepEqual(scenario.problems.map(p => p.id), ['N1', 'N2', 'N3', 'N4', 'N4.1', 'N5', 'N5.5', 'Q1', 'Q1.1', 'Q2', 'Q2.1', 'Q2.2', 'Q3', 'Q3.scaffold', 'Q3.2', 'Q3.3', 'Q3.3.1', 'Q3.1', 'Q4', 'Q5', 'Q6', 'Q6.1', 'Q6.2', 'Q7', 'Q8']);
+  assert.deepEqual(scenario.problems.map(p => p.id), ['N1', 'N2', 'N3', 'N4', 'N4.1', 'N5', 'N5.5', 'Q1', 'Q1.1', 'Q2', 'Q2.1', 'Q2.2', 'Q3', 'Q3.scaffold', 'Q3.2', 'Q3.3', 'Q3.3.1', 'Q3.1', 'Q4', 'Q5', 'Q6', 'Q6.1', 'Q6.2', 'Q7', 'Q8', 'Q9']);
   const result = submitAnswer(scenario, { ...initialState(scenario), selected: 'N3' }, '末');
   assert.equal(result.status, 'correct');
   const dialogue = result.state.messages.filter(m => m.problemId === 'N3' && m.kind === 'dialogue');
@@ -163,7 +166,7 @@ test('N3は末だけを正解とし、指定の会話・指示・写真の仮テ
     ['ミサメ', '「それはそうと、サークルとか同好会を探すなら、吉田南の総人広場を抜けた先にある掲示板ね。あそこには色んな団体が部員募集のチラシを貼っているわ」'],
     ['タツ', '「うん、確かにそこしかないかもね。とりあえず行ってみるか」'],
     ['アサヒ', '「出発進行～！」'],
-    ['', '指示：吉田南、総人広場を抜けた先にある掲示板へ行こう。以下の写真を参考に向かい、現地で「末席同好会のチラシ」を見つけたら、次のページへ進もう。'],
+    ['', '指示：吉田南、総人広場を抜けた先にある掲示板へ行こう。以下の写真を参考にしてください。現地で末席同好会のチラシを見つけたら上部の「次へ」ボタンを押しましょう。'],
     ['', '〈ここに、吉田南、総人広場先掲示板までの行き方を写真付きで分かりやすく解説する〉'],
     ['', '〈N4が貼ってある場所の写真をここに挿入〉'],
   ]);
@@ -321,7 +324,7 @@ test('N4.1は建物名で正解し、旧N4.2の会話と指示を返す', () => 
     ['ミサメ', '「今回はいっぱい歩きましたね。疲れました～」'],
     ['タツ', '「そこのミサメ君、文句を言わない！さっさと歩く」'],
     ['ミサメ', '「ど、どういうキャラですか？」'],
-    ['', '指示：人間・環境学研究科棟、南西の角へ向かおう。以下の写真を参考に向かおう。現地で「N5」を見つけたら、次のページへ進もう。'],
+    ['', '指示：人間・環境学研究科棟、南西の角へ向かおう。以下の写真を参考にしてください。現地でN5と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'],
     ['', '〈ここに、人間・環境学研究科棟、南西の角までの行き方を写真付きで分かりやすく解説する〉'],
     ['', '〈N5が貼ってある場所の写真をここに挿入〉'],
   ]);
@@ -474,25 +477,33 @@ test('Q5は16:30とカード番号203が揃った場合だけ正解し、会話�
   assert.equal(submitAnswer(scenario, result.state, ['16:30', card]).status, 'already-solved');
 });
 
-test('Q7はA+203またはD+302の組で正解し、前問の記録と推理・会場案内を保存する', () => {
+test('Q7はA+203とD+302の両組が揃って初めて正解し、前問の記録と推理・会場案内を保存する', () => {
   const problem = scenario.problems.find(p => p.id === 'Q7');
   assert.equal(problem.prompt, '矛盾があるブロックを全て指摘せよ');
   assert.deepEqual(problem.answerCombos, [['A', '203'], ['D', '302']]);
   const start = restoreState(scenario, JSON.stringify({ ...initialState(scenario), selected: 'Q6.2', solved: scenario.problems.slice(0, scenario.problems.indexOf(problem)).map(p => p.id) }));
   const state = { ...start, selected: 'Q7' };
-  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['D', '302']).status, 'correct');
-  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['A', '203']).status, 'correct');
+  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['D', '302']).status, 'progress');
+  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['A', '203']).status, 'progress');
   for (const answer of [['C', '302'], ['D', '003'], ['A', '302'], ['D', '203'], ['302', 'D'], ['D', '302', '余分'], ['D', ''], ['', '302'], ['D'], 'D&302']) {
     const result = submitAnswer(scenario, state, answer);
     assert.notEqual(result.status, 'correct');
+    assert.notEqual(result.status, 'progress');
     assert.equal(result.state, state);
   }
   for (const answer of [['D', '302'], [' d ', '３０２'], ['Ｄ', '302'], ['A', '203'], [' ａ ', '２０３'], ['Ａ', '203']]) {
     assert.equal(checkAnswer(problem, answer), true);
   }
-  const result = submitAnswer(scenario, state, ['Ｄ', '３０２']);
+  const first = submitAnswer(scenario, state, ['Ｄ', '３０２']);
+  assert.equal(first.status, 'progress');
+  assert.deepEqual(first.state.solved, start.solved);
+  assert.deepEqual(first.state.answerCombos.Q7, [1]);
+  assert.equal(first.state.messages.filter(m => m.problemId === 'Q7' && m.kind === 'dialogue').length, 0);
+  assert.equal(submitAnswer(scenario, first.state, ['D', '302']).status, 'incorrect');
+  const result = submitAnswer(scenario, first.state, ['Ａ', '２０３']);
   assert.equal(result.status, 'correct');
   assert.deepEqual(result.state.solved, [...start.solved, 'Q7']);
+  assert.deepEqual(result.state.answerCombos.Q7, [0, 1]);
   const dialogue = result.state.messages.filter(m => m.problemId === 'Q7' && m.kind === 'dialogue');
   assert.equal(dialogue[0].speaker, 'タツ');
   assert.ok(dialogue[0].text.startsWith('「ずっと違和感があったんだ。'));
@@ -502,6 +513,24 @@ test('Q7はA+203またはD+302の組で正解し、前問の記録と推理・�
   assert.ok(dialogue[2].text.includes('この先は会場を離れても進められます'));
   assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
   assert.equal(submitAnswer(scenario, result.state, ['D', '302']).status, 'already-solved');
+});
+
+test('Q6でトンカチと答えると専用の誤答会話を保存し、正解記録を増やさず再回答できる', () => {
+  const problem = scenario.problems.find(p => p.id === 'Q6');
+  const state = { ...initialState(scenario), selected: 'Q6' };
+  const result = submitAnswer(scenario, state, 'トンカチ');
+  assert.equal(result.status, 'incorrect');
+  assert.equal(result.response, true);
+  assert.deepEqual(result.state.solved, []);
+  assert.deepEqual(
+    result.state.messages.filter(m => m.problemId === 'Q6').map(m => [m.kind, m.speaker, m.text]),
+    [
+      ['answer', 'あなた', 'トンカチ'],
+      ...problem.answerResponses['トンカチ'].map(line => ['dialogue', line.speaker, line.text]),
+    ],
+  );
+  assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
+  assert.equal(submitAnswer(scenario, result.state, 'ドライアイス').status, 'correct');
 });
 
 test('Q8は4空欄が揃った場合だけ正解し、完成文と解答記録を保存する', () => {
@@ -525,6 +554,29 @@ test('Q8は4空欄が揃った場合だけ正解し、完成文と解答記録�
   assert.equal(submitAnswer(scenario, start, ['ハナ', '知恵', '畏怖', '京都大地震']).status, 'correct');
   assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
   assert.equal(submitAnswer(scenario, result.state, correct).status, 'already-solved');
+});
+
+test('Q9は示された文字から3つの言葉を受け、選んだ言葉の幕だけを残す', () => {
+  const problem = scenario.problems.find(p => p.id === 'Q9');
+  const start = { ...initialState(scenario), selected: 'Q9' };
+  assert.deepEqual(problem.wordBank, ['神', 'ハ', 'カ', 'エ', 'ッ', 'タ', 'セ', 'イ', 'ス', 'ク', 'ワ', 'レ', 'ベ', 'テ', 'ガ']);
+  assert.equal(submitAnswer(scenario, start, '神は還った').status, 'incorrect');
+  assert.equal(submitAnswer(scenario, start, '').status, 'empty');
+  for (const branch of problem.answerBranches) {
+    const result = submitAnswer(scenario, start, ` ${branch.answer} `);
+    assert.equal(result.status, 'correct');
+    assert.equal(result.state.branches.Q9, branch.id);
+    const dialogue = result.state.messages.filter(m => m.problemId === 'Q9' && m.kind === 'dialogue');
+    assert.equal(dialogue.at(-1).text, branch.dialogue.at(-1).text);
+    assert.equal(dialogue.length, branch.dialogue.length);
+    assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)).branches, { Q9: branch.id });
+  }
+  const ending = problem.answerBranches.find(branch => branch.id === 'god-returned').dialogue;
+  assert.equal(ending[0].text, '俺はあのとき、見返りがほしかっただけなんじゃないかって思う。ミサメが死に、悲しさと虚しさを埋めるためハナの野望を打ち砕く、そんな復讐に似た感情に身を任せた。');
+  assert.equal(ending.at(-1).text, 'ただ、それでも俺は前を向く。');
+  assert.equal(ending.find(line => line.text.includes('約束ですよ')).speaker, 'ミサメ');
+  assert.equal(problem.answerBranches.find(branch => branch.id === 'world-saved').dialogue.length, 1);
+  assert.equal(problem.answerBranches.find(branch => branch.id === 'all-saved').dialogue.length, 1);
 });
 
 

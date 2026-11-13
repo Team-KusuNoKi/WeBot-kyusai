@@ -445,7 +445,17 @@ export function createPlaySaveController(options) {
     } catch (error) {
       if (operationEpoch !== epoch || disposed) return false;
       if (error.status === 409 && validEnvelope(error.data?.remote) && error.data.remote.code === target.code) { await raiseConflict(error.data.remote, 'server'); return false; }
-      else setStatus('offline', error.message);
+      if (error.status === 404 && target.code !== null) {
+        const actual = read(storageKey);
+        const stored = parseRecord(actual);
+        if (actual === expectedRaw || stored?.code === target.code) {
+          if (actual === expectedRaw) expectedRaw = null;
+          remove(storageKey);
+        }
+        record = null; mode = 'none'; conflict = null;
+        setStatus('idle'); notify(); return true;
+      }
+      setStatus('offline', error.message);
       throw error;
     }
   }

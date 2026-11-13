@@ -251,6 +251,7 @@ test('冥の章演出は宵から進む操作でだけ表示し、動きを減�
     h.evaluate(`state.selected = 'N5.5'; state.solved = ['N5.5']; yoiEndView = true;`);
     h.click('continue-at-venue');
     assert.equal(h.workspace.innerHTML.includes('class="chapter-transition"'), !reduced);
+    assert.ok(!h.workspace.innerHTML.includes('<strong>冥</strong>'));
     assert.equal(h.evaluate('state.selected'), 'Q1');
     h.evaluate('render()');
     assert.ok(!h.workspace.innerHTML.includes('class="chapter-transition"'));
@@ -491,6 +492,10 @@ test('N1正解後は立ち絵と台詞を一つずつ手動で進め、最後に
     assert.equal(h.evaluate('displayedMessages.length'), index + 1);
     assert.equal((h.app.innerHTML.match(/class="novel-line"/g) ?? []).length, 1);
     assert.ok(h.app.innerHTML.includes(line.text));
+    if (problem.dialogue[index + 1]?.text.startsWith('指示：')) {
+      assert.ok(h.app.innerHTML.includes('aria-hidden="true">▷'));
+      assert.ok(!h.app.innerHTML.includes('移動案内へ'));
+    }
     assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
     const portrait = scenario.portraits[line.speaker];
     assert.equal(h.app.innerHTML.includes('class="novel-stage novel-right"'), line.speaker === 'タツ');
@@ -613,7 +618,7 @@ test('不正解は回答欄を赤く揺らし、回答欄・入力・会話を�
   h.click('replay');
   assert.equal(h.evaluate('displayedMessages.length'), 1);
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
 });
 
 test('文字入力・記号選択・選択式でも不正解後の会話と回答を保ち、編集で赤色を解除する', () => {
@@ -750,7 +755,8 @@ test('N2は場所のプルダウンを表示し、正解後はタツのセリフ
   assert.ok(!h.app.innerHTML.includes('<small>N2</small>'));
   finishScene(h);
   assert.equal(h.evaluate('displayedMessages.length'), 10);
-  assert.ok(h.app.innerHTML.includes('<p class="instruction-card-copy">法経済学部北館へ向かおう。'));
+  assert.ok(h.app.innerHTML.includes('<p class="instruction-card-copy"><strong class="instruction-place">法経済学部北館</strong>へ向かおう。'));
+  assert.ok(h.app.innerHTML.includes('現地で<strong class="instruction-find">N3</strong>と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'));
   assert.ok(h.app.innerHTML.includes('class="instruction-card" aria-label="目的地に移動しよう"'));
   assert.ok(!h.app.innerHTML.includes('指示：法経済学部北館'));
   assert.ok(h.app.innerHTML.includes('class="travel-guide-photo"'));
@@ -782,6 +788,7 @@ test('N2からN3へ進み、末で正解すると12件の会話を順次表示�
   finishScene(h);
   assert.ok(h.app.innerHTML.includes('data-action="travel-next"'));
   h.click('travel-next');
+  assert.ok(h.panel.innerHTML.includes('次の問題を見つけたらページをめくろう'));
   h.click('travel-found');
   assert.equal(h.evaluate('state.selected'), 'N3');
   assert.ok(h.composer.innerHTML.includes('漢字で入力…'));
@@ -790,10 +797,12 @@ test('N2からN3へ進み、末で正解すると12件の会話を順次表示�
   assert.ok(h.app.innerHTML.includes('だから答えは末吉の末！'));
   finishScene(h);
   assert.equal(h.evaluate('displayedMessages.length'), 12);
-  assert.ok(h.app.innerHTML.includes('<p class="instruction-card-copy">吉田南、総人広場を抜けた先にある掲示板へ行こう。'));
+  assert.ok(h.app.innerHTML.includes('<p class="instruction-card-copy"><strong class="instruction-place">吉田南、総人広場を抜けた先にある掲示板</strong>へ行こう。'));
+  assert.ok(h.app.innerHTML.includes('現地で<strong class="instruction-find">末席同好会のチラシ</strong>を見つけたら上部の「次へ」ボタンを押しましょう。'));
   assert.ok(h.app.innerHTML.includes('class="travel-guide-photo"'));
   assert.ok(h.app.innerHTML.includes('data-action="travel-next"'));
   h.click('travel-next');
+  assert.ok(h.panel.innerHTML.includes('次の問題を見つけたらページをめくろう'));
   h.click('travel-found');
   assert.equal(h.evaluate('state.selected'), 'N4');
 });
@@ -821,7 +830,8 @@ test('N4の正解でN4.1に切り替え、建物名の正解後に会話を始�
   assert.equal(restored.evaluate('displayedMessages.length'), 8);
   finishScene(h);
   assert.equal(h.evaluate('displayedMessages.length'), 8);
-  assert.ok(h.app.innerHTML.includes('<p class="instruction-card-copy">人間・環境学研究科棟、南西の角へ向かおう。'));
+  assert.ok(h.app.innerHTML.includes('<p class="instruction-card-copy"><strong class="instruction-place">人間・環境学研究科棟、南西の角</strong>へ向かおう。'));
+  assert.ok(h.app.innerHTML.includes('現地で<strong class="instruction-find">N5</strong>と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'));
 });
 
 test('N4からN4.1へは資料のDOMを保持し、問題文と回答欄だけ切り替える', () => {
@@ -1114,10 +1124,20 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.ok(!h.navigation.innerHTML.includes('宵 終了'));
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   assert.equal(h.composer.hidden, true);
-  assert.ok(h.app.innerHTML.includes('data-action="continue-at-venue"><span>会場で続きを解く</span></button>'));
-  assert.ok(h.app.innerHTML.includes('オンライン版を利用して自宅などで解く'));
-  assert.ok(h.app.innerHTML.includes('会場または自宅などでお楽しみいただけます。'));
-  assert.ok(h.app.innerHTML.includes('data-action="continue-online"'));
+  assert.ok(h.app.innerHTML.includes('data-action="play-mei"><span>11月の救祭 冥 をプレイする</span></button>'));
+  assert.ok(h.app.innerHTML.includes('data-action="tour-thanks"><span>周遊版をご購入の方はこちら</span></button>'));
+  assert.ok(h.app.innerHTML.includes('遊んでいただきありがとうございました。'));
+  assert.ok(h.app.innerHTML.includes('冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、<br>お好きな時間にプレイすることが可能です。'));
+  assert.ok(!h.app.innerHTML.includes('class="yoi-completion-note"'));
+  assert.ok(!h.app.innerHTML.includes('周遊版をご購入の方はここで終了'));
+  h.click('tour-thanks');
+  assert.equal(h.panel.open, true);
+  assert.equal(h.panel.dataset.kind, 'tour-thanks');
+  assert.ok(h.panel.innerHTML.includes('周遊版をプレイしてくださり、ありがとうございました。'));
+  assert.ok(h.panel.innerHTML.includes('mei-promo.webp'));
+  assert.ok(h.panel.innerHTML.includes('アンケートはこちら'));
+  await h.evaluate('closePanel()');
+  assert.equal(h.panel.open, false);
   const saved = JSON.parse(h.snapshot());
   h.click('continue-at-venue');
   assert.equal(h.evaluate('yoiEndView'), false);
@@ -1385,7 +1405,7 @@ test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイス�
   assert.equal(h.evaluate('state.selected'), 'Q2');
   assert.equal(h.composer.hidden, false);
   assert.equal(h.evaluate('displayedMessages.length'), 5);
-  assert.ok(h.composer.innerHTML.includes('そのような状況を実現できる方法はあるだろうか？'));
+  assert.ok(h.composer.innerHTML.includes('犯行時刻を偽装する方法はあるだろうか？'));
   assert.equal((h.composer.innerHTML.match(/type="radio"/g) ?? []).length, 2);
   const before = h.evaluate('JSON.stringify(state.messages)');
   const markup = h.app.innerHTML;
@@ -1450,7 +1470,8 @@ test('Q2.2から3つの問いの一覧へ進み、自由に開いて同じ位置
   assert.equal((h.app.innerHTML.match(/class="investigation-stamp">未回答</g) ?? []).length, 3);
   assert.ok(!h.app.innerHTML.includes('考える'));
   assert.ok(h.app.innerHTML.includes('犯人はどうやってミサメを吊るした？'));
-  assert.ok(h.app.innerHTML.includes('未だに違和感が残る部屋はあるか？'));
+  assert.ok(h.app.innerHTML.includes('大きな謎が残る部屋はあるか'));
+  assert.ok(h.app.innerHTML.includes('上の付箋をタップして'));
   assert.ok(h.app.innerHTML.includes('幽煙の間の北壁に貼られていた紙は今どこに？'));
   assert.ok(h.app.innerHTML.includes('data-action="investigation-next" disabled'));
   assert.equal(h.evaluate("answer(['1']).status"), 'unavailable');
@@ -1653,7 +1674,7 @@ test('Q3の各記号は最後の会話の後に暗転し、最後に解いた記
       assert.ok(!h.app.innerHTML.includes('class="investigation-return"'));
       assert.ok(!h.app.innerHTML.includes('class="investigation-closing"'));
       h.click('investigation-closing');
-      const expected = scenario.investigation.closing[id === last ? 'last' : 'more'];
+      const expected = `${scenario.investigation.closing.byEntry[id]}${scenario.investigation.closing[id === last ? 'last' : 'more']}`;
       assert.ok(h.app.innerHTML.includes(`class="investigation-closing-text">${expected}</span>`));
       h.evaluate("enterPlay({ code: '000000', state, view: capturePlayView() })");
       assert.ok(h.app.innerHTML.includes(`class="investigation-closing-text">${expected}</span>`));
@@ -1944,7 +1965,7 @@ test('再生中の問題選択は古い再生を止め、N1は空の背景で再
   assert.ok(!h.app.innerHTML.includes('そういえば、この問題文、ついに『最期の場所』になりましたね。'));
   assert.equal(h.evaluate("answer(['10']).status"), 'correct');
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "N1")'), true);
 });
 
@@ -1997,7 +2018,7 @@ test('未解答のN2を選ぶとN1正解後の会話を背景に回答欄を開�
   assert.ok(h.app.innerHTML.includes('場所を選択…'));
   assert.ok(h.app.innerHTML.includes(scenario.problems.find(p => p.id === 'N1').travelGuide.steps[0].directions));
   assert.ok(!h.app.innerHTML.includes('うん、線が交差するところは、法経済学部北館だね'));
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "N1" && m.kind === "dialogue")'), true);
   assert.equal(h.timer.pending.size, 0);
   assert.equal(h.evaluate('JSON.stringify({ solved: state.solved, messages: state.messages })'), before);
@@ -2095,7 +2116,7 @@ test('解答済みでもスタートには回答ボタンがあり、N1を再回
   h.click('start');
   assert.equal(h.evaluate("answer(['10']).status"), 'correct');
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
   assert.equal(h.evaluate('state.solved.filter(id => id === "N1").length'), 1);
 });
 
@@ -2292,6 +2313,9 @@ test('N1の移動案内で回答を開閉しても、写真とスクロール位
   assert.ok(!h.app.innerHTML.includes('次の問題へ'));
   assert.ok(!h.app.innerHTML.includes('もう一度読む'));
   assert.ok(h.app.innerHTML.includes('data-action="travel-next"'));
+  assert.ok(h.app.innerHTML.includes('<strong class="instruction-place">総合研究10号館</strong>'));
+  assert.ok(h.app.innerHTML.includes('現地で<strong class="instruction-find">N2</strong>と書かれた問題を見つけたら'));
+  assert.ok(!h.app.innerHTML.includes('移動案内へ'));
   h.chat.scrollTop = 120;
   const gallery = h.evaluate("document.querySelector('.chat-area .travel-guide-gallery')");
   gallery.scrollLeft = 200;
@@ -2373,7 +2397,7 @@ test('N2以降のキャラの台詞と地の文は一件ずつタップで進み
 });
 
 test('未回答でもQ4以降をメニューから自由に開き、回答・再読込しても記録を保つ', () => {
-  const ids = ['Q4', 'Q5', 'Q6', 'Q6.1', 'Q6.2', 'Q7', 'Q8'];
+  const ids = ['Q4', 'Q5', 'Q6', 'Q6.1', 'Q6.2', 'Q7', 'Q8', 'Q9'];
   for (const id of ids) {
     const h = appHarness();
     h.click('toggle-problems');
@@ -2392,8 +2416,13 @@ test('未回答でもQ4以降をメニューから自由に開き、回答・再
     assert.deepEqual(JSON.parse(h.snapshot()).solved, before.solved);
     assert.deepEqual(JSON.parse(h.snapshot()).messages, before.messages);
     const problem = scenario.problems.find(p => p.id === id);
-    const answer = problem.type === 'fields' ? problem.fields.map(f => f.answers[0]) : problem.answers[0];
-    assert.equal(h.evaluate(`answer(${JSON.stringify(answer)}).status`), 'correct');
+    if (Array.isArray(problem.answerCombos) && problem.answerCombos.length > 1) {
+      assert.equal(h.evaluate(`answer(${JSON.stringify(problem.answerCombos[0])}).status`), 'progress');
+      assert.equal(h.evaluate(`answer(${JSON.stringify(problem.answerCombos[1])}).status`), 'correct');
+    } else {
+      const answer = problem.type === 'fields' ? problem.fields.map(f => f.answers[0]) : problem.answers[0];
+      assert.equal(h.evaluate(`answer(${JSON.stringify(answer)}).status`), 'correct');
+    }
     finishScene(h);
     const restored = appHarness(h.snapshot());
     restored.click('select', id);
@@ -2550,7 +2579,9 @@ test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む
   assert.ok(h.composer.innerHTML.includes('inputmode="numeric"'));
   assert.equal(h.evaluate("answer(['D', '003']).status"), 'incorrect');
   assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
-  assert.equal(h.evaluate("answer(['d', '３０２']).status"), 'correct');
+  assert.equal(h.evaluate("answer(['d', '３０２']).status"), 'progress');
+  assert.equal(h.composer.hidden, false);
+  assert.equal(h.evaluate("answer(['A', '203']).status"), 'correct');
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   finishScene(h);
   assert.ok(h.evaluate('historyScreenMarkup()').includes('ずっと違和感があったんだ。'));
@@ -2643,7 +2674,7 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   }
   assert.equal(h.panel.open, true);
   assert.ok(h.panel.innerHTML.includes('冊子の次のページをめくろう'));
-  assert.ok(h.panel.innerHTML.includes('ページをめくった'));
+  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
   assert.ok(h.app.innerHTML.includes(narration.at(-1).text));
   assert.ok(!h.app.innerHTML.includes('class="instruction-card instruction-card-page-turn"'));
   h.click('close');
@@ -2966,6 +2997,81 @@ test('旧保存データは番号が未発行でもその問題から再開し�
   assert.equal(h.evaluate('playSaves.getStatus().phase'), 'local-only');
 });
 
+test('再開番号画面でプレイデータを削除したらタイトルに戻る', async t => {
+  const saved = engine.initialState(scenario);
+  const key = `play-save:${scenario.id}`;
+  const record = storedPlay(saved);
+  const parsed = JSON.parse(record);
+  const h = appHarness(null, false, {
+    entryOnly: true,
+    records: { [key]: record },
+    fetchImpl: async (_, init) => {
+      const body = JSON.parse(init.body);
+      if (body.action === 'delete') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ deleted: true, code: parsed.code, revision: body.revision ?? parsed.revision }),
+        };
+      }
+      if (body.action === 'load') {
+        return { ok: true, status: 200, json: async () => parsed };
+      }
+      throw new Error(`Unexpected save API action: ${body.action}`);
+    },
+  });
+  t.after(() => h.dispose());
+  await h.evaluate('startup');
+  assert.equal(h.evaluate('gateVisible'), false);
+  h.click('save-info');
+  assert.equal(h.panel.open, true);
+  h.click('save-delete-confirm');
+  assert.ok(h.panel.innerHTML.includes('data-action="save-delete"'));
+  h.click('save-delete');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.evaluate('gateVisible'), true);
+  assert.equal(h.evaluate('gateInput'), false);
+  assert.equal(h.evaluate('gateBusy'), false);
+  assert.equal(h.panel.open, false);
+  assert.ok(h.app.innerHTML.includes('title-patchwork-v3.webp'));
+  assert.equal(h.evaluate('playSaves.getRecord()'), null);
+});
+
+test('クラウドに記録がなくても削除できタイトルに戻る', async t => {
+  const saved = engine.initialState(scenario);
+  const key = `play-save:${scenario.id}`;
+  const record = storedPlay(saved);
+  const h = appHarness(null, false, {
+    entryOnly: true,
+    records: { [key]: record },
+    fetchImpl: async (_, init) => {
+      const body = JSON.parse(init.body);
+      if (body.action === 'delete') {
+        return {
+          ok: false,
+          status: 404,
+          json: async () => ({ error: 'not_found', message: 'この番号の進行記録が見つかりません。番号を確認してください。' }),
+        };
+      }
+      if (body.action === 'load') {
+        return { ok: true, status: 200, json: async () => JSON.parse(record) };
+      }
+      throw new Error(`Unexpected save API action: ${body.action}`);
+    },
+  });
+  t.after(() => h.dispose());
+  await h.evaluate('startup');
+  h.click('save-info');
+  h.click('save-delete-confirm');
+  h.click('save-delete');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.evaluate('gateVisible'), true);
+  assert.equal(h.evaluate('gateInput'), false);
+  assert.equal(h.panel.open, false);
+  assert.equal(h.evaluate('playSaves.getRecord()'), null);
+  assert.equal(h.evaluate('gateError'), '');
+});
+
 test('番号入力画面ではWebMCPから回答しても進行を変更しない', t => {
   const h = appHarness(null, false, { entryOnly: true, webMCP: true });
   t.after(() => h.dispose());
@@ -3071,8 +3177,12 @@ test('新規開始時だけ「ゲームを開始」を表示し、プレイ中�
   assert.deepEqual(ids(h), ['N1']);
   assert.match(h.panel.innerHTML, /data-action="save-start"[^>]*>ゲームを開始<\/button>/);
   assert.ok(h.app.innerHTML.includes('「再開番号」を選ぶと番号を確認できます'));
+  assert.ok(h.app.innerHTML.includes('menu-guide-annotated.webp'));
   h.click('save-start');
   await Promise.resolve();
+  assert.equal(h.evaluate('composerExpanded'), false);
+  assert.equal(h.composer.hidden, true);
+  assert.ok(h.app.innerHTML.includes('WeBotの使い方'));
   h.click('toggle-menu');
   const nav = h.app.innerHTML.match(/<nav id="navigation-menu"[^>]*>([\s\S]*?)<\/nav>/)[1];
   assert.ok(nav.includes('>再開番号</span>'));
@@ -3085,6 +3195,10 @@ test('新規開始時だけ「ゲームを開始」を表示し、プレイ中�
   assert.ok(!h.panel.innerHTML.includes('data-action="save-start"'));
   h.click('close');
   await Promise.resolve();
+  h.click('open-composer');
+  h.click('start-answer-confirm');
+  await Promise.resolve();
+  assert.equal(h.evaluate('composerExpanded'), true);
   assert.equal(h.evaluate("answer(['10']).status"), 'correct');
   finishScene(h);
   assert.deepEqual(ids(h), ['N1', 'N2']);
@@ -3261,18 +3375,29 @@ test('カード長押しで合成選択になり2枚で合成できる', async t
   assert.equal(h.evaluate('combineSelecting'), true);
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1']);
   assert.ok(h.panel.innerHTML.includes('合成 1/2'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">①'));
   assert.ok(h.panel.innerHTML.includes('data-action="combine-select-run"'));
   assert.match(h.panel.innerHTML, /data-action="combine-select-run"[^>]*\sdisabled/);
+  h.evaluate('switchClueTab("characters")');
+  assert.ok(h.panel.innerHTML.includes('class="clue-card-grid character-grid"'));
+  assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.characterCards.length);
+  h.evaluate('toggleCombineCard("clue-29")');
+  h.evaluate('openPanel("clues", { keepFocus: true })');
+  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">②'));
+  h.evaluate('toggleCombineCard("clue-29")');
+  h.evaluate('switchClueTab("cards")');
   h.evaluate('toggleCombineCard("clue-2")');
   h.evaluate('openPanel("clues", { keepFocus: true })');
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
   assert.ok(h.panel.innerHTML.includes('合成 2/2'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">②'));
   assert.doesNotMatch(h.panel.innerHTML, /data-action="combine-select-run"[^>]*\sdisabled/);
   h.click('combine-select-run');
   assert.equal(h.evaluate('clueTab'), 'combine');
   assert.equal(h.evaluate('combineSelecting'), false);
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
-  assert.ok(h.panel.innerHTML.includes('class="combine-stage"'));
+  assert.ok(h.panel.innerHTML.includes('class="primary-button full combine-open"'));
+  assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
   assert.ok(h.panel.innerHTML.includes('id="combine-feedback"'));
 });
 
@@ -3284,7 +3409,7 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes('role="tablist"'));
   assert.ok(h.panel.innerHTML.includes('class="topbar clue-screen-header"'));
   assert.ok(h.panel.innerHTML.includes('class="menu-button clue-back"'));
-  assert.ok(h.panel.innerHTML.includes(`class="brand-title">${scenario.title}</span>`));
+  assert.ok(h.panel.innerHTML.includes(`class="brand-title">${scenario.title} 冥</span>`));
   assert.ok(!h.panel.innerHTML.includes('>手がかり</h2>'));
   assert.ok(h.panel.innerHTML.includes('id="clue-tab-cards"'));
   h.evaluate('switchClueTab("characters")');
@@ -3292,10 +3417,17 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
   assert.ok(h.panel.innerHTML.includes('マヤ'));
   h.evaluate('switchClueTab("combine")');
-  assert.ok(h.panel.innerHTML.includes('class="combine-stage"'));
+  assert.ok(h.panel.innerHTML.includes('class="primary-button full combine-open"'));
+  assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
+  assert.ok(h.panel.innerHTML.includes('合成とは2枚の手がかりカードから新しいカードを手に入れることのできるシステムです。関連のありそうな2枚のカードを選択してください。'));
+  assert.ok(h.panel.innerHTML.includes('手がかり番号は、カード下部の数字となります。'));
+  assert.ok(h.panel.innerHTML.includes('手がかり番号はカードだけではなくキャラ情報にも書かれてあります。見落とさないようご注意ください。'));
+  assert.ok(h.panel.innerHTML.includes('class="start-guide-menu"'));
+  assert.ok(h.panel.innerHTML.includes('combine-number-callout.webp'));
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-combine"'));
   h.evaluate('switchClueTab("cards")');
   assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.clueGallery.length);
+  assert.ok(!h.panel.innerHTML.includes('class="clue-card-meta"'));
   assert.equal((h.panel.innerHTML.match(/data-minigame-entry/g) ?? []).length, 0);
   h.click('close');
   await Promise.resolve();
