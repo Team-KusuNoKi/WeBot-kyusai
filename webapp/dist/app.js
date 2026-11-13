@@ -813,6 +813,7 @@ function setComposerExpanded(expanded) {
 }
 
 function closePanel() {
+  clearTimeout(hintCueTimer);
   if (!panel.open || panel.classList.contains('is-closing')) return;
   miniView?.destroy();miniView=null;
   if (panel.classList.contains('clue-gallery') && combinePicker) {
@@ -2064,16 +2065,38 @@ function bindCombineCardGestures() {
 }
 
 
+function hintAnswerBack(explanation) {
+  return explanation ? `<div class="hint-ema hint-ema-back" aria-hidden="true"><p class="hint-ema-answer">${esc(explanation)}</p></div>` : '';
+}
+
 function hintReaderMarkup(subject) {
   const { hints, explanation } = subject;
   const count = hints.length;
   const index = Math.max(0, (state.hints[subject.id] || 1) - 1);
-  const answer = explanation ? `<details class="answer-reveal hint-answer"${index + 1 < count ? ' hidden' : ''}><summary>答えと解説を見る</summary><p>${esc(explanation)}</p></details>` : '';
+  const answer = explanation ? `<details class="answer-reveal hint-answer"${index + 1 < count ? ' hidden' : ''}><summary>解答を見る</summary><p>${esc(explanation)}</p></details>` : '';
+  const back = hintAnswerBack(explanation);
   if (!count) {
-    return `<div class="hint-reader hint-reader-empty"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-ema-stage"><div class="hint-ema"><p class="hint-ema-empty">この問題のヒントはまだありません。</p></div></div>${answer}</div>`;
+    return `<div class="hint-reader hint-reader-empty"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-ema-stage"><div class="hint-ema-flip"><div class="hint-ema hint-ema-front"><p class="hint-ema-empty">この問題のヒントはまだありません。</p></div>${back}</div></div>${answer}</div>`;
   }
-  const cards = hints.map((hint, i) => `<section class="hint-card"${i === index ? '' : ' inert'}><span class="eyebrow">ヒント ${i + 1} / ${count}</span><p>${esc(hint)}</p></section>`).join('');
-  return `<div class="hint-reader"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-pager"><button type="button" class="hint-prev" aria-label="前のヒント"${index === 0 ? ' disabled' : ''}>${icon('chevron')}</button><div class="hint-ema-stage"><div class="hint-ema"><div class="hint-window"><div class="hint-track" style="transform:translateX(-${index * 100}%)">${cards}</div></div></div></div><button type="button" class="hint-next" aria-label="次のヒント"${index === count - 1 ? ' disabled' : ''}>${icon('chevron')}</button></div><span class="sr-only" role="status"></span>${answer}</div>`;
+  const cards = hints.map((hint, i) => `<section class="hint-card"${i === index ? '' : ' inert'}><p>${esc(hint)}</p><span class="eyebrow">ヒント ${i + 1} / ${count}</span></section>`).join('');
+  return `<div class="hint-reader"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-pager"><button type="button" class="hint-prev" aria-label="前のヒント"${index === 0 ? ' disabled' : ''}>${icon('chevron')}</button><div class="hint-ema-stage"><div class="hint-ema-flip"><div class="hint-ema hint-ema-front"><div class="hint-window"><div class="hint-track" style="transform:translateX(-${index * 100}%)">${cards}</div></div></div>${back}</div></div><button type="button" class="hint-next" aria-label="次のヒント"${index === count - 1 ? ' disabled' : ''}>${icon('chevron')}</button></div><span class="sr-only" role="status"></span>${answer}</div>`;
+}
+
+let hintCueTimer;
+function armHintCue(pager) {
+  if (!pager) return;
+  clearTimeout(hintCueTimer);
+  pager.classList.remove('is-quiet');
+  const begin = () => {
+    if (reducedMotion()) { pager.classList.add('is-quiet'); return; }
+    hintCueTimer = setTimeout(() => { if (pager.isConnected) pager.classList.add('is-quiet'); }, 2400);
+  };
+  const disclosure = pager.closest('details');
+  if (disclosure && !disclosure.open) {
+    disclosure.addEventListener('toggle', () => { if (disclosure.open) begin(); }, { once: true });
+    return;
+  }
+  begin();
 }
 
 function bindHintReader(subject) {
@@ -2103,6 +2126,14 @@ function bindHintReader(subject) {
       answer.hidden = !next.disabled;
       if (answer.hidden) answer.open = false;
     }
+    panel.querySelector('.hint-confirm')?.toggleAttribute('hidden', true);
+    panel.querySelector('.hint-ema-flip')?.classList.remove('is-flipped', 'is-turning');
+    panel.querySelector('.hint-ema-back')?.setAttribute('aria-hidden', 'true');
+    const reveal = panel.querySelector('.hint-answer-button');
+    if (reveal) {
+      reveal.hidden = !answer || answer.hidden;
+      reveal.setAttribute('aria-expanded', String(Boolean(answer?.open)));
+    }
     reader.querySelector('[role="status"]').textContent = `ヒント ${index + 1} / ${subject.hints.length}。${subject.hints[index]}`;
     if ((delta > 0 && next.disabled) || (delta < 0 && prev.disabled)) {
       (delta > 0 ? prev : next).focus({ preventScroll: true });
@@ -2112,6 +2143,7 @@ function bindHintReader(subject) {
   }
   prev.addEventListener('click', () => move(-1));
   next.addEventListener('click', () => move(1));
+  armHintCue(reader.querySelector('.hint-pager'));
   const disclosure = reader.closest('details');
   if (disclosure) {
     disclosure.addEventListener('toggle', () => { if (disclosure.open) markRead(); });
@@ -2281,13 +2313,19 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     ? `<div class="answer-choice-header"><h2 id="panel-title">${title}</h2><button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button></div>${content}`
     : isImagePanel
     ? `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button image-viewer-close" data-action="close" aria-label="${imageLabel}を閉じる">${icon('close')}</button><div class="image-viewer-stage" tabindex="0" aria-label="${imageLabel}。ピンチまたはプラス・マイナスで拡大縮小。拡大中はドラッグで移動できます。">${content}</div><div class="image-zoom-controls" role="group" aria-label="画像の拡大縮小"><button data-action="image-zoom-out" aria-label="画像を縮小">−</button><button data-action="image-zoom-reset" aria-label="画像の倍率をリセット"><span data-zoom-label>100%</span></button><button data-action="image-zoom-in" aria-label="画像を拡大">＋</button></div>${kind === 'puzzle-image' ? puzzlePagesMarkup(p) : ''}`
-    : `<div class="panel-header"><div><h2 id="panel-title"${saveInfo ? ' tabindex="-1"' : ''}>${title}</h2></div><button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button></div><div class="panel-body">${content}</div>`;
+    : `<div class="panel-header"><div><h2 id="panel-title"${saveInfo ? ' tabindex="-1"' : ''}>${title}</h2></div>${kind === 'hints' ? (p?.explanation ? `<button type="button" class="hint-answer-button" data-action="hint-answer" aria-expanded="false"${!p.hints.length || (state.hints[p.id] || 1) >= p.hints.length ? '' : ' hidden'}>解答を見る</button>` : '') : `<button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button>`}</div><div class="panel-body">${content}</div>`;
   const draggableSheet = !isImagePanel && !pageTurnDialog && !tourThanksDialog && !['start-answer', 'answer-choices', 'symbol-choices', 'clues', 'hex-cube'].includes(kind);
   panel.classList.toggle('draggable-sheet', draggableSheet);
   if (draggableSheet) {
     const header = panel.querySelector('.panel-header');
     header?.insertAdjacentHTML?.('afterbegin', '<button class="sheet-handle" type="button" data-action="close" aria-label="パネルを閉じる。下に引いて閉じることもできます"><span></span></button>');
     sheetDismiss = bindSheetDismiss(panel, { onDismiss: closePanel, canDismiss: () => !gateBusy, motion: reducedMotion, onThreshold: () => haptics.trigger(), onStart() { surfaceAnimations.get(panel)?.cancel(); surfaceAnimations.delete(panel); } });
+  }
+  if (kind === 'hints') {
+    const summary = panel.querySelector('.hint-answer summary');
+    summary?.setAttribute('tabindex', '-1');
+    summary?.setAttribute('aria-hidden', 'true');
+    if (p?.explanation) panel.insertAdjacentHTML?.('beforeend', `<div class="hint-confirm" hidden><div class="hint-confirm-card" role="dialog" aria-modal="true" aria-labelledby="hint-confirm-title"><div class="panel-header"><div><h2 id="hint-confirm-title">解答を見る</h2></div><button type="button" class="icon-button" data-action="hint-answer-cancel" aria-label="閉じる">${icon('close')}</button></div><div class="panel-body"><p class="panel-intro">絵馬を裏返して、答えを表示します。</p><div class="reset-actions"><button type="button" class="secondary-button" data-action="hint-answer-cancel">戻る</button><button type="button" class="primary-button" data-action="hint-answer-confirm">解答を見る</button></div></div></div></div>`);
   }
   if (!panel.open) panel.showModal();
   syncNavigation();
@@ -2537,6 +2575,11 @@ document.addEventListener('click', event => {
     return;
   }
   const button = event.target.closest('[data-action]');
+  if (event.target.classList?.contains('hint-confirm')) {
+    event.target.hidden = true;
+    panel.querySelector('.hint-answer-button')?.focus({ preventScroll: true });
+    return;
+  }
   if (button?.disabled || button?.closest?.('[inert]')) return;
   const action = button?.dataset.action;
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
@@ -2844,6 +2887,36 @@ document.addEventListener('click', event => {
     openPanel(action);
   }
   else if (action === 'close') closePanel();
+  else if (action === 'hint-answer') {
+    const popup = panel.querySelector('.hint-confirm');
+    if (!popup || panel.querySelector('.hint-answer')?.hidden) return;
+    popup.hidden = false;
+    popup.querySelector('[data-action="hint-answer-confirm"]')?.focus({ preventScroll: true });
+  }
+  else if (action === 'hint-answer-cancel') {
+    const popup = panel.querySelector('.hint-confirm');
+    if (popup) popup.hidden = true;
+    panel.querySelector('.hint-answer-button')?.focus({ preventScroll: true });
+  }
+  else if (action === 'hint-answer-confirm') {
+    const popup = panel.querySelector('.hint-confirm');
+    if (popup) popup.hidden = true;
+    const flip = panel.querySelector('.hint-ema-flip');
+    const back = panel.querySelector('.hint-ema-back');
+    const headerButton = panel.querySelector('.hint-answer-button');
+    if (headerButton) headerButton.hidden = true;
+    if (!flip) return;
+    back?.removeAttribute('aria-hidden');
+    if (reducedMotion()) { flip.classList.add('is-flipped'); return; }
+    const front = flip.querySelector('.hint-ema-front');
+    const finish = () => {
+      front?.removeEventListener('transitionend', finish);
+      flip.classList.add('is-flipped');
+      flip.classList.remove('is-turning');
+    };
+    front?.addEventListener('transitionend', finish);
+    flip.classList.add('is-turning');
+  }
   else if (action === 'continue-conversation') {
     resetChatFollow(); updateConversationNotice(); scrollConversationToEnd(true);
   }

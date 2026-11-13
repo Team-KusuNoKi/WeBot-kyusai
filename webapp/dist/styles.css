@@ -563,28 +563,32 @@ dialog.answer-choice-dialog { inset: 0; width: min(360px, calc(100vw - 16px)); h
 .hint-pager {
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: var(--control-height) minmax(0, 1fr) var(--control-height);
-  align-items: center;
-  gap: 4px;
-  min-height: min(360px, 52dvh);
-  padding: 18px 0 8px;
+  padding: 0;
 }
 .hint-pager button {
-  position: relative;
+  position: absolute;
+  top: 50%;
   z-index: 2;
   display: grid;
   place-items: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  color: #f3e6d0;
-  background: #2a1c14cc;
-  box-shadow: inset 0 0 0 1px #f3e6d033;
+  width: 52px;
+  height: 76px;
+  border-radius: 0;
+  color: #4a3422;
+  background: transparent;
+  box-shadow: none;
+  opacity: .9;
+  transform: translateY(-50%);
+  transition: opacity 1.8s ease;
 }
-.hint-pager button:is(:hover, :focus-visible) { background: #3a2a1ccc; }
-.hint-pager button:disabled { opacity: var(--disabled-opacity); }
+.hint-pager button svg { width: 36px; height: 36px; }
+.hint-pager.is-quiet button:not(:hover):not(:focus-visible) { opacity: .14; }
+.hint-pager button:is(:hover, :focus-visible) { background: transparent; color: #4a3422; opacity: .92; transition-duration: .2s; }
+.hint-pager button:disabled,
+.hint-pager.is-quiet button:disabled:not(:hover):not(:focus-visible) { opacity: 0; }
+.hint-prev { left: -16px; }
 .hint-prev svg { transform: rotate(90deg); }
+.hint-next { right: -16px; }
 .hint-next svg { transform: rotate(-90deg); }
 .hint-ema-stage {
   position: relative;
@@ -592,47 +596,74 @@ dialog.answer-choice-dialog { inset: 0; width: min(360px, calc(100vw - 16px)); h
   display: grid;
   place-items: center;
   min-width: 0;
-  padding: 8px 0 12px;
+  padding: 0;
+  perspective: 1100px;
 }
+.hint-ema-flip {
+  width: 100%;
+  aspect-ratio: 420 / 386;
+  position: relative;
+  transform-style: preserve-3d;
+}
+.hint-ema-front, .hint-ema-back { transition: transform 340ms ease-in; backface-visibility: hidden; }
+.hint-ema-back { position: absolute; inset: 0; transform: rotateY(-90deg); visibility: hidden; justify-content: center; }
+.hint-ema-flip.is-turning .hint-ema-front { transform: rotateY(90deg); }
+.hint-ema-flip.is-flipped .hint-ema-front { visibility: hidden; transform: rotateY(90deg); }
+.hint-ema-flip.is-flipped .hint-ema-back { visibility: visible; transform: rotateY(0); transition-timing-function: ease-out; }
+.hint-reader:has(.is-turning, .is-flipped) .hint-pager button { opacity: 0; pointer-events: none; }
+.hint-ema-answer { margin: 0; font: 18px/1.65 var(--serif); text-align: left; }
 .hint-ema {
   --ema-ink: #3a2414;
   position: relative;
-  width: min(100%, 248px);
-  aspect-ratio: 5 / 6;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 22% 18px 16px;
-  background: url("./assets/hint-ema.svg") center / 100% 100% no-repeat;
-  filter: drop-shadow(0 16px 18px #1a120c73);
+  justify-content: stretch;
+  padding: 31% 28px 10px;
+  background: url("./assets/hint-ema.svg?v=6") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 10px 16px #3a2a1833);
   color: var(--ema-ink);
 }
-.hint-window { position: relative; z-index: 1; overflow: hidden; flex: 1; min-height: 0; display: flex; align-items: center; }
-.hint-track { display: flex; width: 100%; transition: transform var(--motion-enter) var(--motion-ease); }
+.hint-panel .hint-ema { width: 100%; max-width: none; }
+.hint-ema.hint-ema-back {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  justify-content: center;
+}
+.hint-window { position: relative; z-index: 1; overflow: hidden; flex: 1; min-height: 0; display: flex; align-items: stretch; }
+.hint-track { display: flex; width: 100%; height: 100%; transition: transform var(--motion-enter) var(--motion-ease); }
 .hint-card {
   flex: 0 0 100%;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  padding: 4px 6px;
-  text-align: center;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  text-align: left;
 }
 .hint-card .eyebrow {
-  color: #6b4a2acc;
-  font: 11px/1.4 var(--serif);
-  letter-spacing: .18em;
+  color: #8a5e34cc;
+  font: 10px/1.3 var(--serif);
+  letter-spacing: .12em;
 }
 .hint-reader .hint-card p {
+  align-self: center;
+  width: 100%;
+  max-height: 100%;
   margin: 0;
-  max-height: 11.5em;
   padding: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: transparent;
   color: var(--ema-ink, #3a2414);
-  font: 15px/1.85 var(--serif);
+  font: 18px/1.65 var(--serif);
+  text-align: left;
   overflow-wrap: anywhere;
 }
 .hint-ema-empty {
@@ -642,15 +673,46 @@ dialog.answer-choice-dialog { inset: 0; width: min(360px, calc(100vw - 16px)); h
   font: 14px/1.8 var(--serif);
   text-align: center;
 }
-.hint-reader-empty .hint-ema-stage { min-height: min(320px, 46dvh); }
-.hint-panel { background: #1a1510 url("./assets/hint-screen-bg.webp") center 42% / cover no-repeat; }
-.hint-panel .panel-header { background: linear-gradient(180deg, #1a1510e8 0%, #1a1510a8 68%, #1a151000 100%); color: #f3e6d0; }
-.hint-panel .panel-header h2 { color: #f3e6d0; }
-.hint-panel .panel-header .icon-button { color: #f3e6d0; }
-.hint-panel .panel-header .icon-button:is(:hover, :focus-visible) { background: #3a2a1c88; }
-.hint-panel .sheet-handle span { background: #f3e6d066; }
-.hint-panel.dismiss-ready .sheet-handle span { background: #f0782b; }
-.hint-panel .panel-body { position: relative; overflow: hidden; background: transparent; }
+@media (prefers-reduced-motion: reduce) { .hint-pager button { transition: none; } }
+.hint-panel { position: relative; overflow: hidden; background: #e7e2d8; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
+.hint-panel::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -32px;
+  background: url("./assets/hint-screen-bg.webp") center 40% / cover no-repeat;
+  filter: blur(7px);
+  pointer-events: none;
+}
+.hint-panel::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: rgba(247, 244, 239, .34);
+  pointer-events: none;
+}
+dialog.hint-panel { min-height: 0; height: fit-content; }
+.hint-panel .panel-header { position: relative; z-index: 2; background: var(--white); color: var(--ink); border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
+.hint-panel .panel-header h2 { color: var(--ink); }
+.hint-answer-button { min-height: 36px; padding: 4px 2px 4px 12px; background: transparent; color: var(--accent-ink); font: 15px var(--serif); }
+.hint-answer-button:is(:hover, :focus-visible) { background: transparent; color: var(--accent-ink); }
+.hint-confirm { position: absolute; z-index: 6; inset: 0; display: grid; place-items: center; padding: 16px; background: #14141466; }
+.hint-confirm-card { width: min(420px, 100%); border-radius: var(--radius-xl); background: var(--white); box-shadow: 0 12px 32px #20202026; overflow: hidden; }
+.hint-confirm-card .panel-header { padding: 18px 24px 0; background: var(--white); border-radius: 0; }
+.hint-confirm-card .panel-header > div { width: 100%; min-width: 0; }
+.hint-confirm-card .panel-header h2 { margin: 0; padding-bottom: 10px; border-bottom: 1px solid #c8c8c8; color: var(--ink); font: 21px/1.5 var(--serif); letter-spacing: .09em; }
+.hint-panel .hint-confirm-card .panel-body { padding: 12px 24px 22px; overflow: visible; background: var(--white); }
+.hint-confirm-card .panel-intro { margin: 0 0 20px; color: var(--ink); font-size: 15px; line-height: 1.85; }
+.hint-confirm-card .reset-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.hint-confirm-card .reset-actions button { min-height: var(--control-height-lg); padding-inline: 22px; border-radius: var(--radius-pill); font-size: 15px; }
+.hint-confirm-card .icon-button { color: var(--ink); }
+.hint-confirm-card .icon-button:is(:hover, :focus-visible) { background: var(--surface-hover); }
+.hint-panel .sheet-handle span { background: var(--muted); }
+.hint-panel.dismiss-ready .sheet-handle span { background: var(--accent-ink); }
+.hint-panel .panel-body { position: relative; z-index: 1; overflow: hidden; background: transparent; padding-top: 4px; }
+.hint-panel .hint-answer > summary { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.hint-panel .hint-answer:not([open]) { margin: 0; padding: 0; }
 .hint-panel .hint-answer { position: relative; z-index: 1; }
 .full { width: 100%; justify-content: center; }
 .answer-reveal { margin-top: 20px; padding: 4px 16px; border-radius: 18px; background: var(--white); }

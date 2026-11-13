@@ -1,32 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 336" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 386" fill="none">
   <defs>
-    <linearGradient id="wood" x1="140" y1="14" x2="140" y2="322" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#f6e6c8"/>
-      <stop offset=".38" stop-color="#e7c792"/>
-      <stop offset="1" stop-color="#c9965e"/>
-    </linearGradient>
-    <linearGradient id="wash" x1="40" y1="80" x2="240" y2="300" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#d4573a" stop-opacity=".08"/>
-      <stop offset=".45" stop-color="#d4573a" stop-opacity="0"/>
-      <stop offset="1" stop-color="#6e8f62" stop-opacity=".07"/>
-    </linearGradient>
-    <filter id="paper" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
-      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="4" seed="4" result="noise"/>
-      <feColorMatrix in="noise" type="saturate" values="0" result="gray"/>
-      <feComponentTransfer in="gray" result="grain">
-        <feFuncA type="linear" slope=".34"/>
-      </feComponentTransfer>
-      <feBlend in="SourceGraphic" in2="grain" mode="multiply"/>
-    </filter>
-    <path id="board" fill-rule="evenodd" d="M140 14 262 68V320H18V68Z M140 60 m-8 0 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"/>
+    <clipPath id="board">
+      <path d="M210 58 406 120 388 371H32L14 120Z"/>
+    </clipPath>
   </defs>
-  <path d="M140 10 268 66V326H12V66Z" stroke="#7a4e30" stroke-width="8" stroke-linejoin="round"/>
-  <g filter="url(#paper)">
-    <path fill="url(#wood)" fill-rule="evenodd" d="M140 14 262 68V320H18V68Z M140 60 m-8 0 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"/>
-    <path fill="url(#wash)" fill-rule="evenodd" d="M140 14 262 68V320H18V68Z M140 60 m-8 0 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0"/>
-    <g stroke="#8a623c" stroke-opacity=".28" stroke-width="1">
-      <path d="M48 78v232M78 86v214M112 90v220M168 90v220M202 86v214M232 78v232"/>
-    </g>
+  <path fill="#ead9a6" d="M210 58 406 120 388 371H32L14 120Z"/>
+  <g clip-path="url(#board)" stroke="#c6a56c" stroke-width="1.15" stroke-opacity=".55" stroke-linecap="round">
+    <path d="M20 132H400M20 148H400M20 164H400M20 180H400M20 196H400M20 212H400M20 228H400M20 244H400M20 260H400M20 276H400M20 292H400M20 308H400M20 324H400M20 340H400M20 356H400"/>
   </g>
-  <circle cx="140" cy="60" r="10.5" stroke="#9a3a2c" stroke-width="2.4"/>
+  <path d="M210 58 406 120 388 371H32L14 120Z" stroke="#e0c98e" stroke-width="1.5" stroke-linejoin="round"/>
+  <g fill="none" stroke="#e23d3a" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke-width="3.2" d="M208 44C184 18 132 16 124 36c-6 16 28 28 78 14"/>
+    <path stroke-width="3.2" d="M212 44C236 18 288 16 296 36c6 16-28 28-78 14"/>
+    <path stroke-width="2.8" d="M202 50c-14 18-30 26-44 36"/>
+    <path stroke-width="2.8" d="M218 50c14 18 30 26 44 36"/>
+  </g>
+  <circle cx="156" cy="90" r="3.4" fill="#e23d3a"/>
+  <circle cx="264" cy="90" r="3.4" fill="#e23d3a"/>
+  <circle cx="210" cy="46" r="4.6" fill="#d43330"/>
+  <path d="M210 50v12" stroke="#e23d3a" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="210" cy="80" r="16" fill="#f3c63c"/>
+  <path d="M194 80a16 16 0 0 0 32 0" fill="#e0ac22"/>
+  <ellipse cx="202" cy="73" rx="6" ry="4" fill="#fff6cf"/>
+  <path d="M199 86h22" stroke="#b8861a" stroke-width="1.6" stroke-linecap="round"/>
 </svg>
