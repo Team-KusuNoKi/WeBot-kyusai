@@ -117,10 +117,21 @@ const chatIsAtBottom = chat => chat.scrollHeight - chat.clientHeight - chat.scro
 function updateConversationNotice() {
   const notice = document.querySelector('#conversation-notice');
   if (!notice) return;
-  notice.hidden = !unreadConversationCount;
+  if (!unreadConversationCount) {
+    if (notice.hidden || surfaceAnimations.has(notice)) return;
+    if (!notice.animate || reducedMotion()) { notice.hidden = true; return; }
+    animateFade(notice, false).then(finished => { if (finished && !unreadConversationCount) notice.hidden = true; });
+    return;
+  }
+  const grew = !notice.hidden && !surfaceAnimations.has(notice) && unreadConversationCount > noticeCount;
+  surfaceAnimations.get(notice)?.cancel();
+  notice.hidden = false;
+  noticeCount = unreadConversationCount;
   const label = `↓ 続きの会話（${unreadConversationCount}）`;
   if (notice.textContent !== label) notice.textContent = label;
+  if (grew) animateEmphasis(notice, reducedMotion());
 }
+let noticeCount = 0;
 
 function resumeChatFollowIfAtBottom() {
   const chat = document.querySelector('.chat-area');
@@ -766,15 +777,30 @@ function trackSurface(element, animation) {
 }
 
 function animateSurface(element, opening, offset = 20, axis = 'Y', duration = null) {
+  return animateFrames(element, opening, `translate${axis}(${typeof offset === 'number' ? `${offset}px` : offset})`, `translate${axis}(0)`, duration);
+}
+
+// 中央に出る小さな面は、位置を変えずに拡大縮小で出入りさせる。
+function animateScale(element, opening, from = .94, duration = null) {
+  return animateFrames(element, opening, `scale(${from})`, 'scale(1)', duration);
+}
+
+// 位置を transform で決めている要素は、不透明度だけを動かす。
+function animateFade(element, opening, duration = null) {
+  return animateFrames(element, opening, null, null, duration);
+}
+
+function animateFrames(element, opening, hiddenTransform, visibleTransform, duration) {
   if (!element) return Promise.resolve(false);
   const previous = surfaceAnimations.get(element);
   const currentStyle = previous || !opening ? getComputedStyle(element) : null;
-  const interruptedFrame = currentStyle ? { opacity: currentStyle.opacity, transform: currentStyle.transform } : null;
+  const frame = (opacity, transform) => transform == null ? { opacity } : { opacity, transform };
+  const interruptedFrame = currentStyle ? frame(currentStyle.opacity, hiddenTransform == null ? null : currentStyle.transform) : null;
   previous?.cancel();
   surfaceAnimations.delete(element);
   if (!element.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve(true);
-  const hiddenFrame = { opacity: 0, transform: `translate${axis}(${typeof offset === 'number' ? `${offset}px` : offset})` };
-  const visibleFrame = { opacity: 1, transform: `translate${axis}(0)` };
+  const hiddenFrame = frame(0, hiddenTransform);
+  const visibleFrame = frame(1, visibleTransform);
   const animation = element.animate([interruptedFrame ?? (opening ? hiddenFrame : visibleFrame), opening ? visibleFrame : hiddenFrame], {
     duration: duration ?? (opening ? MOTION.enter : MOTION.exit), easing: MOTION.ease, fill: 'both',
   });
@@ -798,9 +824,36 @@ function animatePop(element, opening) {
   return trackSurface(element, animation);
 }
 
+function shakeElement(element, distance = 6) {
+  if (!element?.animate || reducedMotion()) return;
+  element.animate([0, -distance, distance, -distance * .8, distance * .8, -distance / 3, 0].map(x => ({ transform: `translateX(${x}px)` })), { duration: 380, easing: 'ease-in-out' });
+}
+
+function popElement(element) {
+  if (!element?.animate || reducedMotion()) return;
+  element.animate([{ opacity: 0, scale: .4 }, { opacity: 1, scale: 1.15, offset: .6 }, { opacity: 1, scale: 1 }], { duration: MOTION.enter, easing: MOTION.ease });
+}
+
+let clueToastTimer;
+function announceNewClue(count) {
+  const button = document.querySelector('.clue-button');
+  if (!reducedMotion()) button?.animate?.([{ scale: 1 }, { scale: 1.12, offset: .35 }, { scale: 1 }], { duration: 520, easing: MOTION.ease });
+  const shell = document.querySelector('.shell');
+  if (!shell?.insertAdjacentHTML) return;
+  document.querySelector('.clue-toast')?.remove();
+  clearTimeout(clueToastTimer);
+  shell.insertAdjacentHTML('beforeend', `<p class="clue-toast" role="status">${icon('cards')}<span>新しい手がかりを${count > 1 ? `${count}枚` : ''}手に入れた</span></p>`);
+  const toast = document.querySelector('.clue-toast');
+  if (!toast) return;
+  animateSurface(toast, true, -12);
+  clueToastTimer = setTimeout(() => {
+    animateSurface(toast, false, -12).then(finished => { if (finished) toast.remove(); });
+  }, 2600);
+}
+
 function revealItems(selector, root = document) {
   if (reducedMotion()) return;
-  root.querySelectorAll(selector).forEach((item, index) => {
+  root.querySelectorAll?.(selector)?.forEach((item, index) => {
     item.animate?.([
       { opacity: .25, transform: 'translateY(8px)' },
       { opacity: 1, transform: 'translateY(0)' },
@@ -945,6 +998,7 @@ function setMenuExpanded(expanded) {
   animatePop(menu, expanded).then(finished => {
     if (finished && !menuExpanded && menu.isConnected) menu.hidden = true;
   });
+  if (expanded) revealItems(':scope > button', menu);
 }
 
 // 展開した問題は閉じられない。戻る操作は履歴（捜査中は問題一覧）へ送る。
@@ -998,6 +1052,7 @@ function closePanel() {
     combinePicker = false;
     combineReplaceAt = null;
     openPanel('clues');
+    animateFade(panel.querySelector('#clue-tab-content'), true, MOTION.state);
     return;
   }
   if (panel.classList.contains('clue-gallery') && combineSelecting) {
@@ -1034,8 +1089,10 @@ function closePanel() {
   panel.inert = true;
   syncNavigation();
   const clueScreen = panel.classList.contains('clue-gallery');
-  const exitTarget = clueScreen ? panel.querySelector('.clue-screen-content') ?? panel : panel;
-  const exit = animateSurface(exitTarget, false, clueScreen || closingImageViewer ? 0 : panel.classList.contains('draggable-sheet') ? '100%' : 24, 'Y', clueScreen ? MOTION.state : imageExit ? MOTION.enter : null);
+  const centered = ['page-turn-dialog', 'tour-thanks-dialog', 'start-answer-dialog', 'answer-choice-dialog'].some(name => panel.classList.contains(name));
+  const exit = clueScreen ? animateSurface(panel, false, 16, 'X')
+    : centered && !closingImageViewer ? animateScale(panel, false, .96)
+    : animateSurface(panel, false, closingImageViewer ? 0 : panel.classList.contains('draggable-sheet') ? '100%' : 24, 'Y', imageExit ? MOTION.enter : null);
   const completion = imageExit ? Promise.all([exit, imageExit]).then(([finished]) => finished) : exit;
   return completion.then(finished => {
     closingImageViewer?.dispose();
@@ -1103,6 +1160,7 @@ function renderEntry() {
       ${!gateInput ? `<p class="save-entry-error" role="alert">${esc(gateError)}</p>` : ''}
     </div></main></div>`;
   if (entering) animateSurface(document.querySelector('.title-actions'), true, 12);
+  if (entering && !reducedMotion()) document.querySelector('.title-art')?.animate?.([{ opacity: 0, transform: 'scale(1.03)' }, { opacity: 1, transform: 'none' }], { duration: 520, easing: MOTION.ease, fill: 'backwards' });
   if (gateInput) openPanel('resume');
   syncNavigation();
 }
@@ -1132,6 +1190,7 @@ function enterPlay(record) {
   playSessionRevision++;
   conversationPlayer.stop();
   historyView = false;
+  knownClueCount = null;
   changingSession = true;
   state = restoreState(scenario, JSON.stringify(record.state));
   investigationSnapshot = [...state.solved];
@@ -1240,7 +1299,12 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
       announcedCode = false;
     }
     if (!record) throw new Error('再開番号が見つかりません。');
-    if (automatic) { enterPlay(record); viewportLayout.update(); }
+    if (automatic) {
+      await animateFade(document.querySelector('.resume-loading'), false);
+      enterPlay(record);
+      animateFade(document.querySelector('.workspace'), true);
+      viewportLayout.update();
+    }
     else await transitionToPlay(record);
     if (requestedMinigame) {const id=requestedMinigame;requestedMinigame=null;await openHexCube(id);}
     if (kind === 'continue') void playSaves.retry();
@@ -1250,6 +1314,7 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
     if (gateVisible) {
       if (requestedMinigame) gateInput = true;
       renderEntry();
+      if (gateInput) shakeElement(panel.querySelector('.resume-digits'));
     }
     else openPanel('save-info');
   }
@@ -1835,7 +1900,13 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
         ${p.answerPresentation === 'page' && !composerVisible ? '' : composerContentMarkup(p)}
       </section>
       ${historyView ? historyScreenMarkup() : ''}`;
-  document.querySelector('.investigation-closing')?.remove();
+  const previousClosing = document.querySelector('.investigation-closing:not(.is-leaving)');
+  if (previousClosing && !investigationClosing && previousClosing.animate && !reducedMotion()) {
+    previousClosing.classList.add('is-leaving');
+    previousClosing.inert = true;
+    previousClosing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: MOTION.enter, easing: MOTION.ease, fill: 'forwards' })
+      .finished.catch(() => {}).finally(() => previousClosing.remove());
+  } else previousClosing?.remove();
   if (investigationClosing) workspace.insertAdjacentHTML('afterend', investigationClosingMarkup());
   mountEpilogue(workspace);
   if (investigationClosing) document.querySelector('.investigation-closing button')?.focus({ preventScroll: true });
@@ -1850,6 +1921,10 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   viewportLayout.update();
   updateConversationNotice();
   if (scroll) scrollConversationToEnd();
+  if (showClues) {
+    if (knownClueCount !== null && clueCount > knownClueCount && !panel.open) announceNewClue(clueCount - knownClueCount);
+    knownClueCount = clueCount;
+  }
   syncNavigation();
   if (clueCount !== lastClueBadgeCount) {
     lastClueBadgeCount = clueCount;
@@ -1857,6 +1932,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   }
   save();
 }
+let knownClueCount = null;
 
 function switchClueTab(nextTab) {
   const tabs = ['cards', 'characters', 'combine'];
@@ -1869,9 +1945,22 @@ function switchClueTab(nextTab) {
   combineReplaceAt = null;
   if (nextTab === 'combine') combineSelecting = false;
   haptics.trigger();
+  const previousTab = panel.querySelector('.clue-tabs [aria-selected="true"]')?.getBoundingClientRect?.();
   openPanel('clues');
   animateSurface(panel.querySelector('#clue-tab-content'), true, direction * 40, 'X', MOTION.enter);
+  slideTabIndicator(panel.querySelector(`#clue-tab-${clueTab}`), previousTab);
   panel.querySelector(`#clue-tab-${clueTab}`)?.focus({ preventScroll: true });
+}
+
+// 下線は ::after に描き、対応ブラウザだけ前のタブの位置から滑らせる。
+function slideTabIndicator(tab, previousRect) {
+  if (!tab?.animate || !previousRect?.width || reducedMotion() || !('pseudoElement' in (globalThis.KeyframeEffect?.prototype ?? {}))) return;
+  const rect = tab.getBoundingClientRect();
+  if (!rect.width) return;
+  tab.animate([
+    { transform: `translateX(${previousRect.left - rect.left}px) scaleX(${previousRect.width / rect.width})`, transformOrigin: 'left' },
+    { transform: 'none', transformOrigin: 'left' },
+  ], { duration: MOTION.enter, easing: MOTION.ease, pseudoElement: '::after' });
 }
 
 function clueGalleryItems() {
@@ -1929,6 +2018,20 @@ function combineOrderBadge(id) {
   return mark ? `<span class="combine-order" aria-hidden="true">${mark}</span>` : '';
 }
 
+function refreshCombineSelection(changedId = null) {
+  const hadBar = Boolean(panel.querySelector('.combine-select-bar'));
+  openPanel('clues', { keepFocus: true });
+  if (!hadBar) animateSurface(panel.querySelector('.combine-select-bar'), true, 16);
+  if (changedId) popCombineBadge(changedId);
+  if (combineSelection.length === 2) animateEmphasis(panel.querySelector('.combine-select-run'), reducedMotion());
+}
+
+function popCombineBadge(id) {
+  if (!combineSelection.includes(id)) return;
+  const key = globalThis.CSS?.escape?.(id) ?? id;
+  popElement(panel.querySelector(`[data-id="${key}"] .combine-order, [data-combine-id="${key}"] > .combine-order`));
+}
+
 function combineSelectBarMarkup() {
   if (!combineSelecting || combinePicker || clueTab === 'combine') return '';
   const count = combineSelection.length;
@@ -1944,22 +2047,18 @@ function combineSelectBarMarkup() {
   </div>`;
 }
 
-function refreshCombineSelection(changedId = null) {
-  openPanel('clues', { keepFocus: true });
-  if (changedId) animateEmphasis(panel.querySelector(`[data-id="${changedId}"] .combine-order, [data-combine-id="${changedId}"] .combine-order`), reducedMotion());
-  if (combineSelection.length === 2) animateEmphasis(panel.querySelector('.combine-select-run'), reducedMotion());
-}
-
 function applyCombineResult(ids) {
   const result = findCombination(scenario, ids);
   if (!result) {
     haptics.trigger('error');
     const message = panel.querySelector('#combine-feedback');
     if (message) message.textContent = 'この組み合わせからは、まだ新しい情報を見つけられません。';
+    shakeElement(message);
     return;
   }
   if (!state.combinations.includes(result.id)) {
     state.combinations.push(result.id);
+    if (knownClueCount !== null) knownClueCount = unlockedCards(scenario, state).length;
     save();
     openPanel('clues', { revealSelector: `[data-finding-id="${result.id}"]` });
   } else {
@@ -2028,13 +2127,18 @@ function clueCardExpandedMarkup(gallery, index) {
 
 function closeClueCardPreview() {
   const id = expandedClueId;
+  const sourceRect = panel.querySelector('.clue-gallery-card[aria-current="true"]')?.getBoundingClientRect?.();
   expandedClueId = null;
   openPanel('clues');
-  panel.querySelector(`[data-action="clue-card-open"][data-id="${globalThis.CSS?.escape?.(id) ?? id}"]`)?.focus({ preventScroll: true });
+  const tile = panel.querySelector(`[data-action="clue-card-open"][data-id="${globalThis.CSS?.escape?.(id) ?? id}"]`);
+  tile?.focus({ preventScroll: true });
+  animateCardFrom(tile, sourceRect);
 }
 
-function animateCharacterCard(element, sourceRect) {
+// 押したカードの位置から拡大して開き、閉じるときは一覧の位置へ戻す。
+function animateCardFrom(element, sourceRect) {
   if (!element?.animate || !sourceRect?.width || reducedMotion()) return;
+  animateFade(panel.querySelector('#clue-tab-content'), true, MOTION.state);
   const targetRect = element.getBoundingClientRect();
   if (!targetRect.width || !targetRect.height) return;
   const panelRect = panel.getBoundingClientRect();
@@ -2068,7 +2172,7 @@ function closeCharacterPreview() {
   openPanel('clues');
   const tile = panel.querySelector(`[data-action="character-open"][data-index="${index}"]`);
   tile?.focus({ preventScroll: true });
-  animateCharacterCard(tile, sourceRect);
+  animateCardFrom(tile, sourceRect);
 }
 
 function hexEntryOpensReward(id) {
@@ -2113,7 +2217,12 @@ async function openHexCube(id='hex-cube') {
   expandedCharacter=null;
   if (playSaves.getStatus().phase === 'conflict') return;
   const panelKind = hexEntryOpensReward(id) ? hexRewardPanel() : 'hex-cube';
-  if (panelKind === 'hex-cube') await ensureHexCube();
+  if (panelKind === 'hex-cube' && !resolvedMountHexCube) {
+    const triggers = [...document.querySelectorAll('[data-action="hex-open"]')];
+    triggers.forEach(button => { button.classList.add('is-loading'); button.setAttribute('aria-busy', 'true'); });
+    try { await ensureHexCube(); }
+    finally { triggers.forEach(button => { button.classList.remove('is-loading'); button.removeAttribute('aria-busy'); }); }
+  } else if (panelKind === 'hex-cube') await ensureHexCube();
   if (gateVisible || playSaves.getStatus().phase === 'conflict') return;
   openPanel(panelKind);
 }
@@ -2354,6 +2463,26 @@ function hintReaderMarkup(subject) {
   return `<div class="hint-reader"><div class="hint-shrine" aria-hidden="true"></div><div class="hint-pager"><button type="button" class="hint-prev" aria-label="前のヒント"${index === 0 ? ' disabled' : ''}>${icon('chevron')}</button><div class="hint-ema-stage"><div class="hint-ema-flip"><div class="hint-ema hint-ema-front"><div class="hint-window"><div class="hint-track" style="transform:translateX(-${index * 100}%)">${cards}</div></div></div>${back}</div></div><button type="button" class="hint-next" aria-label="次のヒント"${index === count - 1 ? ' disabled' : ''}>${icon('chevron')}</button></div><span class="sr-only" role="status"></span>${answer}</div>`;
 }
 
+function setHintConfirm(popup, open) {
+  if (!popup) return;
+  const card = popup.querySelector('.hint-confirm-card');
+  if (open) {
+    popup.hidden = false;
+    popup.inert = false;
+    animateFade(popup, true, MOTION.state);
+    animateScale(card, true, .94);
+    return;
+  }
+  if (popup.hidden) return;
+  if (!popup.animate || reducedMotion()) { popup.hidden = true; return; }
+  popup.inert = true;
+  Promise.all([animateFade(popup, false), animateScale(card, false, .96)]).then(([finished]) => {
+    if (!finished) return;
+    popup.hidden = true;
+    popup.inert = false;
+  });
+}
+
 let hintCueTimer;
 function armHintCue(pager) {
   if (!pager) return;
@@ -2403,7 +2532,9 @@ function bindHintReader(subject) {
     panel.querySelector('.hint-ema-back')?.setAttribute('aria-hidden', 'true');
     const reveal = panel.querySelector('.hint-answer-button');
     if (reveal) {
+      const revealWasHidden = reveal.hidden;
       reveal.hidden = !answer || answer.hidden;
+      if (revealWasHidden && !reveal.hidden) animateSurface(reveal, true, -4, 'Y', MOTION.state);
       reveal.setAttribute('aria-expanded', String(Boolean(answer?.open)));
     }
     reader.querySelector('[role="status"]').textContent = `ヒント ${index + 1} / ${subject.hints.length}。${subject.hints[index]}`;
@@ -2626,9 +2757,13 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   } else if (kind === 'clues' && clueTab === 'characters' && panel.querySelector('.clue-carousel')) bindClueCarousel(Math.max(0, expandedCharacter ?? 0));
   if (kind === 'clues' && ['cards', 'characters'].includes(clueTab) && !combinePicker) bindCombineCardGestures();
   viewportLayout.schedule();
+  const centeredDialog = pageTurnDialog || tourThanksDialog || ['start-answer', 'answer-choices', 'symbol-choices'].includes(kind);
   if (kind === 'clues') {
     if (revealSelector) animateSurface(panel.querySelector(revealSelector), true, 8);
-    else if (!wasOpen || previousPanelKind !== kind) animateSurface(panel.querySelector('.clue-screen-content'), true, 0, 'Y', MOTION.state);
+    else if (!wasOpen) animateSurface(panel, true, 16, 'X');
+    else if (previousPanelKind !== kind) animateSurface(panel.querySelector('.clue-screen-content'), true, 0, 'Y', MOTION.state);
+  } else if (centeredDialog && !wasOpen) {
+    animateScale(panel, true, .94);
   } else if (!isImagePanel && (kind !== 'resume' || !wasOpen) && (!wasOpen || previousPanelKind !== kind || revealSelector)) {
     animateSurface(wasOpen ? panel.querySelector(revealSelector ?? '.panel-body') ?? panel.querySelector('.symbol-choice-grid, .answer-choice-grid, .image-viewer-stage') : panel, true, kind === 'resume' ? '100%' : wasOpen ? 8 : 24);
   }
@@ -2651,6 +2786,7 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
   const nextProblem = scenario.problems.find(p => p.id === id);
   if (!nextProblem) return;
   const slideIn = !openOverScene || (current().autoOpenContinuation && current().continueTo === id);
+  const switchingProblem = state.selected !== id;
   rememberAnswerDraft();
   if (historyView) closeHistoryScreen();
   if (!canOpenProblem(nextProblem, state)) { showInvestigation(); return; }
@@ -2709,6 +2845,10 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
     save();
   } else {
     render();
+    if (switchingProblem && !preserveConversation) {
+      animateFade(document.querySelector('.chat-area'), true, MOTION.state);
+      animateSurface(document.querySelector('#problem-navigation'), true, -4, 'Y', MOTION.state);
+    }
   }
   if (resetBackground) document.querySelector('.chat-area').scrollTop = nextProblem.conversationBackground === 'investigation' ? investigationScrollTop : 0;
   if (!preserveConversation && displayedMessages.length) animateSurface(document.querySelector('#messages'), true, 8);
@@ -2852,7 +2992,7 @@ document.addEventListener('click', event => {
   }
   const button = event.target.closest('[data-action]');
   if (event.target.classList?.contains('hint-confirm')) {
-    event.target.hidden = true;
+    setHintConfirm(event.target, false);
     panel.querySelector('.hint-answer-button')?.focus({ preventScroll: true });
     return;
   }
@@ -3082,7 +3222,7 @@ document.addEventListener('click', event => {
     haptics.trigger();
     openPanel('clues');
     panel.querySelector('.clue-carousel')?.focus({ preventScroll: true });
-    animateCharacterCard(panel.querySelector('.clue-gallery-card[aria-current="true"]'), sourceRect);
+    animateCardFrom(panel.querySelector('.clue-gallery-card[aria-current="true"]'), sourceRect);
   }
   else if (action === 'character-dismiss' && !event.target.closest('.clue-gallery-card')) {
     closeCharacterPreview();
@@ -3100,11 +3240,13 @@ document.addEventListener('click', event => {
     }
     const card = clueGalleryItems().find(item => item.id === button.dataset.id);
     if (!card) return;
+    const sourceRect = button.getBoundingClientRect?.();
     expandedClueId = card.id;
     expandedCharacter = null;
     haptics.trigger();
     openPanel('clues');
     panel.querySelector('[data-action="clue-card-close"]')?.focus({ preventScroll: true });
+    animateCardFrom(panel.querySelector('.clue-gallery-card[aria-current="true"]'), sourceRect);
   }
   else if (action === 'clue-card-close' && clueTab === 'cards') {
     haptics.trigger();
@@ -3118,12 +3260,14 @@ document.addEventListener('click', event => {
     combineReplaceAt = null;
     haptics.trigger();
     openPanel('clues');
+    animateSurface(panel.querySelector('.combine-picker'), true, 24);
   }
   else if (action === 'combine-picker-close' && combinePicker) {
     combinePicker = false;
     combineReplaceAt = null;
     haptics.trigger();
     openPanel('clues');
+    animateFade(panel.querySelector('#clue-tab-content'), true, MOTION.state);
   }
   else if (action === 'combine-toggle' && combinePicker) {
     const id = button.dataset.id;
@@ -3153,12 +3297,15 @@ document.addEventListener('click', event => {
     clearCombineSelecting();
     haptics.trigger();
     openPanel('clues', { keepFocus: true });
+    popCombineBadge(id);
+    if (combineSelection.length === 2) animateEmphasis(panel.querySelector('[data-action="combine-confirm"]'), reducedMotion());
   }
   else if (action === 'combine-confirm' && combinePicker && combineSelection.length === 2) {
     combinePicker = false;
     combineReplaceAt = null;
     combineSelecting = false;
     openPanel('clues');
+    animateFade(panel.querySelector('#clue-tab-content'), true, MOTION.state);
     applyCombineResult(combineSelection);
   }
   else if (action === 'combine-select-run' && combineSelecting && combineSelection.length === 2) {
@@ -3169,6 +3316,7 @@ document.addEventListener('click', event => {
     expandedCharacter = null;
     clueTab = 'combine';
     openPanel('clues');
+    animateSurface(panel.querySelector('#clue-tab-content'), true, 40, 'X', MOTION.enter);
     applyCombineResult(combineSelection);
   }
   else if (['hints', 'clues', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'answer-choices'].includes(action)) {
@@ -3185,17 +3333,15 @@ document.addEventListener('click', event => {
   else if (action === 'hint-answer') {
     const popup = panel.querySelector('.hint-confirm');
     if (!popup || panel.querySelector('.hint-answer')?.hidden) return;
-    popup.hidden = false;
+    setHintConfirm(popup, true);
     popup.querySelector('[data-action="hint-answer-confirm"]')?.focus({ preventScroll: true });
   }
   else if (action === 'hint-answer-cancel') {
-    const popup = panel.querySelector('.hint-confirm');
-    if (popup) popup.hidden = true;
+    setHintConfirm(panel.querySelector('.hint-confirm'), false);
     panel.querySelector('.hint-answer-button')?.focus({ preventScroll: true });
   }
   else if (action === 'hint-answer-confirm') {
-    const popup = panel.querySelector('.hint-confirm');
-    if (popup) popup.hidden = true;
+    setHintConfirm(panel.querySelector('.hint-confirm'), false);
     const flip = panel.querySelector('.hint-ema-flip');
     const back = panel.querySelector('.hint-ema-back');
     const headerButton = panel.querySelector('.hint-answer-button');

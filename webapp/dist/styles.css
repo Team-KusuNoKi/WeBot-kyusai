@@ -48,7 +48,7 @@
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
 body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.75 var(--sans); }
 button, input, select { font: inherit; }
-button { transition: background-color var(--motion-state) var(--motion-ease), color var(--motion-state) var(--motion-ease), scale var(--motion-press) var(--motion-ease), opacity var(--motion-state) var(--motion-ease); }
+button { transition: background-color var(--motion-state) var(--motion-ease), color var(--motion-state) var(--motion-ease), scale var(--motion-press) var(--motion-ease), opacity var(--motion-state) var(--motion-ease), box-shadow var(--motion-state) var(--motion-ease); }
 button { border: 0; color: inherit; cursor: pointer; }
 button:active:not(:disabled) { scale: .96; }
 button:disabled { cursor: default; }
@@ -163,7 +163,9 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .novel-portrait img[src$="/asahi-cutout.webp"] { transform: translateX(.96%); }
 .novel-portrait img[src$="/maya-cutout.webp"] { transform: translateX(.16%); }
 .novel-bubble { grid-area: 2 / 1; overflow: hidden; position: relative; display: flex; flex-direction: column; flex: none; gap: 10px; width: 100%; min-height: 9.8rem; padding: 23px 20px 12px; border: 1px solid #ad9274; border-radius: 14px; background: #fffcf6; box-shadow: 0 4px 18px #31261635; color: var(--ink); text-align: left; }
+.novel-bubble { transition: background-color var(--motion-state) var(--motion-ease), color var(--motion-state) var(--motion-ease), translate var(--motion-press) var(--motion-ease); }
 .novel-bubble:focus-visible, .novel-bubble:active { background: #fffaf0; color: var(--ink); scale: 1; }@media (hover: hover) { .novel-bubble:hover { background: #fffaf0; color: var(--ink); scale: 1; } }
+.novel-bubble:active { translate: 0 1px; }
 .novel-bubble:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
 .novel-speaker { white-space: nowrap; padding: 3px 16px; border-radius: 3px; background: #352f2b; box-shadow: inset 3px 0 var(--accent); color: #fff; font-size: 14px; font-weight: 600; letter-spacing: .1em; }
 .novel-right .novel-speaker { box-shadow: inset -3px 0 var(--accent); }
@@ -180,8 +182,9 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .novel-next { display: flex; align-items: center; align-self: flex-end; gap: 6px; margin-top: auto; color: var(--accent-ink); font-size: 12px; font-weight: 600; }
 .novel-next svg { width: 16px; height: 16px; }
 @media (prefers-reduced-motion: no-preference) {
-  .novel-next > [aria-hidden], .page-turn-scene-cue { animation: cue-arrive 260ms var(--motion-ease) both; }
+  .novel-next > [aria-hidden], .page-turn-scene-cue { animation: cue-arrive 260ms var(--motion-ease) both, cue-idle 1.4s 1.6s ease-in-out infinite; }
   @keyframes cue-arrive { from { opacity: .3; translate: -4px 0; } to { opacity: 1; translate: 0 0; } }
+  @keyframes cue-idle { 0%, 100% { translate: 0 0; } 50% { translate: 3px 0; } }
   .investigation-question:active { translate: 0 2px; box-shadow: 1px 2px 3px #38241440; }
   dialog[open].page-turn-dialog .page-turn-stop { animation: stop-stamp 310ms var(--motion-ease) both; }
   @keyframes stop-stamp {
@@ -466,6 +469,8 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 .composer-meta { display: none; }
 .feedback { margin-top: 8px; color: var(--accent-ink); font-size: 11px; }
 .feedback:empty { display: none; }
+.feedback:not(:empty), .save-status-strip.save-warning { animation: feedback-in var(--motion-enter) var(--motion-ease) both; }
+@keyframes feedback-in { from { opacity: 0; } to { opacity: 1; } }
 .primary-button, .secondary-button { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: var(--control-height); padding: 11px 16px; border-radius: var(--radius-md); background: var(--accent); font-size: 12px; }
 .primary-button:focus-visible { background: var(--accent-hover); }@media (hover: hover) { .primary-button:hover { background: var(--accent-hover); } }
 .primary-button svg { width: 17px; height: 17px; }
@@ -1032,8 +1037,9 @@ dialog.answer-choice-dialog { inset-block: var(--visual-offset-top, 0px) var(--v
 .answer-readiness { display: none; }
 .answer-error { color: var(--danger); }
 .answer-error:empty { display: none; }
-.needs-completion .needs-answer { box-shadow: inset 0 0 0 2px var(--accent-ink); }
-#answer-form button[aria-busy="true"] { opacity: var(--disabled-opacity-soft); }
+.needs-completion .needs-answer { box-shadow: inset 0 0 0 2px var(--accent-ink); animation: needs-attention 640ms ease-in-out; }
+@keyframes needs-attention { 0%, 50%, 100% { box-shadow: inset 0 0 0 2px var(--accent-ink); } 25%, 75% { box-shadow: inset 0 0 0 4px var(--accent-ink); } }
+#answer-form button[aria-busy="true"] { opacity: var(--disabled-opacity-soft); scale: .98; cursor: progress; }
 #answer-form[data-fields-layout="row"] { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; gap: 8px; }
 #answer-form[data-fields-layout="row"] .answer-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
 #answer-form[data-fields-layout="row"] .text-composer { min-height: var(--answer-field-height); padding: 6px; }
@@ -1105,15 +1111,17 @@ dialog.clue-gallery { --clue-card-width: min(72vw, calc(62dvh * .707), 330px); i
 .clue-screen-bg { position: absolute; z-index: 0; inset: -28px; background: url("./assets/clue-screen-bg.webp") center / cover no-repeat; filter: blur(7px); pointer-events: none; }
 .clue-screen-bg::after { content: ""; position: absolute; inset: 0; background: rgba(247, 244, 239, .34); }
 dialog.clue-gallery[open] { display: flex; flex-direction: column; }
-dialog.clue-gallery::backdrop, dialog.clue-gallery.is-closing::backdrop { background: var(--canvas); animation: none; }
+dialog.clue-gallery::backdrop { background: var(--canvas); }
 .clue-screen-content { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 @media (min-width: 600px) {
   dialog.clue-gallery { top: 16px; height: calc(100dvh - 34px); border-radius: 26px; }
 }
 .clue-back svg { transform: rotate(180deg); }
 .clue-tabs { flex-shrink: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--white); }
-.clue-tabs button { min-height: var(--control-height-lg); border-radius: 0; border-bottom: 3px solid transparent; background: transparent; font-size: 13px; color: var(--muted); }
-.clue-tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.clue-tabs button { position: relative; min-height: var(--control-height-lg); border-radius: 0; background: transparent; font-size: 13px; color: var(--muted); }
+.clue-tabs button::after { content: ""; position: absolute; inset: auto 0 0; height: 3px; background: transparent; }
+.clue-tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+.clue-tabs button[aria-selected="true"]::after { background: var(--ink); }
 .clue-tabs button:focus-visible { outline-offset: -5px; }
 .clue-gallery .panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 22px 20px max(22px, env(safe-area-inset-bottom)); }
 .clue-gallery .panel-body:has(.clue-carousel), .clue-gallery .panel-body:has(.clue-card-expanded) { display: flex; flex-direction: column; justify-content: center; padding: 0 0 env(safe-area-inset-bottom); }
@@ -1122,6 +1130,12 @@ dialog.clue-gallery::backdrop, dialog.clue-gallery.is-closing::backdrop { backgr
 .clue-card-actions { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .clue-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; align-items: start; }
 .clue-card-tile { display: grid; gap: 8px; align-content: start; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: left; color: inherit; }
+.clue-card-thumb { transition: box-shadow var(--motion-state) var(--motion-ease), scale var(--motion-press) var(--motion-ease); }
+.clue-card-tile.is-long-pressing .clue-card-thumb, .clue-gallery-card.is-long-pressing { scale: .95; transition: scale 480ms cubic-bezier(.4,0,.2,1); }
+[data-action="hex-open"].is-loading { cursor: progress; animation: hex-loading 900ms ease-in-out infinite alternate; }
+@keyframes hex-loading { from { background-color: #ffffff00; } to { background-color: #ffffff55; } }
+.clue-toast { position: fixed; z-index: 20; top: max(64px, calc(env(safe-area-inset-top) + 56px)); left: 50%; display: flex; align-items: center; gap: 8px; margin: 0; padding: 9px 16px; translate: -50% 0; border-radius: var(--radius-pill); background: var(--ink); color: var(--white); font-size: 13px; font-weight: 600; white-space: nowrap; box-shadow: 0 6px 18px #20202033; pointer-events: none; }
+.clue-toast svg { width: 18px; height: 18px; }
 .clue-card-thumb { position: relative; display: block; width: 100%; overflow: hidden; background: var(--white); border: 1px solid var(--surface-hover); box-shadow: 0 4px 12px #20202020; }
 .clue-card-thumb img { display: block; width: 100%; height: auto; vertical-align: top; }
 .clue-card-tile:focus-visible .clue-card-thumb { box-shadow: 0 6px 18px #20202030; }@media (hover: hover) { .clue-card-tile:hover .clue-card-thumb { box-shadow: 0 6px 18px #20202030; } }
@@ -1238,7 +1252,7 @@ dialog.hex-failure {
   touch-action: pan-y; user-select: none; -webkit-user-select: none;
 }
 .hex-shape, .hex-shape * { -webkit-tap-highlight-color: transparent; }
-.hex-face { fill: var(--white); stroke: none; cursor: pointer; }
+.hex-face { fill: var(--white); stroke: none; cursor: pointer; transition: fill var(--motion-state) var(--motion-ease), filter var(--motion-state) var(--motion-ease); }
 .hex-face.is-filled { fill: var(--accent-soft); }
 .hex-face.hovered, .hex-face:focus-visible { filter: brightness(.92); }
 .hex-face:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
@@ -1315,7 +1329,9 @@ dialog.hex-cube-panel {
 .investigation-closing { position: fixed; inset: 0; z-index: 10; }
 .investigation-closing::before { content: ''; position: absolute; inset: 0; background: #080909; animation: investigation-darken 350ms ease-out both; }
 .investigation-closing button { position: relative; display: grid; width: 100%; height: 100%; align-content: center; justify-items: center; gap: 32px; padding: 24px; overflow: auto; background: transparent; }
+.investigation-closing button { transition: translate var(--motion-press) var(--motion-ease); }
 .investigation-closing button:active, .investigation-closing button:focus-visible { scale: 1; background: transparent; }@media (hover: hover) { .investigation-closing button:hover { scale: 1; background: transparent; } }
+.investigation-closing button:active { translate: 0 1px; }
 .investigation-closing-text { width: min(100%, 23em); text-align: start; color: #eeeae2; font: 400 clamp(15px, 3.8vw, 17px)/1.95 var(--serif); letter-spacing: .025em; animation: investigation-darken 240ms 350ms ease-out both; }
 .investigation-closing-back { color: #c4c3bd; font-size: 12px; animation: investigation-darken 300ms 720ms ease-out both; }
 .investigation-closing button:focus-visible .investigation-closing-back { text-decoration: underline; text-underline-offset: 4px; }
