@@ -189,7 +189,7 @@ export const scenario = {
         { speaker: 'ミサメ', text: '「だからNFの危機が迫る今、なんとしてでもこの祭りを未来につなぎたいって思ってます。」' },
         { speaker: 'タツ', text: '「そういうことなら協力するしかないな。ミサメに落ち込まれたら、この巡回班も楽しくないからな。」' },
         { speaker: 'アサヒ', text: '「そうですね。ミサメ先輩の熱い思いも聞けたことだし、とりあえずこの不審なチラシをどうにかしましょう。」' },
-        { speaker: 'タツ＆アサヒ', text: '「いつの間に！！」' },
+        { speaker: 'タツ＆ミサメ', text: '「いつの間に！！」' },
         { speaker: '', text: n1Move.instruction, emphasis: true },
         { speaker: '', text: '〈ここに、総合研究10号館までの行き方を写真付きで分かりやすく解説する。解いている人が図書館前にいないかもしれないことにも留意〉', travelGuidePart: 'photo' },
         { speaker: '', text: '〈N2が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
