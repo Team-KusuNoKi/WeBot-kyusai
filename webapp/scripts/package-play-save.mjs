@@ -94,6 +94,14 @@ if (!backendOnly) {
       for (const match of text.matchAll(/["'](\.\.\/assets\/[^"']+)["']/g)) {
         await collect(resolve(dist, match[1].replace(/^\.\.\//, '')));
       }
+      // routePhoto のように `../assets/<dir>/${...}` とテンプレートで組み立てる画像は、
+      // 静的プレフィックスのディレクトリごと収集する。scenario.js の注釈どおり JPEG 原寸は配信しない。
+      for (const match of text.matchAll(/`(\.\.\/assets\/[^`$]*\/)\$\{/g)) {
+        const directory = resolve(dist, match[1].replace(/^\.\.\//, ''));
+        for (const file of await listFiles(directory)) {
+          if (extname(file) === '.webp') await collect(file);
+        }
+      }
     } else if (extname(path) === '.css') {
       for (const ref of cssReferences(data.toString('utf8')).filter(local)) await collect(resolve(dirname(path), referencePath(ref)));
     }
