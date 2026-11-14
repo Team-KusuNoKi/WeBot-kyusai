@@ -3447,8 +3447,8 @@ test('カード長押しで合成選択になり2枚で合成できる', async t
   assert.equal(h.evaluate('clueTab'), 'combine');
   assert.equal(h.evaluate('combineSelecting'), false);
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
-  assert.ok(h.panel.innerHTML.includes('class="combine-open"'));
-  assert.ok(!h.panel.innerHTML.includes('class="primary-button full combine-open"'));
+  assert.ok(h.panel.innerHTML.includes('class="answer-fab combine-tab-fab"'));
+  assert.ok(h.panel.innerHTML.includes('data-action="combine-pick"'));
   assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
   assert.ok(h.panel.innerHTML.includes('id="combine-feedback"'));
 });
@@ -3469,8 +3469,8 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
   assert.ok(h.panel.innerHTML.includes('マヤ'));
   h.evaluate('switchClueTab("combine")');
-  assert.ok(h.panel.innerHTML.includes('class="combine-open"'));
-  assert.ok(!h.panel.innerHTML.includes('class="primary-button full combine-open"'));
+  assert.ok(h.panel.innerHTML.includes('class="answer-fab combine-tab-fab"'));
+  assert.ok(h.panel.innerHTML.includes('data-action="combine-pick"'));
   assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
   assert.ok(h.panel.innerHTML.includes('合成とは2枚の手がかりカードから新しいカードを手に入れることのできるシステムです。関連のありそうな2枚のカードを選択してください。'));
   assert.ok(h.panel.innerHTML.includes('手がかり番号は、カード下部の数字となります。'));

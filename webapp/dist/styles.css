@@ -49,12 +49,12 @@
 body { margin: 0; background: var(--canvas); color: var(--ink); font: 14px/1.75 var(--sans); }
 button, input, select { font: inherit; }
 button { transition: background-color var(--motion-state) var(--motion-ease), color var(--motion-state) var(--motion-ease), scale var(--motion-press) var(--motion-ease), opacity var(--motion-state) var(--motion-ease), box-shadow var(--motion-state) var(--motion-ease); }
-button { border: 0; color: inherit; cursor: pointer; }
+button { border: 0; color: inherit; cursor: pointer; touch-action: manipulation; }
 button:active:not(:disabled) { scale: .96; }
 button:disabled { cursor: default; }
 button svg { width: 21px; height: 21px; flex-shrink: 0; }
 a { color: inherit; text-decoration: none; }
-button, a, input, summary { outline: none; }
+button, a, input, select, summary, label { outline: none; -webkit-tap-highlight-color: transparent; }
 button:focus-visible, a:focus-visible { background-color: var(--surface-hover); }
 .hidden, [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
@@ -164,13 +164,13 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .novel-portrait img[src$="/maya-cutout.webp"] { transform: translateX(.16%); }
 .novel-bubble { grid-area: 2 / 1; overflow: hidden; position: relative; display: flex; flex-direction: column; flex: none; gap: 10px; width: 100%; min-height: 9.8rem; padding: 23px 20px 12px; border: 1px solid #ad9274; border-radius: 14px; background: #fffcf6; box-shadow: 0 4px 18px #31261635; color: var(--ink); text-align: left; }
 .novel-bubble { transition: background-color var(--motion-state) var(--motion-ease), color var(--motion-state) var(--motion-ease), translate var(--motion-press) var(--motion-ease); }
-.novel-bubble:focus-visible, .novel-bubble:active { background: #fffaf0; color: var(--ink); scale: 1; }@media (hover: hover) { .novel-bubble:hover { background: #fffaf0; color: var(--ink); scale: 1; } }
-.novel-bubble:active { translate: 0 1px; }
+.novel-bubble:focus-visible, .novel-bubble:active:not(:disabled) { background: #fffaf0; color: var(--ink); scale: 1; }@media (hover: hover) { .novel-bubble:hover { background: #fffaf0; color: var(--ink); scale: 1; } }
+.novel-bubble:active:not(:disabled) { translate: 0 1px; }
 .novel-bubble:focus-visible { outline: 3px solid var(--accent-ink); outline-offset: 2px; }
 .novel-speaker { white-space: nowrap; padding: 3px 16px; border-radius: 3px; background: #352f2b; box-shadow: inset 3px 0 var(--accent); color: #fff; font-size: 14px; font-weight: 600; letter-spacing: .1em; }
 .novel-right .novel-speaker { box-shadow: inset -3px 0 var(--accent); }
 .novel-line { font: 500 16px/1.85 var(--serif); white-space: pre-wrap; overflow-wrap: anywhere; }
-.page-turn-scene { position: relative; z-index: 3; display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 16px; align-self: stretch; padding: 24px; border: 0; background: transparent; color: var(--white); text-align: center; }
+.page-turn-scene { position: absolute; z-index: 3; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; border: 0; background: transparent; color: var(--white); text-align: center; }
 .page-turn-scene-icon { display: grid; place-items: center; }
 .page-turn-scene-icon svg { width: 44px; height: 44px; filter: drop-shadow(0 2px 8px #00000080); }
 .page-turn-scene-text { font: 600 17px/1.8 var(--serif); letter-spacing: .08em; text-shadow: 0 2px 8px #00000099; }
@@ -1127,7 +1127,6 @@ dialog.clue-gallery::backdrop { background: var(--canvas); }
 .clue-gallery .panel-body:has(.clue-carousel), .clue-gallery .panel-body:has(.clue-card-expanded) { display: flex; flex-direction: column; justify-content: center; padding: 0 0 env(safe-area-inset-bottom); }
 .clue-gallery .panel-body:has(.clue-card-expanded) { justify-content: stretch; padding: 0; overflow: hidden; }
 
-.clue-card-actions { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .clue-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; align-items: start; }
 .clue-card-tile { display: grid; gap: 8px; align-content: start; width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; text-align: left; color: inherit; }
 .clue-card-thumb { transition: box-shadow var(--motion-state) var(--motion-ease), scale var(--motion-press) var(--motion-ease); }
@@ -1142,9 +1141,6 @@ dialog.clue-gallery::backdrop { background: var(--canvas); }
 .clue-card-tile:focus-visible { outline: none; }
 .clue-card-tile:focus-visible .clue-card-thumb { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
 .combine-guide { margin-bottom: 22px; }
-.combine-open { display: flex; align-items: center; justify-content: center; gap: 6px; width: fit-content; min-height: var(--control-height); margin: 4px 0 0 auto; padding: 0 15px; border-radius: var(--radius-pill); background: var(--accent); font-size: 14px; font-weight: 600; box-shadow: 0 2px 8px #20202024; }
-.combine-open svg { width: 20px; height: 20px; }
-.combine-open:focus-visible { background: var(--accent-hover); }@media (hover: hover) { .combine-open:hover { background: var(--accent-hover); } }
 .start-guide-menu .combine-number-callout { margin: 0; }
 .clue-card-expanded { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .clue-card-expanded-header { flex-shrink: 0; display: flex; justify-content: flex-end; height: 40px; padding: 0 4px; background: transparent; }
@@ -1155,6 +1151,9 @@ dialog.clue-gallery::backdrop { background: var(--canvas); }
 .clue-carousel:focus-visible { outline-offset: -3px; }
 .clue-gallery-card { position: relative; flex: 0 0 var(--clue-card-width); width: var(--clue-card-width); aspect-ratio: 732 / 1038; background: var(--white); border: 1px solid var(--surface-hover); box-shadow: 0 8px 20px #20202030; scroll-snap-align: center; scroll-snap-stop: always; transform: scale(var(--card-scale, .86)); transform-origin: center; }
 .clue-gallery-card[aria-current="true"] { --card-scale: 1; }
+/* 拡大アニメーション用のクローンは .clue-card-expanded の外に置かれるので、画像サイズをこちらで固定する。 */
+.clue-card-ghost { overflow: hidden; }
+.clue-card-ghost > img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .clue-gallery-position { margin: 0 0 12px; color: var(--muted); font-size: 12px; text-align: center; }
 .clue-card-expanded .clue-carousel { --clue-card-width: 100%; flex: 1; min-height: 0; align-items: flex-start; gap: 10px; scroll-padding-inline: 14%; padding: 20px 14% max(16px, env(safe-area-inset-bottom)); }
 .clue-card-expanded .clue-photo-card { position: relative; aspect-ratio: auto; height: auto; max-height: 100%; background: transparent; border: 0; box-shadow: 0 8px 16px #2020201c; transform: scale(var(--card-scale, .86)); transform-origin: center center; }
@@ -1163,7 +1162,7 @@ dialog.clue-gallery::backdrop { background: var(--canvas); }
 .clue-card-expanded .clue-photo-card img { display: block; width: 100%; height: auto; }
 .character-sheet .clue-carousel { align-items: center; gap: 14px; scroll-padding-inline: 7%; padding: 20px 7% max(20px, env(safe-area-inset-bottom)); }
 .clue-gallery .panel-body:has(.combine-stage) { display: flex; flex-direction: column; justify-content: center; }
-.clue-gallery .panel-body:has(.combine-guide) { justify-content: flex-start; }
+.clue-gallery .panel-body:has(.combine-guide) { justify-content: flex-start; padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 .combine-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
 .combine-slot { display: grid; align-content: center; justify-items: center; gap: 8px; width: 100%; min-height: min(46dvh, 380px); padding: 10px; border: 1.5px dashed #b7b7b7; border-radius: 16px; background: transparent; color: var(--muted); }
 .combine-slot[data-filled="true"] { align-content: start; min-height: 0; border-style: solid; border-color: var(--surface-hover); background: var(--white); color: inherit; }
@@ -1174,8 +1173,8 @@ dialog.clue-gallery::backdrop { background: var(--canvas); }
 .combine-picker { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .combine-picker-close { position: absolute; z-index: 2; top: 4px; right: 8px; background: #fffc; box-shadow: 0 2px 10px #2020202e; }
 .combine-picker .clue-card-grid { flex: 1; min-height: 0; overflow-y: auto; align-content: start; padding: 4px 16px 84px; }
-.combine-picker .answer-fab { min-height: var(--control-height); gap: 6px; padding-inline: 15px; font-size: 14px; box-shadow: 0 2px 8px #20202024; }
-.combine-picker .answer-fab svg { width: 20px; height: 20px; }
+.combine-picker .answer-fab, .combine-tab-fab { min-height: var(--control-height); gap: 6px; padding-inline: 15px; font-size: 14px; box-shadow: 0 2px 8px #20202024; }
+.combine-picker .answer-fab svg, .combine-tab-fab svg { width: 20px; height: 20px; }
 .combine-order { position: absolute; z-index: 2; top: 6px; right: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--ink); font: 700 14px/1 var(--sans); box-shadow: 0 2px 6px #20202033; }
 .combine-feedback { min-height: 1.4em; margin: 16px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .combine-feedback:empty { display: none; }
