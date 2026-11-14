@@ -163,7 +163,8 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .chat-area.novel-area:has(.novel-bubble[data-action="investigation-closing"]) { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
 .novel-stage { display: grid; grid-template-columns: minmax(0, 1fr); --portrait-width: clamp(82px, 24vw, 108px); --portrait-inset: 18px; margin-top: auto; }
 .novel-portrait { grid-area: 1 / 1; align-self: end; position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; width: var(--portrait-width); margin: 0 0 -12px var(--portrait-inset); pointer-events: none; }
-.novel-right .novel-portrait:not(.portrait-leaving), .novel-portrait.portrait-leaving.was-right { margin-inline: auto var(--portrait-inset); }
+.novel-right .novel-portrait:not(.portrait-leaving), .novel-portrait.novel-portrait-right, .novel-portrait.portrait-leaving.was-right { margin-inline: auto var(--portrait-inset); }
+.novel-portrait-right .novel-speaker { box-shadow: inset -3px 0 var(--accent); }
 .novel-portrait img { aspect-ratio: 1; object-fit: contain; display: block; width: 100%; height: auto; filter: drop-shadow(0 2px 4px #20190e35); }
 /* 透過PNGの左右の余白を補正し、人物の輪郭の中央を名札に合わせる。 */
 .novel-portrait img[src$="/misame-cutout.webp"] { transform: translateX(-2.75%); }
@@ -438,6 +439,8 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 .has-character .message-body { max-width: calc(100% - 65px); }
 .character-right { justify-content: flex-end; }
 .character-right .speaker { margin-left: auto; }
+.character-duo { justify-content: space-between; }
+.character-duo .message-body { max-width: calc(100% - 130px); margin-inline: auto; }
 .message-body { width: fit-content; max-width: calc(100% - 38px); min-width: 0; }
 .speaker { display: flex; align-items: center; gap: 9px; width: fit-content; margin-bottom: 6px; padding: 0; background: transparent; color: var(--muted); font-size: 10px; }
 .speaker small { font-size: 9px; }

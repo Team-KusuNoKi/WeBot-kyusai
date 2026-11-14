@@ -513,10 +513,10 @@ test('N1正解後は立ち絵と台詞を一つずつ手動で進め、最後に
       assert.ok(!h.app.innerHTML.includes('移動案内へ'));
     }
     assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
-    const portrait = scenario.portraits[line.speaker];
+    const portraits = line.speaker.split('＆').map(name => scenario.portraits[name]).filter(Boolean);
     assert.equal(h.app.innerHTML.includes('class="novel-stage novel-right"'), line.speaker === 'タツ');
-    assert.equal(h.app.innerHTML.includes('<div class="novel-portrait"><img'), Boolean(portrait));
-    if (portrait) assert.ok(h.app.innerHTML.includes(portrait));
+    assert.equal(h.app.innerHTML.includes('<div class="novel-portrait"><img'), Boolean(portraits.length));
+    for (const portrait of portraits) assert.ok(h.app.innerHTML.includes(portrait));
     if (!index) {
       assert.equal(h.evaluate("answer(['10']).status"), 'busy');
       h.click('history');
@@ -643,7 +643,7 @@ test('不正解は回答欄を赤く揺らし、回答欄・入力・会話を�
   h.click('replay');
   assert.equal(h.evaluate('displayedMessages.length'), 1);
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
 });
 
 test('文字入力・記号選択・選択式でも不正解後の会話と回答を保ち、編集で赤色を解除する', () => {
@@ -2026,7 +2026,7 @@ test('再生中の問題選択は古い再生を止め、N1は空の背景で再
   assert.ok(!h.app.innerHTML.includes('そういえば、この問題文、ついに『最期の場所』になりましたね。'));
   assert.equal(h.evaluate("answer(['10']).status"), 'correct');
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "N1")'), true);
 });
 
@@ -2079,7 +2079,7 @@ test('未解答のN2を選ぶとN1正解後の会話を背景に回答欄を開�
   assert.ok(h.app.innerHTML.includes('場所を選択…'));
   assert.ok(h.app.innerHTML.includes(scenario.problems.find(p => p.id === 'N1').travelGuide.steps[0].directions));
   assert.ok(!h.app.innerHTML.includes('うん、線が交差するところは、法経済学部北館だね'));
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "N1" && m.kind === "dialogue")'), true);
   assert.equal(h.timer.pending.size, 0);
   assert.equal(h.evaluate('JSON.stringify({ solved: state.solved, messages: state.messages })'), before);
@@ -2177,7 +2177,7 @@ test('解答済みでもスタートには回答ボタンがあり、N1を再回
   h.click('start');
   assert.equal(h.evaluate("answer(['10']).status"), 'correct');
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 11);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems[0].dialogue.length);
   assert.equal(h.evaluate('state.solved.filter(id => id === "N1").length'), 1);
 });
 

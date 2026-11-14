@@ -244,7 +244,7 @@ const preloadedSceneSources = new Set();
 
 function preloadSceneImages(scene = []) {
   if (typeof Image === 'undefined' || !scene.length) return;
-  const sources = new Set(scene.map(line => scenario.portraits[line.speaker]).filter(Boolean));
+  const sources = new Set(scene.flatMap(line => (line.speaker || '').split('＆').map(name => scenario.portraits[name])).filter(Boolean));
   const preview = current().travelGuide?.steps[0]?.preview;
   if (preview) sources.add(preview);
   for (const src of sources) {
@@ -452,8 +452,13 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
 
 function novelPortraitMarkup(speaker) {
   if (!speaker) return '';
-  const portrait = scenario.portraits[speaker];
-  return `<div class="novel-portrait">${portrait ? `<img src="${esc(portrait)}" alt="">` : ''}<span class="novel-speaker">${esc(speaker)}</span></div>`;
+  const names = speaker.split('＆');
+  names.sort((a, b) => (a === 'タツ' ? 1 : 0) - (b === 'タツ' ? 1 : 0));
+  return names.map((name, index) => {
+    const portrait = scenario.portraits[name];
+    const side = names.length > 1 && index === names.length - 1 ? ' novel-portrait-right' : '';
+    return `<div class="novel-portrait${side}">${portrait ? `<img src="${esc(portrait)}" alt="">` : ''}<span class="novel-speaker">${esc(name)}</span></div>`;
+  }).join('');
 }
 
 // 保存済みの台詞も表示時に直し、再生位置の照合には元の本文を使う。
@@ -484,29 +489,32 @@ function revealNovelContent(element) {
 
 function updateNovelBubble(bubble, line) {
   const stage = bubble.parentElement;
-  const outgoing = stage.querySelector('.novel-portrait:not(.portrait-leaving)');
+  const outgoings = [...stage.querySelectorAll('.novel-portrait:not(.portrait-leaving)')];
   const speaker = line.speaker || '';
-  if ((outgoing?.querySelector('.novel-speaker').textContent || '') !== speaker) {
-    stage.querySelector('.portrait-leaving')?.remove();
+  const outgoingSpeaker = outgoings.map(node => node.querySelector('.novel-speaker').textContent).join('＆');
+  if (outgoingSpeaker !== speaker) {
+    stage.querySelectorAll('.portrait-leaving').forEach(node => node.remove());
     let incomingOpacity = .78;
-    if (outgoing && !reducedMotion()) {
-      const opacity = Number(getComputedStyle(outgoing).opacity);
-      incomingOpacity = 1 - opacity;
-      outgoing.getAnimations().forEach(animation => animation.cancel());
-      outgoing.classList.toggle('was-right', stage.classList.contains('novel-right'));
-      outgoing.classList.add('portrait-leaving');
-      outgoing.setAttribute('aria-hidden', 'true');
-      const exit = outgoing.animate([{ opacity }, { opacity: 0 }], {
-        duration: MOTION.state, easing: MOTION.ease, fill: 'forwards',
-      });
-      exit.finished.then(() => outgoing.remove(), () => outgoing.remove());
-    } else outgoing?.remove();
+    for (const outgoing of outgoings) {
+      if (!reducedMotion()) {
+        const opacity = Number(getComputedStyle(outgoing).opacity);
+        incomingOpacity = 1 - opacity;
+        outgoing.getAnimations().forEach(animation => animation.cancel());
+        outgoing.classList.toggle('was-right', outgoing.classList.contains('novel-portrait-right') || stage.classList.contains('novel-right'));
+        outgoing.classList.add('portrait-leaving');
+        outgoing.setAttribute('aria-hidden', 'true');
+        const exit = outgoing.animate([{ opacity }, { opacity: 0 }], {
+          duration: MOTION.state, easing: MOTION.ease, fill: 'forwards',
+        });
+        exit.finished.then(() => outgoing.remove(), () => outgoing.remove());
+      } else outgoing.remove();
+    }
     stage.classList.toggle('novel-right', speaker === 'タツ');
     if (speaker) {
       bubble.insertAdjacentHTML('beforebegin', novelPortraitMarkup(speaker));
-      if (!reducedMotion()) bubble.previousElementSibling.animate([
+      if (!reducedMotion()) stage.querySelectorAll('.novel-portrait:not(.portrait-leaving)').forEach(portrait => portrait.animate([
         { opacity: incomingOpacity }, { opacity: 1 },
-      ], { duration: MOTION.state, easing: MOTION.ease });
+      ], { duration: MOTION.state, easing: MOTION.ease }));
     }
   }
   const previousHeight = bubble.getBoundingClientRect().height;
@@ -1463,6 +1471,17 @@ function messageMarkup(m) {
   if (m.kind === 'success') return '';
   if (!m.speaker) return `<p class="narration">${m.emphasis ? `<strong>${formattedText}</strong>` : formattedText}</p>`;
   const own = m.kind === 'answer';
+  const duoNames = m.kind === 'dialogue' ? m.speaker.split('＆') : [m.speaker];
+  if (duoNames.length > 1) {
+    duoNames.sort((a, b) => (a === 'タツ' ? 1 : 0) - (b === 'タツ' ? 1 : 0));
+    const sideMarkup = name => {
+      const sidePortrait = scenario.portraits?.[name];
+      return sidePortrait
+        ? `<div class="character-speaker"><span class="avatar character-avatar" aria-hidden="true"><img src="${esc(sidePortrait)}" alt="" width="56" height="70"></span><span class="character-name">${esc(name)}</span></div>`
+        : `<span class="avatar" aria-hidden="true">${esc(Array.from(name)[0])}</span>`;
+    };
+    return `<article class="message character-duo has-character">${sideMarkup(duoNames[0])}<div class="message-body"><div class="bubble">${formattedText}</div></div>${sideMarkup(duoNames.at(-1))}</article>`;
+  }
   const portrait = scenario.portraits?.[m.speaker];
   const rightSide = m.speaker === 'タツ';
   const avatar = portrait
