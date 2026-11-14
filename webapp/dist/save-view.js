@@ -102,10 +102,11 @@ export function sanitizeAnswerDraft(problem, raw) {
   const choice = (value, options) => options?.some(option => (typeof option === 'string' ? option : option.id) === value) ? value : '';
   if (problem.answerSlots) return Array.from({ length: problem.answerSlots }, (_, index) => choice(raw[index], problem.symbolChoices));
   if (problem.type === 'fields') return problem.fields.map((field, index) => {
-    // Q7の記号欄を文字入力からプルダウンへ変更したため、旧下書きの英字も引き継ぐ。
-    const value = problem.id === 'Q7' && index === 0 ? text(raw[index]).normalize('NFKC').trim().toUpperCase() : raw[index];
+    const value = raw[index];
     if (field.kanaChoices) return [...text(value)].filter(kana => kana === ' ' || field.kanaChoices.includes(kana)).slice(0, field.length).join('').trimEnd();
-    return field.answerChoices || field.options ? choice(value, field.answerChoices ?? field.options) : text(value);
+    if (field.answerChoices || field.options) return choice(value, field.answerChoices ?? field.options);
+    // 手がかり番号の欄には数字だけを戻す（全角数字はそのまま残す）。
+    return field.inputMode === 'numeric' ? text(value).replace(/[^\d０-９]/g, '') : text(value);
   });
   if (problem.type === 'multiple') return [...new Set(raw.slice(0, problem.options.length).map(value => choice(value, problem.options)).filter(Boolean))];
   if (problem.answerChoices || problem.answerControl === 'select' || problem.type === 'single') return [choice(raw[0], problem.answerChoices ?? problem.options)];

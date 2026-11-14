@@ -142,7 +142,7 @@ test('文字・プルダウン・複数選択・途中の空欄を問題ごと�
     'Q3.2': ['2', '3'], N4: ['8', '', '↙'], N1: ['5'],
   } };
   const view = restorePlayView(scenario, state, raw);
-  assert.deepEqual(view.answerDrafts, { ...raw.answerDrafts, Q7: ['D', '００３'] });
+  assert.deepEqual(view.answerDrafts, { ...raw.answerDrafts, Q7: ['', '００３', '', ''] });
   assert.equal(view.repeatAnswer, false);
   assert.deepEqual(state.solved, [], '下書きは正解記録にしない');
   const n4 = restorePlayView(scenario, { ...state, selected: 'N4' }, raw);

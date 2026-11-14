@@ -482,7 +482,7 @@ test('再生の置き換えと中断では、古いタイマーから会話が�
   assert.equal(timer.pending.size, 0);
 });
 
-test('N1正解後は立ち絵と台詞を一つずつ手動で進め、最後に移動案内と回答を表示する', () => {
+test('N1正解後は立ち絵と台詞を一つずつ手動で進め、最後に移動案内と回答を表示する', async () => {
   const h = appHarness();
   const problem = scenario.problems[0];
   h.evaluate("answer(['10'])");
@@ -524,8 +524,17 @@ test('N1正解後は立ち絵と台詞を一つずつ手動で進め、最後に
   assert.equal(h.scrolls.at(-1).behavior, 'instant');
   assert.equal(h.scrolls.at(-1).top, 48);
   assert.equal(h.evaluate("document.querySelector('.answer-fab').disabled"), true);
-  h.click('close-composer');
-  assert.equal(h.evaluate("document.querySelector('.answer-fab').disabled"), false);
+  assert.ok(h.composer.innerHTML.includes('class="composer-hint"'));
+  assert.ok(!h.composer.innerHTML.includes('data-action="close-composer"'));
+  assert.ok(h.evaluate('headerActionsMarkup()').includes('data-action="history"'));
+  await Promise.resolve();
+  await Promise.resolve();
+  h.documentEvent('keydown', { key: 'Escape' });
+  assert.equal(h.evaluate('historyView'), true);
+  assert.equal(h.evaluate('state.selected'), 'N2');
+  h.click('history-back');
+  assert.equal(h.evaluate('historyView'), false);
+  assert.equal(h.evaluate("document.querySelector('.answer-fab').disabled"), true);
 });
 
 test('N1〜N3・N4.1の移動写真と説明は指示カード内にまとめ、履歴の問題の写真も個別に拡大する', async t => {
@@ -898,7 +907,7 @@ test('N4は3つの空欄と18択のウィンドウで入力し、3文字を選�
   assert.equal(h.evaluate('state.selected'), 'N4.1');
 });
 
-test('N4の空欄は重複選択・選び直しができ、途中で閉じたり資料を切り替えても保持する', async () => {
+test('N4の空欄は重複選択・選び直しができ、開き直したり資料を切り替えても保持する', async () => {
   const h = appHarness();
   h.click('select', 'N4');
   h.click('symbol-slot', '0');
@@ -906,8 +915,7 @@ test('N4の空欄は重複選択・選び直しができ、途中で閉じたり
   h.click('close');
   await Promise.resolve();
   await Promise.resolve();
-  h.click('close-composer');
-  h.click('open-composer');
+  h.evaluate("enterPlay({ code: '000000', state, view: capturePlayView() })");
   assert.equal(h.evaluate('selectedSymbols.join("")'), '8');
   h.click('puzzle-page', '2');
   assert.equal(h.evaluate('selectedSymbols.join("")'), '8');
@@ -1134,11 +1142,17 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.equal(h.panel.open, true);
   assert.equal(h.panel.dataset.kind, 'tour-thanks');
   assert.ok(h.panel.innerHTML.includes('周遊版をプレイしてくださり、ありがとうございました。'));
-  assert.ok(h.panel.innerHTML.includes('mei-promo.webp'));
+  assert.ok(h.panel.innerHTML.includes('book-mei.webp'));
+  assert.ok(h.panel.innerHTML.includes('付属図書館前で販売中'));
   assert.ok(h.panel.innerHTML.includes('アンケートはこちら'));
   await h.evaluate('closePanel()');
   assert.equal(h.panel.open, false);
   const saved = JSON.parse(h.snapshot());
+  h.click('play-mei');
+  assert.ok(h.app.innerHTML.includes('data-action="continue-at-venue"><span>会場でプレイする</span></button>'));
+  assert.ok(h.app.innerHTML.includes('data-action="continue-online"><span>オンラインでプレイする</span></button>'));
+  assert.ok(!h.app.innerHTML.includes('data-action="play-mei"'));
+  assert.ok(h.app.innerHTML.includes('data-action="tour-thanks"'));
   h.click('continue-at-venue');
   assert.equal(h.evaluate('yoiEndView'), false);
   assert.equal(h.evaluate('state.selected'), 'Q1');
@@ -1151,7 +1165,6 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.equal(h.composer.hidden, false);
   assert.ok(h.app.innerHTML.includes('<h2>Q1</h2>'));
   assert.equal(h.evaluate('displayedMessages.length'), 0);
-  h.click('close-composer');
   h.click('select', 'Q1');
   assert.equal(h.evaluate('displayedMessages.length'), 0);
   assert.ok(!h.app.innerHTML.includes('ミサメが危ない！！！！！！！'));
@@ -1178,7 +1191,8 @@ test('宵から会場で解く場合は解答済みでもQ1を再表示し、正
   h.click('travel-next');
   assert.equal(h.composer.hidden, true);
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q1</strong>を見つけましたか？'));
+  assert.ok(h.panel.innerHTML.includes('data-action="travel-found">問題を確認した</button>'));
   h.click('travel-found');
   h.evaluate("answer(['5'])");
   const saved = JSON.parse(h.snapshot());
@@ -1194,10 +1208,7 @@ test('宵から会場で解く場合は解答済みでもQ1を再表示し、正
   assert.ok(!h.app.innerHTML.includes('<h2>Q1.1</h2>'));
   assert.deepEqual(JSON.parse(h.snapshot()).solved, saved.solved);
   assert.deepEqual(JSON.parse(h.snapshot()).messages, saved.messages);
-  h.click('close-composer');
-  assert.ok(h.app.innerHTML.includes('<span>次へ</span>'));
-  h.click('travel-next');
-  h.click('travel-found');
+  h.click('select', 'Q1');
   assert.equal(h.evaluate('state.selected'), 'Q1');
   assert.equal(h.evaluate("answer(['4']).status"), 'incorrect');
   assert.equal(h.evaluate('state.selected'), 'Q1');
@@ -1313,7 +1324,8 @@ test('オンラインを選ぶと推理パートの説明から始まり、STOP�
   h.click('travel-next');
   assert.equal(h.composer.hidden, true);
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q1</strong>を見つけましたか？'));
+  assert.ok(h.panel.innerHTML.includes('data-action="travel-found">問題を確認した</button>'));
   h.click('travel-found');
   assert.equal(h.composer.hidden, false);
   assert.ok(h.composer.innerHTML.includes('<h2>Q1</h2>'));
@@ -1381,7 +1393,7 @@ test('Q1.1の人物プルダウンは指定順の4候補で、マヤのみ正解
   for (const person of problem.answerChoices) assert.equal(engine.checkAnswer(problem, person), person === 'マヤ');
 });
 
-test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイスで小問を切り替えて真相を表示する', () => {
+test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイスで小問を切り替えて真相を表示する', async () => {
   const h = appHarness();
   h.click('select', 'Q1.1');
   h.evaluate("answer('マヤ')");
@@ -1394,14 +1406,21 @@ test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイス�
   assert.ok(h.evaluate('historyScreenMarkup()').includes('出口の方から入ったりもしてないわよ！'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('（確かに…。時間的には可能でも物理的にはマヤには不可能だ。'));
   assert.ok(!h.app.innerHTML.includes('class="page-turn-text"'));
+  // 会話の終わりは暗転した場面の中央に案内だけを出し、ポップアップはタップで開く。
+  assert.equal(h.panel.open, false);
+  assert.ok(h.app.innerHTML.includes('class="page-turn-scene" data-action="travel-next"'));
+  assert.ok(h.app.innerHTML.includes('scene-dim'));
+  assert.ok(h.app.innerHTML.includes('class="page-turn-scene-text">冊子の次のページをめくろう<span class="page-turn-scene-cue"'));
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('>冊子の次のページをめくろう</p>'));
+  assert.ok(h.panel.innerHTML.includes('>冊子で問題<strong class="page-turn-target">Q2</strong>を見つけましたか？</p>'));
   assert.ok(h.app.innerHTML.includes('<span>次へ</span>'));
   assert.equal(h.panel.dataset.kind, 'travel-next');
-  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
+  assert.ok(h.panel.innerHTML.includes('data-action="travel-found">問題を確認した</button>'));
   assert.equal(h.evaluate('state.selected'), 'Q1.1');
   assert.equal(h.composer.hidden, true);
   h.click('travel-found');
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.evaluate('state.selected'), 'Q2');
   assert.equal(h.composer.hidden, false);
   assert.equal(h.evaluate('displayedMessages.length'), 5);
@@ -1435,8 +1454,10 @@ test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイス�
   assert.ok(h.evaluate('historyScreenMarkup()').includes('「ドライアイスが昇華することで、時間差で布が落ちる……。それによって鏡に光が反射するようになり、ミサメさんの姿が現れたってことですか……！」'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('「そうだ！　犯人はなんて巧妙なトリックを仕掛けたんだ……！」'));
   assert.ok(!h.app.innerHTML.includes('class="page-turn-text"'));
+  assert.equal(h.panel.open, false);
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('>冊子の次のページをめくろう</p>'));
+  assert.ok(h.panel.innerHTML.includes('>冊子で問題<strong class="page-turn-target">Q3</strong>を見つけましたか？</p>'));
   h.click('select', 'Q2.1');
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "Q1.1")'), true);
 });
@@ -1448,18 +1469,24 @@ test('既存のQ2.2解答済み記録でも会話の後にページ送り指示�
   h.evaluate("selectProblem('Q2.2')");
   assert.ok(h.evaluate('historyScreenMarkup()').includes('「ドライアイスが昇華することで、時間差で布が落ちる……。それによって鏡に光が反射するようになり、ミサメさんの姿が現れたってことですか……！」'));
   assert.ok(!h.app.innerHTML.includes('class="page-turn-text"'));
-  assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('>冊子の次のページをめくろう</p>'));
+  assert.equal(h.panel.open, false);
+  assert.ok(h.app.innerHTML.includes('class="page-turn-scene" data-action="travel-next"'));
   assert.equal(h.evaluate('isPlaying'), false);
+  h.click('travel-next');
+  assert.equal(h.panel.open, true);
+  assert.ok(h.panel.innerHTML.includes('>冊子で問題<strong class="page-turn-target">Q3</strong>を見つけましたか？</p>'));
 });
 
-test('Q2.2から3つの問いの一覧へ進み、自由に開いて同じ位置へ戻れる', () => {
+test('Q2.2から3つの問いの一覧へ進み、自由に開いて同じ位置へ戻れる', async () => {
   const h = appHarness();
   h.click('select', 'Q2.2');
   h.evaluate("answer('ドライアイス')");
   finishScene(h);
+  assert.equal(h.panel.open, false);
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
   h.click('travel-found');
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.evaluate('investigationView'), true);
   assert.equal((h.app.innerHTML.match(/class="investigation-question"/g) ?? []).length, 3);
   assert.ok(h.app.innerHTML.includes('<h1>残された違和感</h1>'));
@@ -1482,6 +1509,8 @@ test('Q2.2から3つの問いの一覧へ進み、自由に開いて同じ位置
   h.click('investigation-back');
   assert.equal(h.chat.scrollTop, 217);
   h.click('investigation-open', 'Q3');
+  assert.ok(h.app.innerHTML.includes('answer-options-two-columns'));
+  assert.ok(h.app.innerHTML.includes('--answer-option-columns: 2'));
   for (const [id, text] of [['2', '梁には単純なロープの痕跡しかなかった。'], ['3', '梁までの高さは4mもある。']]) {
     assert.equal(h.evaluate(`answer(['${id}']).status`), 'incorrect');
     assert.equal(h.evaluate('isPlaying'), false);
@@ -1585,6 +1614,7 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   assert.ok(h.app.innerHTML.includes('幽煙の間にも謎は残っている'));
   h.click('investigation-back');
   assert.ok(h.app.innerHTML.includes('--answered-angle: 240deg'));
+  assert.ok(!h.app.innerHTML.includes('scene-dim'));
   h.click('investigation-next');
   assert.notEqual(h.evaluate('state.selected'), 'Q4');
   h.click('investigation-open', 'Q3');
@@ -1593,18 +1623,22 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   finishScene(h);
   h.click('investigation-back');
   assert.ok(h.app.innerHTML.includes('--answered-angle: 360deg'));
+  // 3つの？がめくれたら画面を暗くして「次へ」を目立たせる。
+  assert.ok(h.app.innerHTML.includes('scene-dim'));
+  assert.ok(h.app.innerHTML.includes('scene-dim-late'));
   assert.ok(!h.app.innerHTML.includes('data-action="investigation-next" disabled'));
   const restored = appHarness(h.snapshot());
   restored.click('select', 'Q3');
   assert.equal((restored.app.innerHTML.match(/class="investigation-stamp">回答済み</g) ?? []).length, 3);
   assert.ok(restored.app.innerHTML.includes('--answered-angle: 360deg'));
+  assert.ok(restored.app.innerHTML.includes('scene-dim'));
   restored.click('investigation-next');
   assert.equal(restored.evaluate('state.selected'), 'Q3.1');
   assert.equal(restored.composer.hidden, false);
   assert.equal((restored.app.innerHTML.match(/class="investigation-question" data-solved="true"/g) ?? []).length, 3);
   assert.ok(!restored.app.innerHTML.includes('class="composer-area answer-page'));
   assert.ok(!restored.app.innerHTML.includes('value="隠し部屋"'));
-  restored.click('close-composer');
+  restored.click('investigation-back');
   assert.equal(restored.evaluate('investigationView'), true);
   restored.click('investigation-next');
   assert.equal((restored.app.innerHTML.match(/data-action="symbol-slot"/g) ?? []).length, 5);
@@ -1620,18 +1654,25 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   assert.equal(restored.evaluate("answer(['蝋人形の間', '幽煙の間', 'かくしべや']).status"), 'correct');
   finishScene(restored);
   assert.equal(restored.evaluate('state.selected'), 'Q3.1');
+  assert.equal(restored.panel.open, false);
+  assert.ok(restored.app.innerHTML.includes('class="page-turn-scene" data-action="travel-next"'));
+  restored.click('travel-next');
   assert.equal(restored.panel.open, true);
   assert.equal(restored.panel.dataset.kind, 'travel-next');
-  assert.match(restored.panel.innerHTML, /STOP<\/span><p[^>]*>冊子の次のページをめくろう<\/p>/);
-  assert.match(restored.panel.innerHTML, /data-action="travel-found">次の問題を確認した。<\/button>/);
+  assert.match(restored.panel.innerHTML, /STOP<\/span><p[^>]*>冊子で問題<strong[^>]*>Q4<\/strong>を見つけましたか？<\/p>/);
+  assert.match(restored.panel.innerHTML, /data-action="travel-found">問題を確認した<\/button>/);
   restored.click('close');
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(restored.panel.open, false);
   assert.equal(restored.evaluate('state.selected'), 'Q3.1');
+  assert.ok(restored.app.innerHTML.includes('class="page-turn-scene"'));
   restored.click('travel-next');
   assert.equal(restored.panel.open, true);
   restored.evaluate("enterPlay({ code: '000000', state, view: capturePlayView() })");
-  assert.equal(restored.panel.dataset.kind, 'travel-next');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(restored.panel.open, false);
+  restored.click('travel-next');
+  assert.equal(restored.panel.open, true);
   restored.click('travel-found');
   assert.equal(restored.evaluate('state.selected'), 'Q4');
   assert.equal(restored.composer.hidden, false);
@@ -1642,10 +1683,8 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   restored.evaluate(`enterPlay({ code: '000000', state, view: { ...capturePlayView(), displayedMessages:
     scenario.problems.find(p => p.id === 'Q3.3.1').dialogue.map(line => ({ ...line, kind: 'dialogue', problemId: 'Q3.3.1' })) } })`);
   assert.equal(restored.evaluate('displayedMessages.length'), 0);
-  assert.equal(restored.composer.hidden, true);
-  restored.click('open-composer');
   assert.equal(restored.composer.hidden, false);
-  assert.ok(restored.composer.innerHTML.includes('<h2>Q4</h2>'));
+  assert.ok(restored.app.innerHTML.includes('<h2>Q4</h2>'));
   assert.equal(restored.evaluate("answer(['マヤ', '002']).status"), 'correct');
 });
 
@@ -1736,7 +1775,7 @@ test('問題の途中で戻ると再生を止め、他の未回答問題の答�
   h.click('investigation-open', 'Q3.2');
   assert.equal(h.evaluate('displayedMessages.length'), 0);
   assert.ok(!h.app.innerHTML.includes('ピッタリと一枚の「N6」の紙になった。'));
-  h.click('close-composer');
+  h.click('investigation-back');
   assert.equal(h.evaluate('investigationView'), true);
 });
 
@@ -2306,7 +2345,7 @@ test('N1の選択メニューは丸なしの1〜10を同じ書体で並べ、選
   assert.ok(h.app.innerHTML.includes('国旗の色に関する問題ですね。'));
 });
 
-test('N1の移動案内で回答を開閉しても、写真とスクロール位置を保ってN2に回答できる', async () => {
+test('N1の移動案内で回答を開き履歴を開閉しても、写真とスクロール位置を保ってN2に回答できる', async () => {
   const h = appHarness();
   h.evaluate("answer(['10'])");
   finishScene(h);
@@ -2336,23 +2375,19 @@ test('N1の移動案内で回答を開閉しても、写真とスクロール位
   assert.equal(gallery.scrollLeft, 200);
   h.chat.scrollTop = 32;
   gallery.scrollLeft = 70;
-  h.click('close-composer');
-  assert.equal(h.evaluate('state.selected'), 'N1');
-  assert.ok(h.navigation.innerHTML.includes('問題番号 <strong>N1</strong>'));
-  assert.equal(h.chat.scrollTop, 120);
-  assert.equal(gallery.scrollLeft, 200);
-  h.click('travel-next');
-  assert.equal(h.evaluate('state.selected'), 'N1');
-  assert.ok(h.panel.innerHTML.includes('class="page-turn-stop" aria-hidden="true">STOP'));
-  assert.ok(h.panel.innerHTML.includes('次の問題を見つけたらページをめくろう'));
-  assert.ok(h.panel.innerHTML.includes('>問題を見つけた</button>'));
-  h.click('travel-found');
-  await Promise.resolve();
+  h.click('history');
+  assert.equal(h.evaluate('historyView'), true);
+  h.click('history-back');
+  assert.equal(h.evaluate('historyView'), false);
+  assert.equal(h.evaluate('state.selected'), 'N2');
+  assert.equal(h.composer.hidden, false);
+  assert.equal(h.chat.scrollTop, 32);
+  assert.equal(gallery.scrollLeft, 70);
   assert.equal(h.renders.length, renders);
   assert.equal(h.evaluate("answer('法経済学部北館').status"), 'correct');
 });
 
-test('小問の途中で回答を閉じると元の案内に戻り、次に開くと続きの小問を表示する', t => {
+test('小問の回答中に戻る操作をすると履歴が開き、閉じても回答画面を維持する', t => {
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'N3');
@@ -2365,8 +2400,11 @@ test('小問の途中で回答を閉じると元の案内に戻り、次に開�
   h.evaluate("enterPlay({ code: '000000', state, view: capturePlayView() })");
   h.chat.scrollTop = 40;
   h.documentEvent('keydown', { key: 'Escape' });
-  assert.equal(h.evaluate('state.selected'), 'N3');
-  assert.equal(h.chat.scrollTop, 123);
+  assert.equal(h.evaluate('historyView'), true);
+  assert.equal(h.evaluate('state.selected'), 'N4.1');
+  h.click('history-back');
+  assert.equal(h.evaluate('historyView'), false);
+  assert.equal(h.composer.hidden, false);
   h.click('open-composer');
   assert.equal(h.evaluate('state.selected'), 'N4.1');
 });
@@ -2406,10 +2444,6 @@ test('未回答でもQ4以降をメニューから自由に開き、回答・再
     h.click('select', id);
     assert.equal(h.evaluate('state.selected'), id);
     assert.equal(h.evaluate('investigationView'), false);
-    if (id === 'Q4') {
-      assert.equal(h.composer.hidden, true);
-      h.click('open-composer');
-    }
     assert.equal(h.composer.hidden, false);
     assert.equal(h.problemMenu.hidden, true);
     assert.ok(h.app.innerHTML.includes(`<h2>${id}</h2>`));
@@ -2427,7 +2461,7 @@ test('未回答でもQ4以降をメニューから自由に開き、回答・再
     const restored = appHarness(h.snapshot());
     restored.click('select', id);
     assert.equal(restored.evaluate('state.selected'), id);
-    assert.equal(restored.composer.hidden, id === 'Q4');
+    assert.equal(restored.composer.hidden, false);
     assert.deepEqual(JSON.parse(restored.snapshot()).solved, [id]);
   }
 });
@@ -2472,8 +2506,10 @@ test('Q6からQ6.2は会話完了を待って進み、犯人とカード番号�
   assert.ok(h.evaluate('historyScreenMarkup()').includes('チューリップの刺繍があった'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('犯人はハナだ！！！'));
   assert.ok(!h.app.innerHTML.includes('<strong>冊子の次のページをめくろう</strong>'));
+  assert.equal(h.panel.open, false);
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q7</strong>を見つけましたか？'));
   assert.ok(h.app.innerHTML.includes('class="answer-fab"'));
   const restored = appHarness(h.snapshot());
   restored.click('history');
@@ -2500,7 +2536,7 @@ test('Q4は人物4候補のプルダウンと手がかり番号の入力欄を�
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'Q4');
-  h.click('open-composer');
+  assert.equal(h.composer.hidden, false);
   const people = ['マヤ', 'ハナ', 'サダヲ', 'アツヤ'];
   const problem = scenario.problems.find(p => p.id === 'Q4');
   assert.deepEqual(problem.fields[0].answerChoices, people);
@@ -2512,7 +2548,7 @@ test('Q4は人物4候補のプルダウンと手がかり番号の入力欄を�
   assert.ok(h.app.innerHTML.includes('id="answer-1" name="answer" type="text" inputmode="numeric"'));
 });
 
-test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒの会話と最後の指示を表示する', () => {
+test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒの会話と最後の指示を表示する', async () => {
   const q4 = scenario.problems.find(p => p.id === 'Q4');
   const saved = { ...engine.initialState(scenario), solved: scenario.problems.slice(0, scenario.problems.indexOf(q4)).map(p => p.id) };
   const h = appHarness(JSON.stringify(saved));
@@ -2520,13 +2556,15 @@ test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒ
   assert.equal(h.evaluate('state.selected'), 'Q5');
   assert.equal(h.composer.hidden, false);
   h.click('select', 'Q4');
-  h.click('open-composer');
   h.evaluate("answer(['マヤ', '002'])");
   h.click('open-composer');
   assert.equal(h.evaluate('state.selected'), 'Q4');
   finishScene(h);
+  assert.equal(h.panel.open, false);
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
   h.click('travel-found');
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.evaluate('state.selected'), 'Q5');
   assert.ok(h.composer.innerHTML.includes('data-fields-layout="row"'));
   assert.ok(h.composer.innerHTML.includes('<select id="answer" name="answer" required>'));
@@ -2543,16 +2581,24 @@ test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒ
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   finishScene(h);
   assert.ok(h.evaluate('historyScreenMarkup()').includes(scenario.portraits['アサヒ']));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes(scenario.portraits['タツ']));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('鈴の音と一致します'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('元の順路へ戻ってしまうはずですから'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('さすがです、先輩'));
   assert.ok(!h.app.innerHTML.includes('class="page-turn-text"'));
+  // 会話の終わりは暗転した場面の中央に案内だけを出し、ポップアップはタップで開く。
+  assert.equal(h.panel.open, false);
+  assert.ok(h.app.innerHTML.includes('class="page-turn-scene" data-action="travel-next"'));
+  assert.ok(h.app.innerHTML.includes('scene-dim'));
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('>冊子の次のページをめくろう</p>'));
+  assert.ok(h.panel.innerHTML.includes('>冊子で問題<strong class="page-turn-target">Q6</strong>を見つけましたか？</p>'));
   assert.ok(h.app.innerHTML.includes('class="answer-fab"'));
   h.click('travel-found');
   assert.equal(h.evaluate('state.selected'), 'Q6');
   const restored = appHarness(h.snapshot());
   restored.click('history');
-  assert.ok(restored.workspace.innerHTML.includes('ミサメ先輩は16時30分頃に入場し'));
+  assert.ok(restored.workspace.innerHTML.includes('ミサメは16時30分頃に入場し'));
 });
 
 test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む', async () => {
@@ -2567,27 +2613,33 @@ test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む
   h.click('open-composer');
   assert.equal(h.evaluate('state.selected'), 'Q6.2');
   finishScene(h);
+  assert.equal(h.panel.open, false);
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
   h.click('travel-found');
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.evaluate('state.selected'), 'Q7');
   assert.ok(h.composer.innerHTML.includes(q7.prompt));
-  assert.deepEqual(q7.fields[0].answerChoices, ['A', 'B', 'C', 'D']);
-  assert.ok(h.composer.innerHTML.includes('<select id="answer" name="answer" required>'));
-  assert.ok(h.composer.innerHTML.includes('ブロックを選択…'));
-  for (const block of ['A', 'B', 'C', 'D']) assert.ok(h.composer.innerHTML.includes(`<option value="${block}">${block}</option>`));
-  assert.equal((h.composer.innerHTML.match(/name="answer" type="text"/g) ?? []).length, 1);
-  assert.ok(h.composer.innerHTML.includes('inputmode="numeric"'));
-  assert.equal(h.evaluate("answer(['D', '003']).status"), 'incorrect');
+  for (const block of ['A', 'B', 'C', 'D']) assert.ok(h.composer.innerHTML.includes(`<span class="answer-field-symbol-mark" aria-hidden="true">${block}</span>`));
+  assert.equal((h.composer.innerHTML.match(/name="answer" type="text"/g) ?? []).length, 4);
+  assert.equal((h.composer.innerHTML.match(/inputmode="numeric"/g) ?? []).length, 4);
+  assert.equal((h.composer.innerHTML.match(/name="answer" type="text"[^>]*required/g) ?? []).length, 2);
+  assert.equal(h.evaluate("answer(['203', '', '', '003']).status"), 'incorrect');
   assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
-  assert.equal(h.evaluate("answer(['d', '３０２']).status"), 'progress');
-  assert.equal(h.composer.hidden, false);
-  assert.equal(h.evaluate("answer(['A', '203']).status"), 'correct');
+  assert.equal(h.evaluate("answer(['203', '001', '', '302']).status"), 'incorrect');
+  assert.equal(h.evaluate("answer(['２０３', '', '', '３０２']).status"), 'correct');
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   finishScene(h);
+  assert.ok(h.evaluate('historyScreenMarkup()').includes(scenario.portraits['タツ']));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes(scenario.portraits['アサヒ']));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('ずっと違和感があったんだ。'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('言われてみれば確かに'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('お前しかいない！！'));
   assert.ok(!h.app.innerHTML.includes('<strong>冊子の次のページをめくろう</strong>'));
+  assert.equal(h.panel.open, false);
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q8</strong>を見つけましたか？'));
   assert.ok(h.panel.innerHTML.includes('この先は会場を離れても進められます'));
   assert.ok(h.app.innerHTML.includes('class="answer-fab"'));
   assert.equal(h.composer.hidden, true);
@@ -2597,17 +2649,18 @@ test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む
   assert.equal(h.evaluate('state.selected'), 'Q8');
   assert.equal(h.evaluate('JSON.stringify(displayedMessages)'), conversation);
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
-  assert.ok(h.composer.innerHTML.includes('data-action="close-composer"'));
+  assert.ok(!h.composer.innerHTML.includes('data-action="close-composer"'));
+  assert.ok(h.composer.innerHTML.includes('class="composer-hint" data-action="hints"'));
   assert.equal((h.composer.innerHTML.match(/name="answer" type="text"/g) ?? []).length, 3);
   h.documentEvent('keydown', { key: 'Escape' });
   await Promise.resolve();
   await Promise.resolve();
-  assert.equal(h.composer.hidden, true);
+  assert.equal(h.evaluate('historyView'), true);
+  assert.equal(h.composer.hidden, false);
+  assert.equal(h.evaluate('state.selected'), 'Q8');
+  h.documentEvent('keydown', { key: 'Escape' });
+  assert.equal(h.evaluate('historyView'), false);
   assert.equal(h.evaluate('JSON.stringify(displayedMessages)'), conversation);
-  assert.ok(h.app.innerHTML.includes('ハナ。お前しかいない'));
-  assert.equal(h.evaluate('state.selected'), 'Q7');
-  assert.ok(h.app.innerHTML.includes('class="answer-fab"'));
-  assert.ok(!h.app.innerHTML.includes('回答ボタンを押して、文章の空欄を埋めてください。'));
   const restored = appHarness(h.snapshot());
   restored.click('history');
   assert.ok(restored.workspace.innerHTML.includes('お好きな場所で続きをお楽しみください。(ただし、はさみとテープが必要になるのでご注意ください)'));
@@ -2628,7 +2681,6 @@ test('手がかり番号を答える全4問の入力案内を統一し、番号�
   t.after(() => h.dispose());
   for (const id of ['Q3.3', 'Q4', 'Q6.2', 'Q7']) {
     h.click('select', id);
-    if (id === 'Q4') h.click('open-composer');
     assert.ok(h.app.innerHTML.includes('placeholder="3桁の手がかり番号を入力…"'));
     assert.ok(h.app.innerHTML.includes('inputmode="numeric"'));
   }
@@ -2639,7 +2691,7 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   const h = appHarness();
   h.click('select', 'Q8');
   assert.equal(h.evaluate('state.selected'), 'Q8');
-  assert.equal(h.evaluate('displayedMessages.length'), 3);
+  assert.equal(h.evaluate('displayedMessages.length'), scenario.problems.find(p => p.id === 'Q7').dialogue.length);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "Q7")'), true);
   assert.ok(h.app.innerHTML.includes('この先は会場を離れても進められます'));
   assert.ok(h.app.innerHTML.includes('全ての謎を解明せよ'));
@@ -2647,7 +2699,8 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
   assert.ok(!h.app.innerHTML.includes('aria-label="謎解き会話" tabindex="0" hidden'));
   assert.ok(!h.app.innerHTML.includes('トークに戻る'));
-  assert.ok(h.app.innerHTML.includes('data-action="close-composer"'));
+  assert.ok(h.app.innerHTML.includes('class="composer-hint" data-action="hints"'));
+  assert.ok(!h.app.innerHTML.includes('data-action="close-composer"'));
   assert.ok(!h.app.innerHTML.includes('answer-fields-inline'));
   assert.ok(h.app.innerHTML.includes(`<p class="answer-template">${q8.answerTemplate}</p>`));
   assert.equal((q8.answerTemplate.match(/【[①②③④]】/g) ?? []).length, 4);
@@ -2665,52 +2718,52 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
   assert.equal(h.evaluate("answer(['ハナ', '知恵', '畏怖', '大地震']).status"), 'correct');
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
-  const narration = q8.dialogue.filter(line => !line.emphasis);
-  for (const line of narration) {
-    assert.ok(h.app.innerHTML.includes('class="novel-bubble"'));
-    assert.ok(h.app.innerHTML.includes(line.text));
-    assert.equal(h.panel.open, false);
-    h.click('novel-next');
-  }
+  assert.ok(!h.app.innerHTML.includes('class="novel-bubble"'));
+  assert.ok(!h.app.innerHTML.includes('次のページへ進もう'));
+  assert.equal(h.panel.open, false);
+  assert.ok(h.app.innerHTML.includes('class="page-turn-scene" data-action="travel-next"'));
+  assert.ok(h.app.innerHTML.includes('class="page-turn-scene-text">冊子の次のページをめくろう'));
+  h.click('travel-next');
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('冊子の次のページをめくろう'));
-  assert.ok(h.panel.innerHTML.includes('次の問題を確認した。'));
-  assert.ok(h.app.innerHTML.includes(narration.at(-1).text));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q9</strong>を見つけましたか？'));
+  assert.ok(h.panel.innerHTML.includes('data-action="travel-found">問題を確認した</button>'));
+  assert.ok(!h.app.innerHTML.includes('class="page-turn-scene"'));
+  assert.ok(!h.app.innerHTML.includes('class="novel-bubble"'));
   assert.ok(!h.app.innerHTML.includes('class="instruction-card instruction-card-page-turn"'));
   h.click('close');
   h.click('travel-next');
   assert.equal(h.panel.open, true);
   const restored = appHarness(h.snapshot());
+  assert.equal(restored.panel.open, false);
+  assert.ok(restored.app.innerHTML.includes('class="page-turn-scene"'));
+  restored.click('travel-next');
   assert.equal(restored.panel.open, true);
   restored.click('close');
   restored.evaluate("selectProblem('Q8')");
-  assert.ok(restored.app.innerHTML.includes(narration.at(-1).text));
+  assert.ok(restored.app.innerHTML.includes('class="page-turn-scene"'));
   restored.click('history');
-  assert.ok(restored.workspace.innerHTML.includes(q8.dialogue[0].text));
+  assert.ok(!restored.workspace.innerHTML.includes('次のページへ進もう'));
   restored.click('select', 'Q8');
   assert.equal(restored.composer.hidden, false);
   assert.equal((restored.app.innerHTML.match(/name="answer" type="text"/g) ?? []).length, 3);
   assert.equal(restored.evaluate("state.solved.includes('Q8')"), true);
 });
 
-
-test('Q8の回答パネルを閉じて再度開いたり他の問題へ切り替えたりできる', async () => {
+test('Q8の回答パネルは閉じられず、Escで履歴を開いたり他の問題へ切り替えたりできる', async () => {
   const h = appHarness();
   h.click('select', 'Q8');
+  assert.equal(h.composer.hidden, false);
+  assert.ok(h.app.innerHTML.includes('class="hint-button header-actions" data-action="history"'));
   h.documentEvent('keydown', { key: 'Escape' });
   await Promise.resolve();
   await Promise.resolve();
-  assert.equal(h.composer.hidden, true);
-  assert.ok(h.app.innerHTML.includes('class="answer-fab"'));
-  assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
-  h.click('open-composer');
+  assert.equal(h.evaluate('historyView'), true);
   assert.equal(h.composer.hidden, false);
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
-  h.documentEvent('keydown', { key: 'Escape' });
-  await Promise.resolve();
-  await Promise.resolve();
-  assert.equal(h.composer.hidden, true);
-  h.click('open-composer');
+  h.click('history-back');
+  assert.equal(h.evaluate('historyView'), false);
+  assert.equal(h.composer.hidden, false);
+  assert.equal(h.evaluate('state.selected'), 'Q8');
   h.click('select', 'Q2');
   assert.equal(h.composer.hidden, false);
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
@@ -3244,7 +3297,6 @@ test('連続送信で会話のない次の小問まで進めず、短い待機�
   assert.equal(h.evaluate('state.selected'), 'Q2.2');
 });
 
-
 test('正解した下書きを消し、旧選択値から再開時に復活させない', t => {
   const h = appHarness();
   t.after(() => h.dispose());
@@ -3284,7 +3336,7 @@ test('履歴は閉じる演出が終わってから取り除き、入力とト�
 
 test('未同期の下書きがある起動では端末の進行を優先し、古いクラウド記録を読み込まない', async t => {
   const saved = { ...engine.initialState(scenario), selected: 'Q7' };
-  const savedView = { ...restorePlayView(scenario, saved, null), answerDrafts: { Q7: ['D', '００３'] } };
+  const savedView = { ...restorePlayView(scenario, saved, null), answerDrafts: { Q7: ['２０３', '', '', '３０２'] } };
   const key = `play-save:${scenario.id}`;
   const h = appHarness(null, false, { entryOnly: true,
     records: { [key]: storedPlay(saved, savedView, { pending: true, generation: 2 }) },
@@ -3363,7 +3415,6 @@ test('手がかりボタンはカード一覧を開き、選んだカードを�
   assert.equal(h.panel.open, false);
 });
 
-
 test('カード長押しで合成選択になり2枚で合成できる', async t => {
   const h = appHarness();
   t.after(() => h.dispose());
@@ -3396,7 +3447,8 @@ test('カード長押しで合成選択になり2枚で合成できる', async t
   assert.equal(h.evaluate('clueTab'), 'combine');
   assert.equal(h.evaluate('combineSelecting'), false);
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
-  assert.ok(h.panel.innerHTML.includes('class="primary-button full combine-open"'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-open"'));
+  assert.ok(!h.panel.innerHTML.includes('class="primary-button full combine-open"'));
   assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
   assert.ok(h.panel.innerHTML.includes('id="combine-feedback"'));
 });
@@ -3417,12 +3469,14 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
   assert.ok(h.panel.innerHTML.includes('マヤ'));
   h.evaluate('switchClueTab("combine")');
-  assert.ok(h.panel.innerHTML.includes('class="primary-button full combine-open"'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-open"'));
+  assert.ok(!h.panel.innerHTML.includes('class="primary-button full combine-open"'));
   assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
   assert.ok(h.panel.innerHTML.includes('合成とは2枚の手がかりカードから新しいカードを手に入れることのできるシステムです。関連のありそうな2枚のカードを選択してください。'));
   assert.ok(h.panel.innerHTML.includes('手がかり番号は、カード下部の数字となります。'));
-  assert.ok(h.panel.innerHTML.includes('手がかり番号はカードだけではなくキャラ情報にも書かれてあります。見落とさないようご注意ください。'));
+  assert.ok(h.panel.innerHTML.includes('手がかり番号はカードだけではなく公開情報にも書かれてあります。見落とさないようご注意ください。'));
   assert.ok(h.panel.innerHTML.includes('class="start-guide-menu"'));
+  assert.ok(h.panel.innerHTML.includes('</div>\n    <p>手がかり番号はカードだけではなく公開情報にも書かれてあります'));
   assert.ok(h.panel.innerHTML.includes('combine-number-callout.webp'));
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-combine"'));
   h.evaluate('switchClueTab("cards")');
@@ -3521,7 +3575,6 @@ test('キャラ情報は横スクロールで切り替えられる', async t => 
   await Promise.resolve();
   assert.equal(h.panel.open, false);
 });
-
 
 test('控室カードのカプセルから六角形を開き、デバッグでは解答後も押せる', t => {
   const h = appHarness();
@@ -3698,3 +3751,5 @@ test('旧保存の番号発行リクエスト中にクリアした更新も発�
   assert.ok(h.networkCalls[1].state.minigames.includes('hex-cube'));assert.equal(h.evaluate('playSaves.getRecord().pending'),false);
   assert.ok(h.panel.innerHTML.includes('新しい手がかり'));
 });
+
+

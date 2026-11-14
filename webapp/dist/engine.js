@@ -123,10 +123,12 @@ export function submitAnswer(scenario, state, answer) {
   if (!problem || !canOpenProblem(problem, state)) return { state, status: 'locked' };
   if (problem.type === 'pending') return { state, status: 'unavailable' };
   if (state.solved.includes(problem.id)) return { state, status: 'already-solved' };
-  if (problem.type === 'fields' && (!Array.isArray(answer) || answer.length !== problem.fields.length || answer.some(value => typeof value !== 'string' || !normalizeAnswer(value)))) return { state, status: 'empty' };
+  if (problem.type === 'fields' && (!Array.isArray(answer) || answer.length !== problem.fields.length || answer.some((value, index) => typeof value !== 'string' || (!normalizeAnswer(value) && !problem.fields[index].optional)))) return { state, status: 'empty' };
   if (problem.answerSlots && (typeof answer !== 'string' || Array.from(normalizeAnswer(answer)).length !== problem.answerSlots)) return { state, status: 'empty' };
   const labels = problem.type === 'fields'
-    ? problem.answerParts ? problem.answerParts.map((part, index) => part + (answer[index]?.trim() ?? '')).join('') : answer.map(value => value.trim()).join(' & ')
+    ? problem.answerParts
+      ? problem.answerParts.map((part, index) => part + (answer[index]?.trim() ?? '')).join('')
+      : answer.map((value, index) => value.trim() ? `${problem.fields[index].symbol ? `${problem.fields[index].symbol}：` : ''}${value.trim()}` : '').filter(Boolean).join(' & ')
     : Array.isArray(answer) ? answer.map(id => problem.options.find(o => o.id === id)?.label).filter(Boolean).join('、') : String(answer ?? '').trim();
   if (!labels) return { state, status: 'empty' };
   const correct = checkAnswer(problem, answer);

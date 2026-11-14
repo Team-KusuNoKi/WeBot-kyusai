@@ -59,7 +59,7 @@ export function createHaptics({ win = globalThis.window, doc = globalThis.docume
 
 export function answerReadiness(problem, raw) {
   const values = (Array.isArray(raw) ? raw : [raw]).map(value => String(value ?? '').trim()).filter(Boolean);
-  const required = problem.answerSlots ?? (problem.type === 'fields' ? problem.fields.length : problem.type === 'multiple' ? problem.selectionCount ?? 1 : 1);
+  const required = problem.answerSlots ?? (problem.type === 'fields' ? problem.fields.filter(field => !field.optional).length : problem.type === 'multiple' ? problem.selectionCount ?? 1 : 1);
   if (problem.type === 'fields') {
     const index = problem.fields.findIndex(field => field.kanaChoices);
     if (index >= 0 && String(raw?.[index] ?? '').replace(/\s/g, '').length !== problem.fields[index].length) {

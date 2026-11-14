@@ -274,7 +274,7 @@ test('Q3の誤答は専用の反応を保存し、正解記録を増やさず再
   const right = submitAnswer(scenario, state, ['1']);
   assert.equal(right.status, 'correct');
   assert.deepEqual(right.state.solved, [id]);
-  assert.equal(right.state.messages.at(-1).text, problem.dialogue[0].text);
+  assert.equal(right.state.messages.at(-1).text, problem.dialogue.at(-1).text);
   assert.deepEqual(restoreState(scenario, JSON.stringify(right.state)), right.state);
 });
 
@@ -464,52 +464,63 @@ test('Q5は16:30とカード番号203が揃った場合だけ正解し、会話�
   assert.equal(result.status, 'correct');
   assert.deepEqual(result.state.solved, [...start.solved, 'Q5']);
   const dialogue = result.state.messages.filter(m => m.kind === 'dialogue' && m.problemId === 'Q5');
-  assert.equal(dialogue[0].speaker, 'アサヒ');
+  assert.deepEqual(dialogue.map(line => line.speaker), ['アサヒ', 'タツ', 'アサヒ', '']);
   assert.ok(dialogue[0].text.includes('16時40分頃に鈴の音を聞き'));
-  assert.ok(dialogue[0].text.includes('16時30分頃に入場し'));
-  assert.ok(dialogue[0].text.endsWith('元の順路へ戻ってしまうはずですから」'));
-  assert.equal(dialogue[1].text, '指示：冊子の次のページをめくろう');
-  assert.equal(dialogue[1].emphasis, true);
+  assert.ok(dialogue[0].text.endsWith('鈴の音と一致します。」'));
+  assert.ok(dialogue[1].text.includes('ミサメは16時30分頃に入場し'));
+  assert.ok(dialogue[1].text.endsWith('通常より時間がかかったんだろう。」'));
+  assert.ok(dialogue[2].text.startsWith('「一方、その頃マヤは既に窃盗を終え'));
+  assert.ok(dialogue[2].text.endsWith('さすがです、先輩」'));
+  assert.equal(dialogue[3].text, '指示：冊子の次のページをめくろう');
+  assert.equal(dialogue[3].emphasis, true);
   assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
   assert.equal(submitAnswer(scenario, result.state, ['16:30', card]).status, 'already-solved');
 });
 
-test('Q7はA+203とD+302の両組が揃って初めて正解し、前問の記録と推理・会場案内を保存する', () => {
+test('Q7はA+203とD+302を埋めB・Cを空欄で送ると正解し、前問の記録と推理・会場案内を保存する', () => {
   const problem = scenario.problems.find(p => p.id === 'Q7');
   assert.equal(problem.prompt, '矛盾があるブロックを全て指摘せよ');
-  assert.deepEqual(problem.answerCombos, [['A', '203'], ['D', '302']]);
+  assert.deepEqual(problem.fields.map(field => [field.symbol, field.optional ?? false]), [['A', false], ['B', true], ['C', true], ['D', false]]);
   const start = restoreState(scenario, JSON.stringify({ ...initialState(scenario), selected: 'Q6.2', solved: scenario.problems.slice(0, scenario.problems.indexOf(problem)).map(p => p.id) }));
   const state = { ...start, selected: 'Q7' };
-  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['D', '302']).status, 'progress');
-  assert.equal(submitAnswer(scenario, { ...initialState(scenario), selected: 'Q7' }, ['A', '203']).status, 'progress');
-  for (const answer of [['C', '302'], ['D', '003'], ['A', '302'], ['D', '203'], ['302', 'D'], ['D', '302', '余分'], ['D', ''], ['', '302'], ['D'], 'D&302']) {
+  for (const answer of [
+    ['203', '001', '', '302'], ['203', '', '001', '302'], ['302', '', '', '203'],
+    ['999', '', '', '302'], ['203', '', '', '003'],
+  ]) {
     const result = submitAnswer(scenario, state, answer);
-    assert.notEqual(result.status, 'correct');
-    assert.notEqual(result.status, 'progress');
+    assert.equal(result.status, 'incorrect');
     assert.equal(result.state, state);
   }
-  for (const answer of [['D', '302'], [' d ', '３０２'], ['Ｄ', '302'], ['A', '203'], [' ａ ', '２０３'], ['Ａ', '203']]) {
+  for (const answer of [['', '', '', ''], ['203', '', '', ''], ['', '', '', '302'], ['203', '001', '', ''], ['203', '', '', '302', '余分'], ['203', '', '302'], '203&302']) {
+    const result = submitAnswer(scenario, state, answer);
+    assert.equal(result.status, 'empty');
+    assert.equal(result.state, state);
+  }
+  for (const answer of [['203', '', '', '302'], [' 203 ', ' ', '', '302'], ['２０３', '', '', '３０２']]) {
     assert.equal(checkAnswer(problem, answer), true);
   }
-  const first = submitAnswer(scenario, state, ['Ｄ', '３０２']);
-  assert.equal(first.status, 'progress');
-  assert.deepEqual(first.state.solved, start.solved);
-  assert.deepEqual(first.state.answerCombos.Q7, [1]);
-  assert.equal(first.state.messages.filter(m => m.problemId === 'Q7' && m.kind === 'dialogue').length, 0);
-  assert.equal(submitAnswer(scenario, first.state, ['D', '302']).status, 'incorrect');
-  const result = submitAnswer(scenario, first.state, ['Ａ', '２０３']);
+  for (const answer of [['203', '999', '', '302'], ['203', '', '999', '302'], ['302', '', '', '203'], ['203', '', '', '203'], ['203', '', '', '302x']]) {
+    assert.equal(checkAnswer(problem, answer), false);
+  }
+  const result = submitAnswer(scenario, state, ['203', '', '', '302']);
   assert.equal(result.status, 'correct');
   assert.deepEqual(result.state.solved, [...start.solved, 'Q7']);
-  assert.deepEqual(result.state.answerCombos.Q7, [0, 1]);
+  assert.equal(result.state.messages.find(m => m.problemId === 'Q7' && m.kind === 'answer').text, 'A：203 & D：302');
   const dialogue = result.state.messages.filter(m => m.problemId === 'Q7' && m.kind === 'dialogue');
-  assert.equal(dialogue[0].speaker, 'タツ');
+  assert.deepEqual(dialogue.map(line => line.speaker), ['タツ', 'アサヒ', 'タツ', 'アサヒ', 'タツ', '', '']);
   assert.ok(dialogue[0].text.startsWith('「ずっと違和感があったんだ。'));
-  assert.ok(dialogue[0].text.endsWith('お前しかいない！！」'));
-  assert.equal(dialogue[1].text, '冊子の次のページをめくろう');
-  assert.equal(dialogue[1].emphasis, true);
-  assert.ok(dialogue[2].text.includes('この先は会場を離れても進められます'));
+  assert.ok(dialogue[0].text.endsWith('あんな色じゃない。」'));
+  assert.equal(dialogue[1].text, '「言われてみれば確かに…」');
+  assert.ok(dialogue[2].text.startsWith('「そもそも普通の人間なら、『赤・黄・青』と言われて'));
+  assert.ok(dialogue[3].text.includes('って言ってましたね'));
+  assert.ok(dialogue[3].text.endsWith('使うようになったって」'));
+  assert.ok(dialogue[4].text.startsWith('「そうだ…つまり、あの事故を境に'));
+  assert.ok(dialogue[4].text.endsWith('お前しかいない！！」'));
+  assert.equal(dialogue[5].text, '冊子の次のページをめくろう');
+  assert.equal(dialogue[5].emphasis, true);
+  assert.ok(dialogue[6].text.includes('この先は会場を離れても進められます'));
   assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
-  assert.equal(submitAnswer(scenario, result.state, ['D', '302']).status, 'already-solved');
+  assert.equal(submitAnswer(scenario, result.state, ['203', '', '', '302']).status, 'already-solved');
 });
 
 test('Q6でトンカチと答えると専用の誤答会話を保存し、正解記録を増やさず再回答できる', () => {
@@ -547,7 +558,7 @@ test('Q8は4空欄が揃った場合だけ正解し、完成文と解答記録�
   assert.deepEqual(result.state.solved, ['Q8']);
   const completed = '一昨年、去年と続けて起きたNF連続失踪事件は、すべてハナによるものだった。1人で謎解きをしていた人物が標的となったのは、問題を通じて人目の少ない場所へ自然に誘導し、拉致を容易にするためだ。そして何より儀式に「知恵深き者」が必要だった。謎解きを進められる者こそ、その条件を満たしていたのだ。今年、ミサメがお化け屋敷へ誘導され、撲殺された後に吊るされたのも、入場者にその姿を見せつけ、儀式に必要な「畏怖を集める」という段階を満たすためだった。ハナがそこまでして儀式を行おうとした理由は、京都を襲うと予言された大地震を防ぐため。かつて神を人の身に降ろし、厄災を回避したという儀式を再現する術を求めていたのだ。';
   assert.equal(result.state.messages.find(m => m.problemId === 'Q8' && m.kind === 'answer').text, completed);
-  assert.equal(result.state.messages.at(-1).text, '次のページへ進もう');
+  assert.deepEqual(result.state.messages.filter(m => m.problemId === 'Q8' && m.kind === 'dialogue'), []);
   assert.equal(submitAnswer(scenario, start, ['ハナ', '知恵', '畏怖', '京都大地震']).status, 'correct');
   assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)), result.state);
   assert.equal(submitAnswer(scenario, result.state, correct).status, 'already-solved');

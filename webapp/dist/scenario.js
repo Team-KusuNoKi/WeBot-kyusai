@@ -391,7 +391,7 @@ export const scenario = {
         { speaker: 'タツ', text: '（確かに…。時間的には可能でも物理的にはマヤには不可能だ。きっと何か根本的な見落としをしている…もっと調査を進めなければ…）' },
         { speaker: '', text: '指示：冊子の次のページをめくろう', emphasis: true },
       ],
-      instruction: '', unlock: [],
+      instruction: '', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q2', title: 'Q2', chapter: '第二章', type: 'single',
@@ -428,7 +428,7 @@ export const scenario = {
         { speaker: 'アサヒ', text: '「ドライアイスが昇華することで、時間差で布が落ちる……。それによって鏡に光が反射するようになり、ミサメさんの姿が現れたってことですか……！」' },
         { speaker: 'タツ', text: '「そうだ！　犯人はなんて巧妙なトリックを仕掛けたんだ……！」' },
       ],
-      instruction: '指示：冊子の次のページをめくろう', unlock: [],
+      instruction: '指示：冊子の次のページをめくろう', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q3', title: 'Q3', chapter: '第二章', type: 'single',
@@ -442,6 +442,7 @@ export const scenario = {
         { id: '2', label: '仕掛けを使って吊るした' },
         { id: '3', label: '自力で吊るした' },
       ],
+      optionColumns: 2,
       answers: ['1'], hints: [
         'ミサメの死体が発見された「鏡の間」について調べてみよう。周辺の状況はどうなっていただろうか。',
         'そういえば、NF前日にあるものがなくなっていたという噂を聞いた気がする。あれを使えばミサメの死体を吊るせるのではないだろうか。',
@@ -529,7 +530,7 @@ export const scenario = {
         { label: '空欄②（下の部屋）', placeholder: '空欄②を選択', answerChoices: roomChoices, answers: ['幽煙の間'] },
         { label: '空欄③：共通の言葉', kanaChoices: [...'もしへかみやすれべとのく'], length: 5, answers: ['かくしべや'] },
       ],
-      hints: [], explanation: '', dialogue: [], instruction: '指示：冊子の次のページをめくろう', unlock: [],
+      hints: [], explanation: '', dialogue: [], instruction: '指示：冊子の次のページをめくろう', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q4', title: 'Q4', chapter: '第二章', type: 'fields',
@@ -547,7 +548,7 @@ export const scenario = {
         { speaker: 'タツ', text: '「秘密裏に隠し部屋が造られていた」この事実は揺るぎない。そういえば、マヤは連日夜遅くまで1人残ってお化け屋敷で作業をしていたそうじゃないか。この隠し部屋を作っていたのか？問いただしてみる価値はあるだろう。' },
         { speaker: '', text: '指示：冊子の次のページをめくろう', emphasis: true },
       ],
-      instruction: '', unlock: [],
+      instruction: '', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q5', title: 'Q5', chapter: '第二章', type: 'fields',
@@ -571,10 +572,12 @@ export const scenario = {
         'おそらく犯人は、鈴の音でミサメが隠し部屋に入ったタイミングを知ったのだろう。確か、あるスタッフがお化け屋敷の中で鈴の音を聞いたと言っていたはずだ。',
       ], explanation: '答えは16:30と手がかり番号「203」（幽煙の間：スタッフの証言）です。',
       dialogue: [
-        { speaker: 'アサヒ', text: '「そうです。幽煙の間のスタッフは、16時40分頃に鈴の音を聞き、その直後に来場者の気配が消えたと証言しています。先輩が隠し部屋の入り口で聞いた鈴の音と一致します。つまり、ミサメ先輩は16時30分頃に入場し、10分ほどで幽煙の間に到達、そこで謎を解いて隠し部屋に入ったと考えられます。一般の来場者より注意深く周囲を観察していたため、通常より時間がかかったのでしょう。一方、その頃マヤは既に窃盗を終え、深紅の間にいたはずです。ミサメ先輩を殺害するには、隠し部屋に入った直後を狙う必要があります。隠し部屋を一通り調べれば、元の順路へ戻ってしまうはずですから」' },
+        { speaker: 'アサヒ', text: '「そうです。幽煙の間のスタッフは、16時40分頃に鈴の音を聞き、その直後に来場者の気配が消えたと証言しています。先輩が隠し部屋の入り口で聞いた鈴の音と一致します。」' },
+        { speaker: 'タツ', text: '「ミサメは16時30分頃に入場し、10分ほどで幽煙の間に到達、そこで謎を解いて隠し部屋に入ったんだ。一般の来場者より注意深く周囲を観察していたから、通常より時間がかかったんだろう。」' },
+        { speaker: 'アサヒ', text: '「一方、その頃マヤは既に窃盗を終え、深紅の間にいたはずです。ミサメ先輩を殺害するには、隠し部屋に入った直後を狙う必要があります。隠し部屋を一通り調べれば、元の順路へ戻ってしまうはずですから。さすがです、先輩」' },
         { speaker: '', text: '指示：冊子の次のページをめくろう', emphasis: true },
       ],
-      instruction: '', unlock: [],
+      instruction: '', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q6', title: 'Q6', chapter: '第二章', type: 'text',
@@ -619,20 +622,17 @@ export const scenario = {
         { speaker: 'タツ', text: '現場に残されていた、血まみれの軍手にはチューリップの刺繍があった。そして、ハナは自分の持ち物にチューリップの刺繍を入れている。この軍手はハナのものに間違いない！！！犯人はハナだ！！！' },
         { speaker: '', text: '冊子の次のページをめくろう', emphasis: true },
       ],
-      instruction: '', unlock: [],
+      instruction: '', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q7', title: 'Q7', chapter: '第二章', type: 'fields',
-      answerFieldsLayout: 'row',
       prompt: '矛盾があるブロックを全て指摘せよ',
-      // 組単位で判定し、回答欄は1組のままにして正解の個数を画面から隠す。全組が揃うまで次へ進まない。
-      answerCombos: [
-        ['A', '203'],
-        ['D', '302'],
-      ],
+      // 記号は行ごとに固定。矛盾するブロックの手がかり番号だけを埋め、矛盾しない行は空欄のまま送る。
       fields: [
-        { label: '矛盾のあるブロック', placeholder: 'ブロックを選択…', answerChoices: ['A', 'B', 'C', 'D'], answers: ['A', 'D'] },
-        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['203', '302'] },
+        { symbol: 'A', label: 'ブロックAの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['203'] },
+        { symbol: 'B', label: 'ブロックBの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: [''], optional: true },
+        { symbol: 'C', label: 'ブロックCの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: [''], optional: true },
+        { symbol: 'D', label: 'ブロックDの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['302'] },
       ],
       hints: [
         'ハナのプロフィールや評判をおさらいしてみよう。何か特徴的なものはないだろうか。',
@@ -640,11 +640,15 @@ export const scenario = {
         'そういえば、謎解きをしているときに違和感のある問題はなかっただろうか。例えば、ハナがその謎を作ったからこそ生まれた違和感が……。',
       ], explanation: '答えはブロック「A」と手がかり番号「203」、およびブロック「D」と手がかり番号「302」です。',
       dialogue: [
-        { speaker: 'タツ', text: '「ずっと違和感があったんだ。あのN6の問題……信号機が題材のはずなのに、配色がおかしい。信号機の赤・黄・青は、あんな色じゃない。そもそも普通の人間なら、『赤・黄・青』と言われて、あんなちぐはぐな配色にはしないはずだ。ハナの後輩の証言によれば、ハナは半年前の転倒事故以来、メイクの色合わせがおかしくなったらしい。服に合わないリップやチークを使うようになった、とも言っていた。……つまり、あの事故を境に、ハナの色彩感覚には何らかの変化が生じた可能性がある。そして、あのN6の奇妙な配色にも、その特徴が表れている。あの問題を作ったのは、ハナ。お前しかいない！！」' },
+        { speaker: 'タツ', text: '「ずっと違和感があったんだ。あのN6の問題……信号機が題材のはずなのに、配色がおかしい。信号機の赤・黄・青は、あんな色じゃない。」' },
+        { speaker: 'アサヒ', text: '「言われてみれば確かに…」' },
+        { speaker: 'タツ', text: '「そもそも普通の人間なら、『赤・黄・青』と言われて、あんなちぐはぐな配色にはしないはずだ。」' },
+        { speaker: 'アサヒ', text: '「確かにハナの後輩の証言によれば、半年前の転倒事故以来、メイクの色合わせがおかしくなったらしいって言ってましたね。服に合わないリップやチークを使うようになったって」' },
+        { speaker: 'タツ', text: '「そうだ…つまり、あの事故を境に、ハナの色彩感覚には何らかの変化が生じた可能性がある。そして、あのN6の奇妙な配色にも、その特徴が表れている。あの問題を作ったのは、ハナ。お前しかいない！！」' },
         { speaker: '', text: '冊子の次のページをめくろう', emphasis: true },
         { speaker: '', text: '※会場でプレイされている方へ\nここで会場内でのプレイは一区切りとなります。この先は会場を離れても進められますので、お好きな場所で続きをお楽しみください。(ただし、はさみとテープが必要になるのでご注意ください)' },
       ],
-      instruction: '', unlock: [],
+      instruction: '', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q8', title: 'Q8', chapter: '第二章', type: 'fields',
@@ -662,14 +666,8 @@ export const scenario = {
         '巻物をよく読んで、当てはまる単語を埋めよう。',
       ], explanation: '空欄は順に「ハナ」「知恵」「畏怖」「大地震」です。',
       completionScreen: 'booklet',
-      dialogue: [
-        { speaker: '', text: '一昨年、去年と続けて起きたNF連続失踪事件は、すべてハナによるものだった。1人で謎解きをしていた人物が標的となったのは、問題を通じて人目の少ない場所へ自然に誘導し、拉致を容易にするためだ。' },
-        { speaker: '', text: 'そして何より儀式に「知恵深き者」が必要だった。謎解きを進められる者こそ、その条件を満たしていたのだ。' },
-        { speaker: '', text: '今年、ミサメがお化け屋敷へ誘導され、撲殺された後に吊るされたのも、入場者にその姿を見せつけ、儀式に必要な「畏怖を集める」という段階を満たすためだった。' },
-        { speaker: '', text: 'ハナがそこまでして儀式を行おうとした理由は、京都を襲うと予言された大地震を防ぐため。かつて神を人の身に降ろし、厄災を回避したという儀式を再現する術を求めていたのだ。' },
-        { speaker: '', text: '次のページへ進もう', emphasis: true },
-      ],
-      instruction: '冊子の次のページをめくろう', unlock: [],
+      dialogue: [],
+      instruction: '冊子の次のページをめくろう', unlock: [], deferPageTurn: true,
     },
     {
       id: 'Q9', title: 'Q9', chapter: '第二章', type: 'text',
@@ -743,7 +741,7 @@ export const scenario = {
     { id: 'A1', title: '11月のしるし', text: 'タイトルに刻まれた、11という数字。', mark: '11' },
     { id: 'B1', title: '次の月', text: '11の次に続く数字は、12。', mark: '12' },
   ],
-  // 手がかり画面のカード一覧（人物カードはキャラ情報タブ側）。image は app/ からの相対パス。
+  // 手がかり画面のカード一覧（人物カードは公開情報タブ側）。image は app/ からの相対パス。
   clueGallery: [
     { id: 'clue-1', number: '100', title: 'アサヒの調査結果', image: '../assets/clue-cards/clue-1.webp' },
     { id: 'clue-2', number: '101', title: '女子高生たちの会話', image: '../assets/clue-cards/clue-2.webp' },

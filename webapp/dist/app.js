@@ -51,7 +51,9 @@ let combineSelection = [];
 let combineReplaceAt = null;
 let combinePicker = false;
 let combineSelecting = false;
-let suppressCombineClick = false;
+let combineSuppressCard = null;
+let combineSuppressUntil = 0;
+let combineSuppressPointer = null;
 let historyChatScrollTop = 0;
 let historyScrollTop = 0;
 let historyOpenProblems = new Set();
@@ -65,6 +67,8 @@ let menuExpanded = false;
 let problemMenuExpanded = false;
 let startView = true;
 let yoiEndView = false;
+let meiPlayChoiceVisible = false;
+let pageTurnRevealed = false;
 let showVenueDirections = false;
 let investigationView = false;
 let investigationClosing = false;
@@ -95,6 +99,7 @@ const overlayHistory = createOverlayHistory(window, dismissTopSurface, scenario.
 
 function syncNavigation() {
   overlayHistory.sync(panel.open && !panel.classList.contains('is-closing') || historyView || !gateVisible && (investigationClosing || composerExpanded || menuExpanded || problemMenuExpanded));
+  updateHeaderActions();
 }
 
 function dismissTopSurface() {
@@ -103,7 +108,7 @@ function dismissTopSurface() {
   if (investigationClosing) return showInvestigation();
   if (problemMenuExpanded) { setProblemMenuExpanded(false); document.querySelector('.problem-toggle')?.focus({ preventScroll: true }); }
   else if (menuExpanded) { setMenuExpanded(false); document.querySelector('.menu-button')?.focus({ preventScroll: true }); }
-  else if (composerExpanded) closeAnswerArea();
+  else if (composerExpanded) answerAreaBack();
 }
 
 const chatIsBeingHandled = () => chatPointerDown || chatTouchDown || chatWheelActive;
@@ -344,7 +349,7 @@ function mountEpilogue(workspace) {
 function playConversation(start, { fromCorrectAnswer = false } = {}) {
   answerOrigin = null;
   startView = false;
-  yoiEndView = false;
+  yoiEndView = meiPlayChoiceVisible = false;
   resetChatFollow();
   sceneStart = start;
   displayedMessages = [];
@@ -511,7 +516,7 @@ function awaitingYoiPageTurn() {
 
 function novelSceneMarkup(line) {
   const action = isPlaying ? 'novel-next' : canReadInvestigationClosing() ? 'investigation-closing' : awaitingYoiPageTurn() ? 'yoi-page-turn'
-    : current().completionScreen === 'booklet' && showsGuideStop(current()) ? 'travel-next' : '';
+    : (current().completionScreen === 'booklet' || current().deferPageTurn) && showsGuideStop(current()) ? 'travel-next' : '';
   const tag = action ? 'button' : 'article';
   return `<div class="novel-stage${line.speaker === 'タツ' ? ' novel-right' : ''}">
     ${novelPortraitMarkup(line.speaker)}
@@ -527,6 +532,7 @@ const icons = {
   history: '<path d="M3 11a9 9 0 1 1 2 7M3 3v8h8m1-5v6l4 2"/>',
   arrow: '<path d="M5 12h14m-6-6 6 6-6 6"/>',
   map: '<path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/>',
+  book: '<path d="M12 6c-1.8-1.4-4.5-2-8-2v15c3.5 0 6.2.6 8 2 1.8-1.4 4.5-2 8-2V4c-3.5 0-6.2.6-8 2v15Z"/>',
   send: '<path d="m3 3 19 9-19 9 4-9-4-9Zm4 9h15"/>',
   edit: '<path d="m16 5 3 3M4 20l4.2-.8L20 7.4 16.6 4 4.8 15.8 4 20Z"/>',
   check: '<path d="m5 12 4 4L19 6"/>',
@@ -587,17 +593,18 @@ function showInvestigation() {
   const previousSolved = investigationSnapshot;
   rememberAnswerDraft();
   conversationPlayer.stop(); isPlaying = false;
-  startView = yoiEndView = repeatAnswer = composerExpanded = menuExpanded = problemMenuExpanded = false;
+  startView = yoiEndView = repeatAnswer = composerExpanded = menuExpanded = problemMenuExpanded = meiPlayChoiceVisible = false;
   investigationView = true;
   state = { ...state, selected: scenario.investigation.id };
   displayedMessages = [];
   const complete = scenario.investigation.entries.filter(id => investigationEntryStatus(id, state.solved) === 2);
   const peelingConclusions = complete.filter(id => !seenConclusions.includes(id));
   seenConclusions = complete;
+  const justCompleted = Boolean(previousSolved) && !scenario.investigation.problemIds.every(id => previousSolved.includes(id)) && investigationComplete(scenario, state);
   resetChatFollow();
   render({ peelingConclusions });
   document.querySelector('.chat-area').scrollTop = investigationScrollTop;
-  document.querySelector(`[data-action="investigation-open"][data-id="${investigationReturnId}"]`)?.focus({ preventScroll: true });
+  (justCompleted ? document.querySelector('.investigation-next') : document.querySelector(`[data-action="investigation-open"][data-id="${investigationReturnId}"]`))?.focus({ preventScroll: true });
   if (peelingConclusions.length) {
     document.querySelector(`[data-conclusion="${peelingConclusions[0]}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
   }
@@ -627,7 +634,7 @@ function showInvestigation() {
         { '--answered-angle': `${currentCount * sector}deg` },
       ], { duration: 750, easing: 'ease-in-out' });
     }
-    if (!scenario.investigation.problemIds.every(id => previousSolved.includes(id)) && investigationComplete(scenario, state)) animateEmphasis(document.querySelector('.investigation-next'), reducedMotion());
+    if (justCompleted) animateEmphasis(document.querySelector('.investigation-next'), reducedMotion());
   }
   investigationSnapshot = [...state.solved];
 }
@@ -911,7 +918,7 @@ function updateAnswerReadiness({ highlight = false, feedback: showFeedback = fal
   form.classList.toggle('needs-completion', highlight && !result.ready);
   form.querySelectorAll('.needs-answer').forEach(field => field.classList.remove('needs-answer'));
   if (highlight && !result.ready) {
-    const empty = [...form.querySelectorAll('input:not([type="hidden"]), select')].filter(field => field.type === 'radio' || field.type === 'checkbox' ? !form.querySelector('input:checked') : !field.value.trim());
+    const empty = [...form.querySelectorAll('input:not([type="hidden"]), select')].filter(field => field.type === 'radio' || field.type === 'checkbox' ? !form.querySelector('input:checked') : !field.value.trim() && field.required);
     for (const field of empty) {
       (field.closest('.answer-field, .answer-options, .text-composer') ?? field).classList.add('needs-answer');
       field.setAttribute('aria-invalid', 'true');
@@ -940,9 +947,10 @@ function setMenuExpanded(expanded) {
   });
 }
 
-function closeAnswerArea() {
+// 展開した問題は閉じられない。戻る操作は履歴（捜査中は問題一覧）へ送る。
+function answerAreaBack() {
   if (!startView && (current().conversationBackground === 'investigation' || !answerOrigin && isInvestigation())) { showInvestigation(); return; }
-  setComposerExpanded(false);
+  openHistoryScreen();
 }
 
 function setComposerExpanded(expanded) {
@@ -1021,6 +1029,7 @@ function closePanel() {
   const imageExit = closingImageViewer?.dismissTo(returnRect);
   imageViewer = null;
   sheetDismiss?.dispose({ preservePosition: true }); sheetDismiss = null;
+  const closingTravelNext = panel.dataset?.kind === 'travel-next';
   panel.classList.add('is-closing');
   panel.inert = true;
   syncNavigation();
@@ -1036,6 +1045,10 @@ function closePanel() {
     panel.close();
     panel.classList.remove('is-closing');
     panel.inert = false;
+    if (closingTravelNext) {
+      pageTurnRevealed = false;
+      if (current().deferPageTurn && !panel.open) render();
+    }
     const available = element => element?.isConnected && !element.closest?.('[hidden], [inert]') && (!element.getClientRects || element.getClientRects().length > 0);
     const actionTarget = panelReturnAction ? document.querySelector(`[data-action="${panelReturnAction}"]`) : null;
     const returnTarget = available(outsideFocus) ? outsideFocus : available(panelReturnFocus) ? panelReturnFocus : available(actionTarget) ? actionTarget : document.querySelector('.composer-area:not([hidden])') ?? document.querySelector('.menu-button');
@@ -1140,6 +1153,7 @@ function enterPlay(record) {
   gateBusy = false;
   gateError = '';
   menuExpanded = problemMenuExpanded = false;
+  pageTurnRevealed = false;
   selectedSymbols = [...selectedSymbols];
   feedback = '';
   resetChatFollow();
@@ -1297,6 +1311,11 @@ function openFinishedPageTurn() {
   if (awaitingYoiPageTurn()) kind = 'yoi-page-turn';
   else if (!composerExpanded && !investigationView && hasStoryPageTurn(current()) && showsGuideStop(current())) kind = 'travel-next';
   if (!kind) return false;
+  // 暗転した場面にページをめくる案内だけを先に出し、ポップアップはタップで開く。
+  if (kind === 'travel-next' && current().deferPageTurn) {
+    document.querySelector('.page-turn-scene')?.focus({ preventScroll: true });
+    return true;
+  }
   openPanel(kind);
   return true;
 }
@@ -1408,7 +1427,9 @@ function answerInputsMarkup(p) {
       ? `<label class="answer-field"><span class="${p.answerParts || row ? 'sr-only' : 'answer-field-label'}">${esc(field.label)}</span>${answerSelectMarkup(field.answerChoices, `answer${index ? `-${index}` : ''}`, field.placeholder ?? '選択…')}</label>`
       : field.options
       ? `<fieldset class="answer-options answer-options-two-columns"><legend class="answer-field-label">${esc(field.label)}</legend>${field.options.map((option, optionIndex) => `<label class="option"><input id="answer-${index}-option-${optionIndex}" name="answer" type="radio" value="${esc(option.id)}" required><span>${esc(option.label)}</span></label>`).join('')}</fieldset>`
-      : `<label class="answer-field"><span class="${p.answerParts || row ? 'sr-only' : 'answer-field-label'}">${esc(field.label)}</span><span class="text-composer"><input id="answer${index ? `-${index}` : ''}" name="answer" type="text" inputmode="${esc(field.inputMode ?? 'text')}" placeholder="${esc(field.placeholder)}" autocomplete="off" required></span></label>`);
+      : field.symbol
+      ? `<label class="answer-field answer-field-symbol"><span class="sr-only">${esc(field.label)}</span><span class="answer-field-symbol-mark" aria-hidden="true">${esc(field.symbol)}</span><span class="text-composer"><input id="answer${index ? `-${index}` : ''}" name="answer" type="text" inputmode="${esc(field.inputMode ?? 'text')}" placeholder="${esc(field.placeholder)}" autocomplete="off"${field.optional ? '' : ' required'}></span></label>`
+      : `<label class="answer-field"><span class="${p.answerParts || row ? 'sr-only' : 'answer-field-label'}">${esc(field.label)}</span><span class="text-composer"><input id="answer${index ? `-${index}` : ''}" name="answer" type="text" inputmode="${esc(field.inputMode ?? 'text')}" placeholder="${esc(field.placeholder)}" autocomplete="off"${field.optional ? '' : ' required'}></span></label>`);
     const submit = `<button type="submit" class="send-button" aria-label="答えを送信">${icon('send')}</button>`;
     if (p.answerFieldsLayout === 'pairs') {
       const pairs = [];
@@ -1481,6 +1502,19 @@ function updateProblemNavigation() {
   if (problemMenuExpanded) alignCurrentProblem();
 }
 
+function headerActionsMarkup() {
+  return composerExpanded
+    ? `<button class="hint-button header-actions" data-action="history" aria-label="会話履歴">${icon('history')}<span>履歴</span></button>`
+    : '<span class="header-spacer header-actions" aria-hidden="true"></span>';
+}
+
+// 問題の展開・解除だけでは全面を再描画しないので、ヘッダー右端だけを差し替える。
+function updateHeaderActions() {
+  const slot = document.querySelector('.play-header .header-actions');
+  if (!slot || slot.matches('button') === composerExpanded) return;
+  slot.outerHTML = headerActionsMarkup();
+}
+
 function setProblemMenuExpanded(expanded) {
   if (problemMenuExpanded === expanded) return;
   problemMenuExpanded = expanded;
@@ -1499,9 +1533,7 @@ function setProblemMenuExpanded(expanded) {
 }
 
 function composerContentMarkup(p) {
-  const heading = p.answerPresentation === 'page'
-    ? `<div class="answer-composer-heading"><h2>${esc(problemLabel(p))}</h2></div>`
-    : `<div class="answer-composer-heading"><h2>${esc(problemLabel(p))}</h2><button class="composer-close" data-action="close-composer" aria-label="回答エリアを閉じる">${icon('close')}</button></div>`;
+  const heading = `<div class="answer-composer-heading"><h2>${esc(problemLabel(p))}</h2><button class="composer-hint" data-action="hints" aria-label="ヒント">${icon('hint')}<span>ヒント</span></button></div>`;
   if (p.type === 'pending') return `${heading}<div class="answer-problem"><p>${esc(p.prompt)}</p></div>`;
   const content = (p.diagram || p.image || p.images) ? puzzleCardMarkup(p) : `<div class="answer-problem" data-problem-id="${esc(p.id)}"><p>${problemPromptMarkup(p)}</p>${p.answerTemplate ? `<p class="answer-template">${esc(p.answerTemplate)}</p>` : ''}${p.wordBank && p.showWordBank !== false ? `<div class="word-bank"><span>${esc(p.wordBankLabel ?? '語群')}</span><p>${p.wordBank.map(esc).join('、')}</p></div>` : ''}</div>
     ${answerFormMarkup(p)}
@@ -1603,7 +1635,12 @@ function yoiCompletionMarkup() {
   return `<section class="yoi-completion" aria-labelledby="yoi-completion-title">
     <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="yoi-completion-title" tabindex="-1">宵</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 宵」はここで終了です。<br>遊んでいただきありがとうございました。</p><p>冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、<br>お好きな時間にプレイすることが可能です。</p></div>
     <div class="yoi-completion-actions" role="group" aria-label="続きの遊び方">
+      ${meiPlayChoiceVisible ? `
+      <button class="primary-button yoi-venue-button" data-action="continue-at-venue"><span>会場でプレイする</span></button>
+      <button class="secondary-button yoi-online-button" data-action="continue-online"><span>オンラインでプレイする</span></button>
+      ` : `
       <button class="primary-button yoi-venue-button" data-action="play-mei"><span>11月の救祭 冥 をプレイする</span></button>
+      `}
       <button class="secondary-button yoi-online-button" data-action="tour-thanks"><span>周遊版をご購入の方はこちら</span></button>
     </div>
     ${storageWarning ? `<p class="feedback" role="status">${esc(storageWarning)}</p>` : ''}
@@ -1707,7 +1744,12 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const completionPending = awaitingYoiPageTurn();
   const composerVisible = !investigationView && !yoiEndView && (!solved || startView || repeatAnswer) && !isPlaying && composerExpanded;
   const boardBackground = !startView && p.conversationBackground === 'investigation';
-  const showBoard = investigationView || boardBackground;
+  // 冊子をめくる暗転は、捜査一覧の背景より前面に出す。
+  const deferredPageTurn = !isPlaying && !composerExpanded && !investigationView && !pageTurnRevealed && p.deferPageTurn && showsGuideStop(p);
+  const showBoard = !deferredPageTurn && (investigationView || boardBackground);
+  // めくり指示の場面と、捜査が揃って「次へ」を促す場面では同じ暗さに落とす。
+  const sceneDim = deferredPageTurn || (investigationView && investigationComplete(scenario, state));
+  const sceneDimLate = sceneDim && peelingConclusions.length > 0;
   const answerPageVisible = p.answerPresentation === 'page' && composerVisible;
   const showStartGuide = startView || (p.id === 'N1' && !isPlaying && (!solved || repeatAnswer) && !displayedMessages.length);
   const showClues = p.chapter === '第二章' && !startView && !yoiEndView;
@@ -1723,7 +1765,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
     ? displayedMessages.findLast(m => m.problemId === lastScene.id && m.kind === 'dialogue' && !isSceneNotice(m)) : null;
   // 案内のない会話は、読了後も最後の台詞を表示する。
   const closingAvailable = canReadInvestigationClosing();
-  const novel = !showBoard && (isPlaying ? novelPlayback : completionPending || lastStoryLine || closingAvailable || characterScene && !transcript.length && !sceneProblem.instruction);
+  const novel = !showBoard && (isPlaying ? novelPlayback : completionPending || deferredPageTurn || lastStoryLine || closingAvailable || characterScene && !transcript.length && !sceneProblem.instruction);
   const novelLine = completionPending
     ? displayedMessages.findLast(m => m.problemId === p.id && m.speaker) ?? p.dialogue.findLast(m => m.speaker)
     : lastStoryLine || lastMessage;
@@ -1733,10 +1775,10 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
     app.innerHTML = '<div class="shell"><main id="main" class="workspace"></main></div>';
     workspace = document.querySelector('.workspace');
   }
-  workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}`;
+  workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}${sceneDim ? ' scene-dim' : ''}${sceneDimLate ? ' scene-dim-late' : ''}`;
   workspace.inert = investigationClosing || Boolean(epiloguePhase);
   workspace.innerHTML = `
-      <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints">${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button></nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div><button class="hint-button" data-action="hints" aria-label="ヒント">${icon('hint')}<span>ヒント</span></button></div>
+      <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints">${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button></nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
         <div class="play-toolbar">
           <div id="problem-navigation" class="problem-navigation">${problemNavigationMarkup()}</div>
           <div class="play-actions">
@@ -1781,7 +1823,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
           <p>会場でプレイされる方は、画面上の「手がかり」ボタンに加えて、印刷した資料を会場で受け取ってプレイすることも可能です。</p>
         </article>` : ''}
         ${showBoard ? investigationMarkup(peelingConclusions) : ''}
-        ${novel && novelLine ? novelSceneMarkup(novelLine) : `<div id="messages" class="messages" role="log" aria-label="会話" aria-live="polite" aria-relevant="additions text">${showBoard ? '' : transcript.map(messageMarkup).join('')}</div>`}
+        ${deferredPageTurn ? `<button type="button" class="page-turn-scene" data-action="travel-next"><span class="page-turn-scene-icon" aria-hidden="true">${icon('book')}</span><span class="page-turn-scene-text">冊子の次のページをめくろう<span class="page-turn-scene-cue" aria-hidden="true">▷</span></span></button>` : novel && novelLine ? novelSceneMarkup(novelLine) : `<div id="messages" class="messages" role="log" aria-label="会話" aria-live="polite" aria-relevant="additions text">${showBoard ? '' : transcript.map(messageMarkup).join('')}</div>`}
         ${branchPending ? `<div class="branch-options" aria-label="会話の選択肢">${p.branches.map(b => `<button data-action="branch" data-id="${esc(b.id)}">${esc(b.label)}</button>`).join('')}</div>` : ''}
         ${sceneProblem.instruction && !hasStoryPageTurn(sceneProblem) && state.solved.includes(sceneProblem.id) && !isPlaying && !startView && !displayedMessages.some(message => !message.speaker && normalizePageTurnText(message.text) === normalizePageTurnText(sceneProblem.instruction)) ? instructionCardMarkup(sceneProblem.instruction) : ''}
         ${(solved || isPlaying) && storageWarning ? `<div class="feedback" role="status">${esc(storageWarning)}</div>` : ''}
@@ -1852,6 +1894,10 @@ function clearCombineSelecting() {
   combineReplaceAt = null;
 }
 
+// 長押しの指を離したときに発生する click を、その指が置かれていたカードに限って一度だけ無効化する。
+// 再描画で click の target が消えると click が届かずフラグだけ残るため、カードIDと有効期限で判定する。
+const combineClickSuppressed = id => id === combineSuppressCard && performance.now() < combineSuppressUntil;
+
 function toggleCombineCard(id) {
   if (!allPlayCards().some(card => card.id === id)) return false;
   if (combineSelection.includes(id)) {
@@ -1886,7 +1932,22 @@ function combineOrderBadge(id) {
 function combineSelectBarMarkup() {
   if (!combineSelecting || combinePicker || clueTab === 'combine') return '';
   const count = combineSelection.length;
-  return `<button type="button" class="primary-button combine-select-bar" data-action="combine-select-run" ${count === 2 ? '' : 'disabled'} aria-label="合成 ${count}枚中2枚">合成 ${count}/2</button>`;
+  const thumbs = combineSelection.map(id => {
+    const card = allPlayCards().find(item => item.id === id);
+    return card?.image ? `<img class="combine-select-thumb" src="${esc(card.image)}" alt="">` : '';
+  }).join('');
+  const status = count === 2 ? 'この2枚で合成できます' : count === 1 ? 'あと1枚選んでください' : 'カードを2枚選んでください';
+  return `<div class="combine-select-bar${count === 2 ? ' is-ready' : ''}" role="group" aria-label="合成するカードを選択中">
+    <button type="button" class="icon-button combine-select-cancel" data-action="combine-select-cancel" aria-label="選択をやめる">${icon('close')}</button>
+    <div class="combine-select-status" aria-live="polite"><span class="combine-select-thumbs" aria-hidden="true">${thumbs}</span><span class="combine-select-text">${status}<small>タップで選択・長押しで拡大</small></span></div>
+    <button type="button" class="primary-button combine-select-run" data-action="combine-select-run" ${count === 2 ? '' : 'disabled'} aria-label="選択したカードを合成">合成 ${count}/2</button>
+  </div>`;
+}
+
+function refreshCombineSelection(changedId = null) {
+  openPanel('clues', { keepFocus: true });
+  if (changedId) animateEmphasis(panel.querySelector(`[data-id="${changedId}"] .combine-order, [data-combine-id="${changedId}"] .combine-order`), reducedMotion());
+  if (combineSelection.length === 2) animateEmphasis(panel.querySelector('.combine-select-run'), reducedMotion());
 }
 
 function applyCombineResult(ids) {
@@ -1920,9 +1981,9 @@ function combineGuideMarkup() {
       </figure>
       <div class="start-guide-menu-copy">
         <p>手がかり番号は、カード下部の数字となります。</p>
-        <p>手がかり番号はカードだけではなくキャラ情報にも書かれてあります。見落とさないようご注意ください。</p>
       </div>
     </div>
+    <p>手がかり番号はカードだけではなく公開情報にも書かれてあります。見落とさないようご注意ください。</p>
   </article>`;
 }
 
@@ -1933,8 +1994,9 @@ function clueCardMarkup(card) {
     : `${card.title}（手がかり番号 ${card.number}）を拡大`;
   const order = combineOrderMark(card.id);
   const selectedLabel = order ? `${card.title}（手がかり番号 ${card.number}）、${order}` : label;
+  const check = combineSelecting && !selected ? '<span class="select-check" aria-hidden="true"></span>' : '';
   return `<button type="button" class="clue-card-tile" data-action="clue-card-open" data-id="${esc(card.id)}"${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(combineSelecting ? selectedLabel : label)}">
-    <span class="clue-card-thumb">${combineOrderBadge(card.id)}<img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span>
+    <span class="clue-card-thumb">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span>
   </button>`;
 }
 
@@ -1950,7 +2012,8 @@ function hexEntryButton() {
 function cluePhotoCardMarkup(card, { current = false } = {}) {
   const selected = combineSelecting && combineSelection.includes(card.id);
   const order = combineOrderMark(card.id);
-  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}<img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}</article>`;
+  const check = combineSelecting && !selected ? '<span class="select-check" aria-hidden="true"></span>' : '';
+  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}</article>`;
 }
 
 function clueCardExpandedMarkup(gallery, index) {
@@ -2183,14 +2246,15 @@ function bindCombineCardGestures() {
   const targetFromEvent = event => {
     if (event.target?.closest?.('[data-action="clue-card-close"], .combine-select-bar, .clue-tabs, .icon-button')) return null;
     const tile = event.target?.closest?.('[data-action="clue-card-open"][data-id]');
-    if (tile) return { id: tile.dataset.id, kind: 'tile' };
+    if (tile) return { id: tile.dataset.id, kind: 'tile', el: tile };
     const card = event.target?.closest?.('.clue-gallery-card[data-combine-id]');
-    if (card) return { id: card.dataset.combineId, kind: 'gallery' };
+    if (card) return { id: card.dataset.combineId, kind: 'gallery', el: card };
     return null;
   };
 
   const clearPress = () => {
     if (press?.timer) clearTimeout(press.timer);
+    press?.el?.classList.remove('is-pressing');
     press = null;
   };
 
@@ -2199,20 +2263,38 @@ function bindCombineCardGestures() {
     const target = targetFromEvent(event);
     if (!target) return;
     clearPress();
+    combineSuppressPointer = null;
     press = {
       id: target.id,
+      el: target.el,
       x: event.clientX,
       y: event.clientY,
       pointerId: event.pointerId,
       timer: setTimeout(() => {
         const id = press?.id;
+        const pointerId = press?.pointerId;
         press = null;
-        if (!id || !beginCombineSelecting(id)) return;
-        suppressCombineClick = true;
+        target.el?.classList.remove('is-pressing');
+        if (!id) return;
+        if (combineSelecting) {
+          // 選択モード中の長押しはカードの拡大プレビューを開く（公開情報タブは常時拡大表示のため対象外）
+          const card = clueTab === 'cards' ? clueGalleryItems().find(item => item.id === id) : null;
+          if (!card || expandedClueId) return;
+          expandedClueId = card.id;
+          expandedCharacter = null;
+          combineSuppressPointer = { id, pointerId };
+          haptics.trigger();
+          openPanel('clues');
+          panel.querySelector('[data-action="clue-card-close"]')?.focus({ preventScroll: true });
+          return;
+        }
+        if (!beginCombineSelecting(id)) return;
+        combineSuppressPointer = { id, pointerId };
         haptics.trigger();
-        openPanel('clues', { keepFocus: true });
+        refreshCombineSelection(id);
       }, longPressMs),
     };
+    target.el?.classList.add('is-pressing');
   });
 
   root.addEventListener('pointermove', event => {
@@ -2222,26 +2304,31 @@ function bindCombineCardGestures() {
 
   for (const name of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     root.addEventListener(name, event => {
+      if (combineSuppressPointer && (event.pointerId == null || event.pointerId === combineSuppressPointer.pointerId)) {
+        combineSuppressCard = combineSuppressPointer.id;
+        combineSuppressUntil = performance.now() + 800;
+        combineSuppressPointer = null;
+      }
       if (!press || (event.pointerId != null && event.pointerId !== press.pointerId)) return;
       clearPress();
     });
   }
 
   root.addEventListener('click', event => {
-    if (suppressCombineClick) {
+    const target = targetFromEvent(event);
+    if (target && combineClickSuppressed(target.id)) {
       event.preventDefault();
       event.stopPropagation();
-      suppressCombineClick = false;
+      combineSuppressCard = null;
       return;
     }
     if (!combineSelecting) return;
-    const target = targetFromEvent(event);
     if (!target || target.kind !== 'gallery') return;
     event.preventDefault();
     event.stopPropagation();
     if (!toggleCombineCard(target.id)) return;
     haptics.trigger();
-    openPanel('clues', { keepFocus: true });
+    refreshCombineSelection(target.id);
   }, true);
 
   root.addEventListener('contextmenu', event => {
@@ -2425,7 +2512,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
       content = clueCardExpandedMarkup(gallery, openedIndex);
     } else {
       const hexCards = clueGalleryCards();
-      content = `<div class="clue-card-grid" role="list">${gallery.map(card => `<div role="listitem">${clueCardMarkup(card)}</div>`).join('')}</div>${hexCards.length ? `<div class="clue-card-hex">${hexCards.join('')}</div>` : ''}`;
+      content = `${!combineSelecting && allPlayCards().length >= 2 ? `<div class="clue-card-actions"><button type="button" class="combine-open" data-action="combine-select-start">${icon('check')}<span>選択して合成</span></button></div>` : ''}<div class="clue-card-grid" role="list">${gallery.map(card => `<div role="listitem">${clueCardMarkup(card)}</div>`).join('')}</div>${hexCards.length ? `<div class="clue-card-hex">${hexCards.join('')}</div>` : ''}`;
     }
   } else if (kind === 'clues' && clueTab === 'characters') {
     title = '手がかり';
@@ -2434,7 +2521,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
       content = `<div class="clue-card-grid character-grid" role="list">${people.map(card => `<div role="listitem">${clueCardMarkup(card)}</div>`).join('')}</div>`;
     } else {
       const index = Math.max(0, Math.min(people.length - 1, expandedCharacter ?? 0));
-      content = `<div class="clue-card-expanded character-sheet"><div class="clue-carousel" tabindex="0" role="region" aria-label="キャラ情報。横スクロールで切り替え">${people.map((card, i) => cluePhotoCardMarkup(card, { current: i === index })).join('')}</div></div>`;
+      content = `<div class="clue-card-expanded character-sheet"><div class="clue-carousel" tabindex="0" role="region" aria-label="公開情報。横スクロールで切り替え">${people.map((card, i) => cluePhotoCardMarkup(card, { current: i === index })).join('')}</div></div>`;
     }
   } else if (kind === 'clues' && combinePicker) {
     title = '手がかり';
@@ -2444,11 +2531,11 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
       const selected = combineSelection.includes(card.id);
       const label = selected ? `${card.title}を入れ替える` : `${card.title}（手がかり番号 ${card.number}）`;
       const order = combineOrderMark(card.id);
-      return `<div role="listitem"><button type="button" class="clue-card-tile" data-action="combine-toggle" data-id="${esc(card.id)}" aria-pressed="${selected}" aria-label="${esc(order ? `${label}、${order}` : label)}"><span class="clue-card-thumb">${combineOrderBadge(card.id)}<img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span></button></div>`;
+      return `<div role="listitem"><button type="button" class="clue-card-tile" data-action="combine-toggle" data-id="${esc(card.id)}" aria-pressed="${selected}" aria-label="${esc(order ? `${label}、${order}` : label)}"><span class="clue-card-thumb">${combineOrderBadge(card.id)}${selected ? '' : '<span class="select-check" aria-hidden="true"></span>'}<img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span></button></div>`;
     }).join('')}</div><button type="button" class="answer-fab" data-action="combine-confirm" ${remaining === 0 ? '' : 'disabled'}>${icon('edit')}<span>${remaining === 0 ? '次へ' : `あと${remaining}枚`}</span></button></div>`;
   } else if (kind === 'clues') {
     title = '手がかり';
-    content = `${combineGuideMarkup()}<button type="button" class="primary-button full combine-open" data-action="combine-pick">合成</button><p id="combine-feedback" class="combine-feedback" role="status"></p><div class="findings">${scenario.combinations.filter(c => state.combinations.includes(c.id)).map(c => `<section class="finding" data-finding-id="${esc(c.id)}"><span class="eyebrow">DISCOVERY · ${esc(c.cards.map(combineCardLabel).join(' + '))}</span><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></section>`).join('')}</div>`;
+    content = `${combineGuideMarkup()}<button type="button" class="combine-open" data-action="combine-pick">${icon('cards')}<span>合成</span></button><p id="combine-feedback" class="combine-feedback" role="status"></p><div class="findings">${scenario.combinations.filter(c => state.combinations.includes(c.id)).map(c => `<section class="finding" data-finding-id="${esc(c.id)}"><span class="eyebrow">DISCOVERY · ${esc(c.cards.map(combineCardLabel).join(' + '))}</span><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></section>`).join('')}</div>`;
   } else if (kind === 'save-info') {
     const record = playSaves.getRecord();
     const status = playSaves.getStatus();
@@ -2469,16 +2556,19 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     const storyTurn = hasStoryPageTurn(p);
     const notice = storyTurn ? p.dialogue.find(line => isSceneNotice({ ...line, problemId: p.id }) && !isBookletTurn(line.text)) : null;
     const bookletEnd = p.completionScreen === 'booklet' && !followingProblem(p);
-    content = pageTurnCardMarkup(storyTurn ? '冊子の次のページをめくろう' : '次の問題を見つけたらページをめくろう', {
+    const bookletTarget = !p.travelGuide && !bookletEnd ? (state.solved.includes(p.id) ? followingProblem(p) : null) ?? p : null;
+    const bookletLabel = bookletTarget ? (bookletTarget.id === scenario.investigation.id ? scenario.investigation.id : problemLabel(bookletTarget)) : '';
+    content = pageTurnCardMarkup(bookletTarget ? `冊子で問題${bookletLabel}を見つけましたか？` : storyTurn ? '冊子の次のページをめくろう' : '次の問題を見つけたらページをめくろう', {
       action: bookletEnd ? 'close' : 'travel-found',
-      buttonLabel: bookletEnd ? 'ページをめくった' : p.travelGuide ? '問題を見つけた' : '次の問題を確認した。',
+      buttonLabel: bookletEnd ? 'ページをめくった' : bookletTarget ? '問題を確認した' : '問題を見つけた',
       notice: notice?.text,
+      emphasis: bookletLabel,
     });
   } else if (kind === 'yoi-page-turn') {
     content = pageTurnCardMarkup(p.pageTurnText, { action: 'yoi-next', buttonLabel: '宵の最後まで読んだら次へ' });
   } else if (kind === 'tour-thanks') {
     title = '周遊版のアンケート';
-    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要3分）</p><img src="../assets/mei-promo.webp" width="1200" height="856" alt="11月の救祭 冥"><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
+    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要3分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救済 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
   } else if (kind === 'start-answer') {
     title = '「次へ」ボタンについて';
     content = '<p class="panel-intro">「次へ」を押すと問題と回答欄が表示されます。シナリオ上で指示があってから押してください。</p><div class="reset-actions"><button class="secondary-button" data-action="close">戻る</button><button class="primary-button" data-action="start-answer-confirm">理解した</button></div>';
@@ -2489,7 +2579,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   if (kind === 'trouble' && haptics.supported) {
     content += `<button class="secondary-button full" data-action="toggle-haptics" aria-pressed="${haptics.enabled}">操作時の振動：${haptics.enabled ? 'オン' : 'オフ'}</button>`;
   }
-  const clueTabs = [['cards', 'カード'], ['characters', 'キャラ情報'], ['combine', '合成']];
+  const clueTabs = [['cards', 'カード'], ['characters', '公開情報'], ['combine', '合成']];
   panel.innerHTML = kind === 'clues'
     ? `${secondaryScreenHeader('close', { showHint: false })}<div class="clue-screen-bg" aria-hidden="true"></div><div class="clue-screen-content${combineSelecting && !combinePicker && clueTab !== 'combine' ? ' is-combine-selecting' : ''}"><div class="clue-tabs" role="tablist" aria-label="手がかりの表示">${clueTabs.map(([id, label]) => `<button id="clue-tab-${id}" role="tab" data-action="clue-tab" data-tab="${id}" aria-selected="${clueTab === id}" aria-controls="clue-tab-content" tabindex="${clueTab === id ? 0 : -1}">${label}</button>`).join('')}</div><div id="clue-tab-content" class="panel-body" role="tabpanel" aria-labelledby="clue-tab-${clueTab}">${content}</div>${combineSelectBarMarkup()}</div>`
     : tourThanksDialog ? content
@@ -2570,10 +2660,11 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
     scrollTop: document.querySelector('.chat-area').scrollTop,
     scrollLeft: document.querySelector('.chat-area .travel-guide-gallery')?.scrollLeft ?? 0,
   } : null;
+  if (!openOverScene) pageTurnRevealed = false;
   investigationView = investigationClosing = false;
   if (nextProblem.type === 'pending') composerExpanded = false;
   if (!preserveConversation && (nextProblem.answerPresentation === 'page' || nextProblem.openAnswerOnEntry === true)) composerExpanded = answering && nextProblem.openAnswerOnEntry === true;
-  if (!openOverScene && nextProblem.openAnswerOnEntry === false) composerExpanded = false;
+  if (!openOverScene && !answering && nextProblem.openAnswerOnEntry === false) composerExpanded = false;
   if (!preserveConversation || state.selected !== id) {
     selectedSymbols = nextProblem.answerSlots ? [...(answerDrafts[id] ?? Array(nextProblem.answerSlots).fill(''))] : [];
     activeSymbolSlot = 0;
@@ -2584,7 +2675,7 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
   const resetBackground = !preserveConversation || (!openOverScene && nextProblem.conversationBackground === 'empty');
   if (resetBackground) resetChatFollow();
   startView = start;
-  yoiEndView = false;
+  yoiEndView = meiPlayChoiceVisible = false;
   repeatAnswer = answering && state.solved.includes(id);
   selectedPuzzleAnswer = id === 'N1' ? answerDrafts[id]?.[0] ?? '' : '';
   state = { ...state, selected: id };
@@ -2770,7 +2861,7 @@ document.addEventListener('click', event => {
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
-  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'close-composer', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'yoi-next', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'history', 'history-back', 'hints', 'clues'].includes(action)) haptics.trigger();
+  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'yoi-next', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'history', 'history-back', 'hints', 'clues'].includes(action)) haptics.trigger();
   if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
   if (action === 'hex-save-retry') {if(!miniSaving){miniSaving=true;void confirmHexReward().finally(()=>{miniSaving=false;});}return;}
   if (action === 'hex-card') {clueTab='cards';expandedCharacter=null;expandedClueId=null;clearCombineSelecting();openPanel('clues');return;}
@@ -2850,14 +2941,14 @@ document.addEventListener('click', event => {
   else if (action === 'chat') { if (historyView) closeHistoryScreen(); closePanel(); document.querySelector('.menu-button')?.focus({ preventScroll: true }); }
   else if (action === 'yoi-end' && state.solved.includes(scenario.problems.find(p => p.completionScreen === 'yoi')?.id)) {
     composerExpanded = false; selectProblem(scenario.problems.find(p => p.completionScreen === 'yoi').id);
-    yoiEndView = true; resetChatFollow(); render();
+    yoiEndView = true; meiPlayChoiceVisible = false; resetChatFollow(); render();
     document.querySelector('#yoi-completion-title')?.focus({ preventScroll: true });
     animateSurface(document.querySelector('.yoi-completion'), true, 8);
   }
   else if (action === 'yoi-page-turn' && awaitingYoiPageTurn()) openPanel('yoi-page-turn');
   else if (action === 'yoi-next' && awaitingYoiPageTurn() && panel.open && panel.dataset.kind === 'yoi-page-turn') {
     closePanel();
-    yoiEndView = true; resetChatFollow(); render();
+    yoiEndView = true; meiPlayChoiceVisible = false; resetChatFollow(); render();
     document.querySelector('#yoi-completion-title')?.focus({ preventScroll: true });
     animateSurface(document.querySelector('.yoi-completion'), true, 8);
   }
@@ -2869,8 +2960,14 @@ document.addEventListener('click', event => {
     if (tourSurveyUrl) window.open(tourSurveyUrl, '_blank', 'noopener,noreferrer');
     return;
   }
-  else if (['continue-at-venue', 'continue-online', 'play-mei'].includes(action) && yoiEndView && state.solved.includes(current().id)) {
+  else if (action === 'play-mei' && yoiEndView && state.solved.includes(current().id)) {
+    meiPlayChoiceVisible = true;
+    render();
+    document.querySelector('.yoi-completion-actions [data-action="continue-at-venue"]')?.focus({ preventScroll: true });
+  }
+  else if (['continue-at-venue', 'continue-online'].includes(action) && yoiEndView && state.solved.includes(current().id)) {
     showVenueDirections = action === 'continue-at-venue';
+    meiPlayChoiceVisible = false;
     composerExpanded = false;
     selectProblem('Q1', { preserveConversation: true, answering: true });
     document.querySelector('.chat-area')?.focus?.({ preventScroll: true });
@@ -2883,6 +2980,8 @@ document.addEventListener('click', event => {
   }
   else if (action === 'travel-next' && showsGuideStop(current()) && !composerExpanded) {
     haptics.trigger('pageTurn');
+    // 暗転しためくり指示は一度だけの合図。ポップアップ以降は直前の会話を背景に戻す。
+    if (current().deferPageTurn) { pageTurnRevealed = true; render(); }
     openPanel('travel-next');
   }
   else if ((action === 'open-composer' || action === 'travel-found') && !isPlaying && !composerExpanded) {
@@ -2902,7 +3001,6 @@ document.addEventListener('click', event => {
     const id = answerOrigin?.problemId === state.selected ? answerOrigin.answerId : next?.id ?? state.selected;
     selectProblem(id, { openOverScene: true, answering: true, investigationDetail: isInvestigation() });
   }
-  else if (action === 'close-composer') closeAnswerArea();
   else if (action === 'start') { composerExpanded = false; selectProblem('N1', { start: true }); }
   else if (action === 'select') { composerExpanded = true; selectProblem(button.dataset.id, { answering: true }); }
   else if (action === 'travel-image') {
@@ -2990,14 +3088,14 @@ document.addEventListener('click', event => {
     closeCharacterPreview();
   }
   else if (action === 'clue-card-open' && (clueTab === 'cards' || (clueTab === 'characters' && combineSelecting))) {
-    if (suppressCombineClick) {
-      suppressCombineClick = false;
+    if (combineClickSuppressed(button.dataset.id)) {
+      combineSuppressCard = null;
       return;
     }
     if (combineSelecting) {
       if (!toggleCombineCard(button.dataset.id)) return;
       haptics.trigger();
-      openPanel('clues', { keepFocus: true });
+      refreshCombineSelection(button.dataset.id);
       return;
     }
     const card = clueGalleryItems().find(item => item.id === button.dataset.id);
@@ -3042,6 +3140,18 @@ document.addEventListener('click', event => {
       combineSelection = next;
       combineReplaceAt = null;
     }
+    refreshCombineSelection(id);
+  }
+  else if (action === 'combine-select-start' && !combineSelecting && allPlayCards().length >= 2) {
+    combineSelecting = true;
+    combineSelection = [];
+    combineReplaceAt = null;
+    haptics.trigger();
+    openPanel('clues', { keepFocus: true });
+  }
+  else if (action === 'combine-select-cancel' && combineSelecting) {
+    clearCombineSelecting();
+    haptics.trigger();
     openPanel('clues', { keepFocus: true });
   }
   else if (action === 'combine-confirm' && combinePicker && combineSelection.length === 2) {
@@ -3186,7 +3296,7 @@ document.addEventListener('keydown', event => {
     setProblemMenuExpanded(false); document.querySelector('.problem-toggle')?.focus({ preventScroll: true });
   } else if (menuExpanded) {
     setMenuExpanded(false); document.querySelector('.menu-button')?.focus({ preventScroll: true });
-  } else if (composerExpanded) closeAnswerArea();
+  } else if (composerExpanded) answerAreaBack();
 });
 for (const name of ['input', 'change']) {
   document.addEventListener(name, event => {
