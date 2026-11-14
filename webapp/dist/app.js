@@ -1,5 +1,5 @@
 import { scenario } from './scenario.js';
-import { initialState, restoreState, submitAnswer, chooseBranch, unlockedCards, unlockedGalleryCards, findCombination, canOpenProblem, investigationComplete, availableNavigationProblems, completeMinigame, readMinigameEntry } from './engine.js';
+import { initialState, restoreState, submitAnswer, chooseBranch, unlockedCards, unlockedGalleryCards, findCombination, canOpenProblem, investigationComplete, availableNavigationProblems, completeMinigame, readMinigameEntry, normalizeAnswer } from './engine.js';
 import { createConversationPlayer, latestSceneStart } from './conversation.js';
 import { createPlaySaveController, normalizePlayCode } from './play-save.js';
 import { isConversationLine, restorePlayView, pendingConversation, sanitizeAnswerDraft } from './save-view.js';
@@ -10,7 +10,8 @@ import { animateEmphasis, toggleDisclosure, animateCombination, copyWithFeedback
 
 const app = document.querySelector('#app');
 const panel = document.querySelector('#panel');
-const tourSurveyUrl = '';
+const SURVEY_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSc15TibCS9BSs688NeI48xmV5tAC8PyO-plPsvPZod5IKey9w/formResponse';
+const SURVEY_ENTRIES = { code: 'entry.1334614969', progress: 'entry.1146454153', affiliation: 'entry.20256359', yoiVolume: 'entry.663390734', yoiDifficulty: 'entry.2109384794', meiVolume: 'entry.2071052292', meiDifficulty: 'entry.1089849868', ending: 'entry.629875828', feedback: 'entry.1851684099' };
 const haptics = createHaptics({ win: window, doc: document });
 const storageKey = `webbot:${scenario.id}`;
 let state = initialState(scenario);
@@ -28,7 +29,8 @@ let announcedCode = false;
 let changingSession = false;
 let saveMutationBusy = false;
 let feedback = '';
-let answerErrorAnimation;
+let surveyStatus = 'idle';
+let answerErrorAnimations = [];
 let imageViewer = null;
 let sheetDismiss = null;
 let answerDrafts = {};
@@ -1542,7 +1544,7 @@ function answerInputsMarkup(p) {
 
 function problemNavigationMarkup() {
   const label = yoiEndView ? '宵 終幕' : startView ? 'スタート' : investigationView ? scenario.investigation.id : problemLabel(current());
-  return `<button class="problem-toggle" data-action="toggle-problems" aria-label="問題番号を選択：${esc(label)}" aria-expanded="${problemMenuExpanded}" aria-controls="problem-menu"><span>問題番号 <strong>${esc(label)}</strong></span>${icon('chevron')}</button><nav id="problem-menu" class="problem-menu" aria-label="問題番号" ${problemMenuExpanded ? '' : 'hidden'}><button data-action="start" ${startView ? 'aria-current="step"' : ''}><span>スタート</span></button>${navigationProblems().map(p => `<button data-action="select" data-id="${esc(p.id)}" ${canOpenProblem(p, state) ? '' : 'disabled'} ${!startView && !yoiEndView && (p.id === state.selected || isInvestigation(state.selected) && p.id === scenario.investigation.id) ? 'aria-current="step"' : ''} aria-label="${esc(p.id)}${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? ' 解答済み' : ''}"><span>${esc(p.id)}</span>${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? icon('check') : ''}</button>${p.completionScreen === 'yoi' && state.solved.includes(p.id) ? `<button data-action="yoi-end" ${yoiEndView ? 'aria-current="step"' : ''}><span>宵 終幕</span></button>` : ''}`).join('')}</nav>`;
+  return `<button class="problem-toggle" data-action="toggle-problems" aria-label="問題番号を選択：${esc(label)}" aria-expanded="${problemMenuExpanded}" aria-controls="problem-menu"><span>問題番号 <strong>${esc(label)}</strong></span>${icon('chevron')}</button><nav id="problem-menu" class="problem-menu" aria-label="問題番号" ${problemMenuExpanded ? '' : 'hidden'}><button data-action="start" ${startView ? 'aria-current="step"' : ''}><span>スタート</span></button>${navigationProblems().map(p => `<button data-action="select" data-id="${esc(p.id)}" ${canOpenProblem(p, state) ? '' : 'disabled'} ${!startView && !yoiEndView && (p.id === state.selected || isInvestigation(state.selected) && p.id === scenario.investigation.id) ? 'aria-current="step"' : ''} aria-label="${esc(p.id)}${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? ' 解答済み' : ''}"><span>${esc(p.id)}</span>${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? icon('check') : ''}</button>${p.completionScreen === 'yoi' && (state.solved.includes(p.id) || playSaves?.getStatus().mode === 'debug') ? `<button data-action="yoi-end" ${yoiEndView ? 'aria-current="step"' : ''}><span>宵 終幕</span></button>` : ''}`).join('')}</nav>`;
 }
 
 function alignCurrentProblem(menu = document.querySelector('#problem-menu')) {
@@ -1713,6 +1715,29 @@ function yoiCompletionMarkup() {
   </section>`;
 }
 
+function surveyFormMarkup() {
+  const code = normalizePlayCode(playSaves.getRecord()?.code);
+  const legend = (label, required = true, note = '') => `<legend class="survey-legend">${esc(label)}<span class="${required ? 'survey-required' : 'survey-optional'}">${required ? '必須' : '任意'}</span></legend>${note ? `<p class="survey-note">${esc(note)}</p>` : ''}`;
+  const choices = (name, values, disabled = false) => `<div class="survey-choices">${values.map(value => `<label class="option"><input type="radio" name="${name}" value="${esc(value)}" required ${disabled ? 'disabled' : ''}><span>${esc(value)}</span></label>`).join('')}</div>`;
+  const scale = (name, low, high, disabled = false) => `<div class="survey-scale"><span class="survey-scale-end">${esc(low)}</span><div class="survey-scale-options">${[1, 2, 3, 4, 5].map(value => `<label class="option survey-scale-option"><input type="radio" name="${name}" value="${value}" required ${disabled ? 'disabled' : ''}><span>${value}</span></label>`).join('')}</div><span class="survey-scale-end">${esc(high)}</span></div>`;
+  return `<form id="survey-form">
+    <p class="panel-intro">本日はクスノキの謎解きにご参加いただき、ありがとうございました。今後の参考にさせていただきますので、ご協力をお願いします。</p>
+    ${code ? '' : '<p class="feedback" role="alert">再開番号がまだ発行されていません。通信状態を確認してから開き直してください。</p>'}
+    <fieldset class="survey-field">${legend('今回はどこまでプレイされましたか？')}${choices('progress', ['宵', '宵と冥'])}</fieldset>
+    <fieldset class="survey-field">${legend('所属を教えてください')}${choices('affiliation', ['小学生', '中学生', '高校生', '大学生', '社会人', 'その他'])}</fieldset>
+    <fieldset class="survey-field">${legend('宵（謎解き）のボリューム', true, '1＝少ない、3＝丁度良い、5＝多い')}${scale('yoiVolume', '少ない', '多い')}</fieldset>
+    <fieldset class="survey-field">${legend('宵（謎解き）の難易度', true, '1＝簡単、3＝丁度良い、5＝難しい')}${scale('yoiDifficulty', '簡単', '難しい')}</fieldset>
+    <div id="survey-mei" hidden>
+      <fieldset class="survey-field">${legend('冥（推理）のボリューム', true, '1＝少ない、3＝丁度良い、5＝多い')}${scale('meiVolume', '少ない', '多い', true)}</fieldset>
+      <fieldset class="survey-field">${legend('冥（推理）の難易度', true, '1＝簡単、3＝丁度良い、5＝難しい')}${scale('meiDifficulty', '簡単', '難しい', true)}</fieldset>
+      <fieldset class="survey-field">${legend('最初に辿り着いた結末はどれですか？')}${choices('ending', ['Aエンド', 'Bエンド', 'Cエンド'], true)}</fieldset>
+    </div>
+    <fieldset class="survey-field">${legend('ご感想やご意見をお聞かせください。', false)}<textarea name="feedback" class="survey-textarea" rows="4"></textarea></fieldset>
+    <p id="survey-error" class="survey-error" role="alert" hidden></p>
+    <button class="primary-button full" type="submit" ${code ? '' : 'disabled'}>送信する</button>
+  </form>`;
+}
+
 function showChapterTransition() {
   if (reducedMotion()) return;
   const workspace = document.querySelector('.workspace');
@@ -1826,8 +1851,9 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const lastMessage = displayedMessages.at(-1);
   const lastScene = scenario.problems.find(item => item.id === lastMessage?.problemId);
   const storyBackdrop = !isPlaying && hasStoryPageTurn(lastScene);
+  // めくり暗転で締まる場面は、背景に案内を残さず最後の台詞だけを出す。
   const transcript = characterScene ? displayedMessages.filter(message =>
-    isSceneNotice(message) && !(storyBackdrop && isBookletTurn(message.text))) : displayedMessages;
+    isSceneNotice(message) && !storyBackdrop) : displayedMessages;
   const lastStoryLine = storyBackdrop && (lastScene === sceneProblem || !transcript.length)
     ? displayedMessages.findLast(m => m.problemId === lastScene.id && m.kind === 'dialogue' && !isSceneNotice(m)) : null;
   // 案内のない会話は、読了後も最後の台詞を表示する。
@@ -2567,7 +2593,7 @@ function bindHintReader(subject) {
   } else markRead();
 }
 
-function openPanel(kind, { keepFocus = false, revealSelector = null, showStartButton = false, travelId = '', travelIndex = 0, imageTrigger = null } = {}) {
+function openPanel(kind, { keepFocus = false, revealSelector = null, showStartButton = false, travelId = '', travelIndex = 0, imageTrigger = null, continuation = false } = {}) {
   miniView?.destroy();miniView=null;
   panelRevision++;
   const wasOpen = panel.open;
@@ -2714,6 +2740,14 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   } else if (kind === 'tour-thanks') {
     title = '周遊版のアンケート';
     content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要3分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救済 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
+  } else if (kind === 'survey') {
+    title = 'アンケート';
+    surveyStatus = 'idle';
+    content = surveyFormMarkup();
+  } else if (kind === 'clear-post') {
+    title = 'クリア';
+    content = `<p class="panel-intro">${continuation ? '「11月の救祭 宵」をクリアしました。' : 'すべての謎を解き明かしました。'}</p>`;
+    if (continuation) content += `<div class="yoi-completion-actions clear-post-actions" role="group" aria-label="続きの遊び方"><button class="primary-button yoi-venue-button" data-action="continue-at-venue"><span>会場でプレイする</span></button><button class="secondary-button yoi-online-button" data-action="continue-online"><span>オンラインでプレイする</span></button></div>`;
   } else if (kind === 'start-answer') {
     title = '「次へ」ボタンについて';
     content = '<p class="panel-intro">「次へ」を押すと問題と回答欄が表示されます。シナリオ上で指示があってから押してください。</p><div class="reset-actions"><button class="secondary-button" data-action="close">戻る</button><button class="primary-button" data-action="start-answer-confirm">理解した</button></div>';
@@ -2873,24 +2907,62 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
   if (composerExpanded) document.querySelector('.composer-area')?.focus({ preventScroll: true });
 }
 
-function setAnswerError(incorrect) {
-  answerErrorAnimation?.cancel();
-  answerErrorAnimation = null;
+// 複数欄・複数選択・スロット入力の問題では、間違えた部分だけを揺らす対象を返す。
+function incorrectAnswerTargets(problem, value) {
+  const form = document.querySelector('#answer-form');
+  if (!form) return [];
+  if (problem.type === 'fields' && Array.isArray(value) && !problem.answerCombos) {
+    const elements = [...form.querySelectorAll('.answer-field, fieldset.answer-options, .room-word-input')];
+    return problem.fields.map((field, index) => {
+      const wrong = !field.answers.some(item => normalizeAnswer(item) === normalizeAnswer(value[index]));
+      // 空欄のまま揺らすと「この欄は矛盾なし」と明かしてしまう問題があるため、空欄は揺らさない。
+      return wrong && normalizeAnswer(value[index]) ? elements[index] : null;
+    }).filter(Boolean);
+  }
+  if (problem.type === 'multiple' && Array.isArray(value)) {
+    const selected = new Set(value);
+    const options = form.querySelectorAll('.option');
+    return problem.options.map((option, index) => selected.has(option.id) && !problem.answers.includes(option.id) ? options[index] : null).filter(Boolean);
+  }
+  if (problem.answerSlots && typeof value === 'string') {
+    const submitted = [...normalizeAnswer(value)];
+    const answers = problem.answers.map(item => [...normalizeAnswer(item)]);
+    return [...form.querySelectorAll('.symbol-slot-button')].filter((element, index) =>
+      answers.every(answer => (answer[index] ?? '') !== (submitted[index] ?? '')));
+  }
+  return [];
+}
+
+function setAnswerError(incorrect, value = null) {
+  answerErrorAnimations.forEach(animation => animation.cancel());
+  answerErrorAnimations = [];
   const form = document.querySelector('#answer-form');
   if (!form) return;
-  form.classList.toggle('is-incorrect', incorrect);
-  form.querySelectorAll('input:not([type="hidden"]), select, .answer-choice-trigger, .symbol-slot-fields, .answer-options').forEach(field => {
-    if (incorrect) field.setAttribute('aria-invalid', 'true');
+  const targets = incorrect ? incorrectAnswerTargets(current(), value) : [];
+  form.classList.toggle('is-incorrect', incorrect && !targets.length);
+  form.querySelectorAll('.is-incorrect').forEach(element => element.classList.remove('is-incorrect'));
+  form.querySelectorAll('input:not([type="hidden"]), select, .answer-choice-trigger, .symbol-slot-fields, .symbol-slot-button, .answer-options').forEach(field => {
+    if (incorrect && !targets.length) field.setAttribute('aria-invalid', 'true');
     else field.removeAttribute('aria-invalid');
   });
+  for (const target of targets) {
+    target.classList.add('is-incorrect');
+    const controls = target.matches?.('input, select, button')
+      ? [target]
+      : [...(target.querySelectorAll?.('input:not([type="hidden"]), select, button') ?? [])];
+    controls.forEach(control => control.setAttribute('aria-invalid', 'true'));
+  }
   const status = document.querySelector('#answer-error');
   if (status) status.textContent = incorrect ? '答えが違います。もう一度回答してください。' : '';
   if (!incorrect || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const fields = form.querySelector('.answer-fields, .text-composer, .answer-choice-trigger, .symbol-slot-fields, .answer-options');
-  if (fields?.animate) answerErrorAnimation = fields.animate(
+  const shake = element => element?.animate?.(
     [0, -6, 6, -5, 5, -2, 0].map(x => ({ transform: `translateX(${x}px)` })),
     { duration: 380, easing: 'ease-in-out' },
   );
+  const animated = targets.length
+    ? targets.map(shake)
+    : [shake(form.querySelector('.answer-fields, .text-composer, .answer-choice-trigger, .symbol-slot-fields, .answer-options'))];
+  answerErrorAnimations = animated.filter(Boolean);
 }
 
 function answer(value) {
@@ -2929,7 +3001,7 @@ function answer(value) {
     }
     const feedbackArea = document.querySelector('.composer-area .feedback');
     if (feedbackArea) feedbackArea.textContent = storageWarning;
-    setAnswerError(true);
+    setAnswerError(true, value);
     return { status: result.status, problemId: problem.id };
   }
   if (result.status === 'progress') {
@@ -3019,7 +3091,7 @@ document.addEventListener('click', event => {
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
-  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'yoi-next', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'history', 'history-back', 'hints', 'clues'].includes(action)) haptics.trigger();
+  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'yoi-next', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues'].includes(action)) haptics.trigger();
   if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
   if (action === 'hex-save-retry') {if(!miniSaving){miniSaving=true;void confirmHexReward().finally(()=>{miniSaving=false;});}return;}
   if (action === 'hex-card') {clueTab='cards';expandedCharacter=null;expandedClueId=null;clearCombineSelecting();openPanel('clues');return;}
@@ -3097,7 +3169,7 @@ document.addEventListener('click', event => {
   else if (action === 'history') openHistoryScreen();
   else if (action === 'history-back') closeHistoryScreen();
   else if (action === 'chat') { if (historyView) closeHistoryScreen(); closePanel(); document.querySelector('.menu-button')?.focus({ preventScroll: true }); }
-  else if (action === 'yoi-end' && state.solved.includes(scenario.problems.find(p => p.completionScreen === 'yoi')?.id)) {
+  else if (action === 'yoi-end' && (state.solved.includes(scenario.problems.find(p => p.completionScreen === 'yoi')?.id) || playSaves?.getStatus().mode === 'debug')) {
     composerExpanded = false; selectProblem(scenario.problems.find(p => p.completionScreen === 'yoi').id);
     yoiEndView = true; meiPlayChoiceVisible = false; resetChatFollow(); render();
     document.querySelector('#yoi-completion-title')?.focus({ preventScroll: true });
@@ -3115,15 +3187,15 @@ document.addEventListener('click', event => {
     return;
   }
   else if (action === 'tour-survey') {
-    if (tourSurveyUrl) window.open(tourSurveyUrl, '_blank', 'noopener,noreferrer');
+    openPanel('survey');
     return;
   }
   else if (action === 'play-mei' && yoiEndView && state.solved.includes(current().id)) {
-    meiPlayChoiceVisible = true;
-    render();
-    document.querySelector('.yoi-completion-actions [data-action="continue-at-venue"]')?.focus({ preventScroll: true });
+    openPanel('clear-post', { continuation: true });
+    return;
   }
   else if (['continue-at-venue', 'continue-online'].includes(action) && yoiEndView && state.solved.includes(current().id)) {
+    if (panel.open) closePanel();
     showVenueDirections = action === 'continue-at-venue';
     meiPlayChoiceVisible = false;
     composerExpanded = false;
@@ -3480,12 +3552,62 @@ document.addEventListener('paste', event => {
   event.preventDefault();
   setResumeDigits(Number(event.target.dataset.resumeDigit), text);
 });
+async function submitSurvey(form) {
+  if (surveyStatus === 'sending') return;
+  const code = normalizePlayCode(playSaves.getRecord()?.code);
+  const errorNode = form.querySelector('#survey-error');
+  const submit = form.querySelector('[type="submit"]');
+  const fail = message => {
+    surveyStatus = 'idle';
+    if (submit) { submit.disabled = false; submit.textContent = '送信する'; submit.removeAttribute('aria-busy'); }
+    if (errorNode) { errorNode.textContent = message; errorNode.hidden = false; }
+    haptics.trigger('error');
+  };
+  if (!code) { fail('再開番号がまだ発行されていません。通信状態を確認してから開き直してください。'); return; }
+  surveyStatus = 'sending';
+  if (submit) { submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = '送信中…'; }
+  if (errorNode) errorNode.hidden = true;
+  const data = new FormData(form);
+  const params = new URLSearchParams();
+  params.set(SURVEY_ENTRIES.code, code);
+  for (const [name, entry] of Object.entries({ progress: SURVEY_ENTRIES.progress, affiliation: SURVEY_ENTRIES.affiliation, yoiVolume: SURVEY_ENTRIES.yoiVolume, yoiDifficulty: SURVEY_ENTRIES.yoiDifficulty, meiVolume: SURVEY_ENTRIES.meiVolume, meiDifficulty: SURVEY_ENTRIES.meiDifficulty, ending: SURVEY_ENTRIES.ending, feedback: SURVEY_ENTRIES.feedback })) {
+    const value = data.get(name);
+    if (typeof value === 'string' && value) params.set(entry, value);
+  }
+  const revision = panelRevision;
+  try {
+    await fetch(SURVEY_ENDPOINT, { method: 'POST', mode: 'no-cors', body: params });
+  } catch {
+    if (panel.open && panel.dataset?.kind === 'survey' && panelRevision === revision) fail('送信できませんでした。通信状態を確認して、もう一度お試しください。');
+    else surveyStatus = 'idle';
+    return;
+  }
+  if (!panel.open || panel.dataset?.kind !== 'survey' || panelRevision !== revision) return;
+  surveyStatus = 'done';
+  haptics.trigger('success');
+  const body = panel.querySelector('.panel-body');
+  if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>ご回答ありがとうございました。</p><p class="muted">まもなく画面が切り替わります。</p></div>';
+  setTimeout(() => { if (panel.open && panel.dataset?.kind === 'survey' && panelRevision === revision) openPanel('clear-post'); }, 1800);
+}
+
+document.addEventListener('change', event => {
+  if (event.target.name !== 'progress' || panel.dataset?.kind !== 'survey') return;
+  const section = panel.querySelector('#survey-mei');
+  if (!section) return;
+  const enabled = event.target.value === '宵と冥';
+  section.hidden = !enabled;
+  section.querySelectorAll('input').forEach(input => { input.disabled = !enabled; if (!enabled) input.checked = false; });
+});
+
 document.addEventListener('submit', event => {
   if (event.target.id === 'resume-form') {
     event.preventDefault();
     if (gateBusy) return;
     gateCode = gateDigits.join('');
     void beginPlay('code', gateCode);
+  } else if (event.target.id === 'survey-form') {
+    event.preventDefault();
+    void submitSurvey(event.target);
   } else if (event.target.id === 'answer-form') {
     event.preventDefault();
     if (isComposingSubmit(event, composingAnswer, compositionEndedAt) || Date.now() < submissionLockedUntil) return;
