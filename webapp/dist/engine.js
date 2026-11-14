@@ -176,10 +176,31 @@ export function chooseBranch(scenario, state, problemId, branchId) {
   return { ...state, branches: { ...state.branches, [problemId]: branchId }, messages: [...state.messages, { speaker: 'あなた', text: branch.label, kind: 'answer', problemId }, ...branch.dialogue.map(line => ({ ...line, kind: 'dialogue', problemId }))] };
 }
 
-export function unlockedCards(scenario, state) {
-  const ids = new Set(scenario.problems.filter(p => state.solved.includes(p.id)).flatMap(p => p.unlock));
+function unlockedCardIds(scenario, state) {
+  const ids = new Set(scenario.problems.filter(p => state.solved.includes(p.id)).flatMap(p => p.unlock ?? []));
   for(const game of scenario.minigames??[])if(state.minigames?.includes(game.id))ids.add(game.rewardCard);
+  return ids;
+}
+
+export function unlockedCards(scenario, state) {
+  const ids = unlockedCardIds(scenario, state);
   return scenario.cards.filter(c => ids.has(c.id));
+}
+
+function galleryCardUnlocked(scenario, card, state, cardIds) {
+  const requires = card.requires;
+  if (!requires) return true;
+  if (requires.solved && !requires.solved.every(id => state.solved.includes(id))) return false;
+  if (requires.investigation && !investigationComplete(scenario, state)) return false;
+  if (requires.minigame && !(state.minigames ?? []).includes(requires.minigame)) return false;
+  if (requires.combination && !(state.combinations ?? []).includes(requires.combination)) return false;
+  if (requires.card && !cardIds.has(requires.card)) return false;
+  return true;
+}
+
+export function unlockedGalleryCards(scenario, state) {
+  const cardIds = unlockedCardIds(scenario, state);
+  return (scenario.clueGallery ?? []).filter(card => galleryCardUnlocked(scenario, card, state, cardIds));
 }
 
 export function completeMinigame(scenario, state, id, moves) {

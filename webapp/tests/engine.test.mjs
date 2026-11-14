@@ -569,7 +569,10 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
     assert.deepEqual(restoreState(scenario, JSON.stringify(result.state)).branches, { Q9: branch.id });
   }
   const ending = problem.answerBranches.find(branch => branch.id === 'god-returned').dialogue;
-  assert.equal(ending[0].text, '俺はあのとき、見返りがほしかっただけなんじゃないかって思う。ミサメが死に、悲しさと虚しさを埋めるためハナの野望を打ち砕く、そんな復讐に似た感情に身を任せた。');
+  assert.equal(ending[0].text, '俺はあのとき、見返りがほしかっただけなんじゃないかって思う。');
+  assert.equal(ending[0].epilogue, true);
+  assert.equal(ending[1].text, 'ミサメが死に、悲しさと虚しさを埋めるためハナの野望を打ち砕く、そんな復讐に似た感情に身を任せた。');
+  assert.equal(ending[1].epilogue, true);
   assert.equal(ending.at(-1).text, 'ただ、それでも俺は前を向く。');
   assert.equal(ending.find(line => line.text.includes('約束ですよ')).speaker, 'ミサメ');
   assert.equal(problem.answerBranches.find(branch => branch.id === 'world-saved').dialogue.length, 1);

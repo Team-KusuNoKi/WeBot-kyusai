@@ -11,13 +11,14 @@ export function latestSceneStart(messages, problemId) {
   return messages.some(message => message.problemId) ? messages.length : 0;
 }
 
-export function createConversationPlayer({ onMessage, onComplete, schedule = setTimeout, cancel = clearTimeout }) {
+export function createConversationPlayer({ onMessage, onComplete, onWait, schedule = setTimeout, cancel = clearTimeout }) {
   let timer;
   let generation = 0;
   function stop() {
     generation++;
     cancel(timer);
     timer = undefined;
+    onWait?.(null);
   }
   function play(messages, { immediate = false } = {}) {
     stop();
@@ -28,10 +29,17 @@ export function createConversationPlayer({ onMessage, onComplete, schedule = set
       if (index === messages.length) { timer = undefined; onComplete(); return; }
       const message = messages[index++];
       onMessage(message);
-      if (run === generation) timer = schedule(next, readingDelay(message));
+      if (run === generation) {
+        const upcoming = messages[index];
+        if (upcoming) onWait?.(upcoming);
+        timer = schedule(next, readingDelay(message));
+      }
     }
     if (immediate) next();
-    else timer = schedule(next, 300);
+    else {
+      if (messages.length) onWait?.(messages[0]);
+      timer = schedule(next, 300);
+    }
   }
   return { play, stop };
 }

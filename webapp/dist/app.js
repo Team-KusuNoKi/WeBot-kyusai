@@ -1,5 +1,5 @@
 import { scenario } from './scenario.js';
-import { initialState, restoreState, submitAnswer, chooseBranch, unlockedCards, findCombination, canOpenProblem, investigationComplete, availableNavigationProblems, completeMinigame, readMinigameEntry } from './engine.js';
+import { initialState, restoreState, submitAnswer, chooseBranch, unlockedCards, unlockedGalleryCards, findCombination, canOpenProblem, investigationComplete, availableNavigationProblems, completeMinigame, readMinigameEntry } from './engine.js';
 import { createConversationPlayer, latestSceneStart } from './conversation.js';
 import { createPlaySaveController, normalizePlayCode } from './play-save.js';
 import { isConversationLine, restorePlayView, pendingConversation, sanitizeAnswerDraft } from './save-view.js';
@@ -41,6 +41,7 @@ let composerHeightAnimation;
 let questionAdvanceAnimation = null;
 let historyView = false;
 let clueTab = 'cards';
+let lastClueBadgeCount = 0;
 let miniView=null, miniSaving=false, miniRewardAlready=false;
 let playSessionRevision=0;
 let requestedMinigame=readMinigameEntry(window.location?.href);
@@ -74,6 +75,10 @@ let sceneStart = latestSceneStart(state.messages, state.selected);
 let displayedMessages = [];
 let isPlaying = false;
 let novelPlayback = false;
+let epiloguePhase = null;
+let epilogueToken = 0;
+let epilogueTimer = 0;
+let epilogueFading = false;
 let followChat = true;
 let unreadConversationCount = 0;
 let chatPointerDown = false;
@@ -153,6 +158,20 @@ function bindChatScroll() {
   }, { passive: true });
 }
 
+function clearTypingIndicator() {
+  document.querySelector('.typing-message')?.remove();
+}
+
+// 次の連絡を待つ間だけ、小さな三点バブルを置く。再生の中断や自分の回答では消す。
+function showTypingIndicator(message) {
+  clearTypingIndicator();
+  const host = document.querySelector('#messages');
+  if (!host || !message || ['answer', 'success', 'error'].includes(message.kind) || reducedMotion()) return;
+  host.insertAdjacentHTML('beforeend', '<div class="message typing-message" aria-hidden="true"><div class="message-body"><div class="bubble typing-bubble"><i></i><i></i><i></i></div></div></div>');
+  host.lastElementChild.classList.add('message-enter');
+  if (followChat && !chatIsBeingHandled()) scrollConversationToEnd();
+}
+
 const conversationPlayer = createConversationPlayer({
   onMessage(message) {
     displayedMessages.push(message);
@@ -160,6 +179,7 @@ const conversationPlayer = createConversationPlayer({
     const markup = messageMarkup(message);
     if (!markup) return;
     const messages = document.querySelector('#messages');
+    clearTypingIndicator();
     messages.insertAdjacentHTML('beforeend', markup);
     messages.lastElementChild.classList.add('message-enter');
     document.querySelector(`.history-screen [data-history-problem="${message.problemId}"] .history-messages`)?.insertAdjacentHTML('beforeend', messageMarkup(message));
@@ -170,11 +190,14 @@ const conversationPlayer = createConversationPlayer({
       updateConversationNotice();
     }
   },
+  onWait: showTypingIndicator,
   onComplete: finishConversation,
 });
 
 function finishConversation({ scroll = true } = {}) {
   isPlaying = false;
+  epiloguePhase = null;
+  cancelEpilogueMotion();
   save();
   render({ scroll });
   const pageTurnOpened = openFinishedPageTurn();
@@ -215,6 +238,109 @@ function preloadSceneImages(scene = []) {
   }
 }
 
+function cancelEpilogueMotion() {
+  epilogueToken += 1;
+  epilogueFading = false;
+  clearTimeout(epilogueTimer);
+}
+
+function resumeEpiloguePhase(displayed, remaining) {
+  if (!isPlaying) return null;
+  if (displayed.at(-1)?.epilogue) return 'line';
+  if (!displayed.length && remaining[0]?.epilogue) return 'title';
+  return null;
+}
+
+function epilogueMarkup() {
+  if (epiloguePhase === 'title') {
+    return `<button type="button" class="epilogue-screen is-title" data-action="epilogue-next" aria-label="Epilogue"><span class="epilogue-script" aria-hidden="true">Epilogue</span></button>`;
+  }
+  const line = displayedMessages.findLast(message => message.epilogue);
+  return `<button type="button" class="epilogue-screen is-line" data-action="epilogue-next"><span class="epilogue-line">${esc(line?.text ?? '')}</span><span class="epilogue-cue" aria-hidden="true">▷</span><span class="sr-only">読み進める</span></button>`;
+}
+
+function fitEpilogueTitle(script) {
+  const max = Math.min(window.innerWidth, 480) - 64;
+  let size = 104;
+  script.style.fontSize = `${size}px`;
+  while (size > 54 && script.scrollWidth > max) {
+    size -= 2;
+    script.style.fontSize = `${size}px`;
+  }
+}
+
+function fadeEpilogueTitle(token) {
+  if (epilogueFading || token !== epilogueToken || epiloguePhase !== 'title') return;
+  epilogueFading = true;
+  clearTimeout(epilogueTimer);
+  const script = document.querySelector('.epilogue-script');
+  const showLine = () => {
+    if (token !== epilogueToken || epiloguePhase !== 'title') return;
+    epilogueTimer = window.setTimeout(() => {
+      if (token !== epilogueToken || epiloguePhase !== 'title') return;
+      advanceNovel();
+    }, reducedMotion() ? 0 : 180);
+  };
+  if (!script || reducedMotion()) { showLine(); return; }
+  script.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 640, easing: 'ease', fill: 'forwards' })
+    .finished.then(showLine, showLine);
+}
+
+function beginEpilogueTitle() {
+  const screen = document.querySelector('.epilogue-screen');
+  const script = screen?.querySelector('.epilogue-script');
+  if (!screen || !script || screen.dataset.started === 'true') return;
+  screen.dataset.started = 'true';
+  const token = ++epilogueToken;
+  epilogueFading = false;
+  clearTimeout(epilogueTimer);
+  if (reducedMotion()) screen.style.opacity = '1';
+  else screen.classList.add('is-entering');
+  const start = () => {
+    if (token !== epilogueToken || epiloguePhase !== 'title' || !script.isConnected) return;
+    fitEpilogueTitle(script);
+    if (reducedMotion()) {
+      script.classList.add('is-shown');
+      epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 1000);
+      return;
+    }
+    script.classList.add('is-writing');
+    const hold = () => {
+      if (token !== epilogueToken || epiloguePhase !== 'title') return;
+      clearTimeout(epilogueTimer);
+      epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 720);
+    };
+    script.addEventListener('animationend', event => {
+      if (event.animationName !== 'epilogue-write') return;
+      hold();
+    }, { once: true });
+    epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 5600);
+  };
+  const load = document.fonts?.load?.('1em "Great Vibes"');
+  if (load?.then) Promise.race([load.catch(() => {}), new Promise(resolve => setTimeout(resolve, 1200))]).then(start);
+  else start();
+}
+
+function revealEpilogueLine() {
+  const line = document.querySelector('.epilogue-line');
+  if (!line || reducedMotion()) return;
+  line.animate([
+    { opacity: 0, transform: 'translateY(10px)' },
+    { opacity: 1, transform: 'translateY(0)' },
+  ], { duration: 720, easing: MOTION.ease, fill: 'both' });
+}
+
+function mountEpilogue(workspace) {
+  document.querySelector('.epilogue-screen')?.remove();
+  if (!epiloguePhase || historyView || gateVisible) return;
+  const markup = epilogueMarkup();
+  if (document.body?.insertAdjacentHTML) document.body.insertAdjacentHTML('beforeend', markup);
+  else document.querySelector('.workspace')?.insertAdjacentHTML('afterend', markup);
+  if (!panel.open) document.querySelector('[data-action="epilogue-next"]')?.focus({ preventScroll: true });
+  if (epiloguePhase === 'title') beginEpilogueTitle();
+  else revealEpilogueLine();
+}
+
 function playConversation(start, { fromCorrectAnswer = false } = {}) {
   answerOrigin = null;
   startView = false;
@@ -229,6 +355,14 @@ function playConversation(start, { fromCorrectAnswer = false } = {}) {
   const scene = conversationMessages(state.messages.slice(sceneStart).filter(m => m.problemId === state.selected));
   preloadSceneImages(scene);
   novelPlayback = usesNovelBubbles(scene);
+  cancelEpilogueMotion();
+  if (scene[0]?.epilogue) {
+    epiloguePhase = 'title';
+    novelPlayback = true;
+    render();
+    return;
+  }
+  epiloguePhase = null;
   if (novelPlayback) {
     advanceNovel(scene);
     if (fromCorrectAnswer && !reducedMotion()) {
@@ -272,6 +406,18 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
   }
   const previous = displayedMessages.at(-1);
   const line = remaining[0];
+  if (epiloguePhase && line?.epilogue) {
+    displayedMessages.push(line);
+    epiloguePhase = 'line';
+    render();
+    document.querySelector('.chat-area').scrollTop = 0;
+    document.querySelector('[data-action="epilogue-next"]')?.focus({ preventScroll: true });
+    return;
+  }
+  if (epiloguePhase) {
+    epiloguePhase = null;
+    cancelEpilogueMotion();
+  }
   displayedMessages.push(line);
   const bubble = previous && document.querySelector('[data-action="novel-next"]');
   if (bubble) {
@@ -468,7 +614,10 @@ function showInvestigation() {
   animateSurface(document.querySelector('.investigation-next'), true, 8);
   if (previousSolved) {
     const changed = scenario.investigation.entries.filter(id => investigationEntryStatus(id, previousSolved) !== investigationEntryStatus(id, state.solved));
-    for (const id of changed) animateEmphasis(document.querySelector(`[data-action="investigation-open"][data-id="${id}"] .investigation-status`), reducedMotion());
+    for (const id of changed) {
+      animateEmphasis(document.querySelector(`[data-action="investigation-open"][data-id="${id}"] .investigation-status`), reducedMotion());
+      if (state.solved.includes(id)) document.querySelector(`[data-action="investigation-open"][data-id="${id}"] .investigation-stamp`)?.classList.add('is-stamping');
+    }
     const previousCount = answeredInvestigationCount(previousSolved);
     const currentCount = answeredInvestigationCount(state.solved);
     if (currentCount > previousCount && !reducedMotion()) {
@@ -599,6 +748,16 @@ function bindPuzzleSubmitLayout() {
   requestAnimationFrame(update);
 }
 
+function trackSurface(element, animation) {
+  surfaceAnimations.set(element, animation);
+  return animation.finished.then(() => {
+    if (surfaceAnimations.get(element) !== animation) return false;
+    surfaceAnimations.delete(element);
+    animation.cancel();
+    return true;
+  }).catch(() => false);
+}
+
 function animateSurface(element, opening, offset = 20, axis = 'Y', duration = null) {
   if (!element) return Promise.resolve(false);
   const previous = surfaceAnimations.get(element);
@@ -612,13 +771,24 @@ function animateSurface(element, opening, offset = 20, axis = 'Y', duration = nu
   const animation = element.animate([interruptedFrame ?? (opening ? hiddenFrame : visibleFrame), opening ? visibleFrame : hiddenFrame], {
     duration: duration ?? (opening ? MOTION.enter : MOTION.exit), easing: MOTION.ease, fill: 'both',
   });
-  surfaceAnimations.set(element, animation);
-  return animation.finished.then(() => {
-    if (surfaceAnimations.get(element) !== animation) return false;
-    surfaceAnimations.delete(element);
-    animation.cancel();
-    return true;
-  }).catch(() => false);
+  return trackSurface(element, animation);
+}
+
+// 宣言済みの transform-origin から小さく弾くメニュー用の開閉。
+function animatePop(element, opening) {
+  if (!element) return Promise.resolve(false);
+  const previous = surfaceAnimations.get(element);
+  const currentStyle = previous || !opening ? getComputedStyle(element) : null;
+  const interruptedFrame = currentStyle ? { opacity: currentStyle.opacity, transform: currentStyle.transform } : null;
+  previous?.cancel();
+  surfaceAnimations.delete(element);
+  if (!element.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return Promise.resolve(true);
+  const hiddenFrame = { opacity: 0, transform: 'scale(.92)' };
+  const visibleFrame = { opacity: 1, transform: 'scale(1)' };
+  const animation = element.animate([interruptedFrame ?? (opening ? hiddenFrame : visibleFrame), opening ? visibleFrame : hiddenFrame], {
+    duration: opening ? MOTION.enter : MOTION.exit, easing: MOTION.ease, fill: 'both',
+  });
+  return trackSurface(element, animation);
 }
 
 function revealItems(selector, root = document) {
@@ -765,7 +935,7 @@ function setMenuExpanded(expanded) {
   if (!menu) return;
   menu.hidden = false;
   menu.inert = !expanded;
-  animateSurface(menu, expanded, -8).then(finished => {
+  animatePop(menu, expanded).then(finished => {
     if (finished && !menuExpanded && menu.isConnected) menu.hidden = true;
   });
 }
@@ -976,12 +1146,16 @@ function enterPlay(record) {
   closePanel();
   const scene = isPlaying ? conversationMessages(state.messages.slice(sceneStart).filter(m => m.problemId === state.selected)) : [];
   novelPlayback = usesNovelBubbles(scene);
+  cancelEpilogueMotion();
+  epiloguePhase = null;
   if (novelPlayback) {
     const remaining = pendingConversation(state, view);
     preloadSceneImages(remaining);
     displayedMessages = scene.slice(0, scene.length - remaining.length);
-    if (!displayedMessages.length || isSceneNotice(displayedMessages.at(-1)) || (isInvestigation() && !remaining.length && current().autoOpenContinuation !== 'after-dialogue')) advanceNovel(remaining);
-    else render();
+    epiloguePhase = resumeEpiloguePhase(displayedMessages, remaining);
+    const opening = !displayedMessages.length || isSceneNotice(displayedMessages.at(-1)) || (isInvestigation() && !remaining.length && current().autoOpenContinuation !== 'after-dialogue');
+    if (epiloguePhase === 'title' || !opening) render();
+    else advanceNovel(remaining);
   } else render();
   const chat = document.querySelector('.chat-area');
   if (chat) chat.scrollTop = view.chatScrollTop;
@@ -1318,7 +1492,7 @@ function setProblemMenuExpanded(expanded) {
   menu.hidden = false;
   menu.inert = !expanded;
   if (expanded) alignCurrentProblem(menu);
-  animateSurface(menu, expanded, -8).then(finished => {
+  animatePop(menu, expanded).then(finished => {
     if (finished && !problemMenuExpanded && menu.isConnected) menu.hidden = true;
   });
   if (expanded) document.querySelector('.problem-toggle')?.focus({ preventScroll: true });
@@ -1560,7 +1734,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
     workspace = document.querySelector('.workspace');
   }
   workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}`;
-  workspace.inert = investigationClosing;
+  workspace.inert = investigationClosing || Boolean(epiloguePhase);
   workspace.innerHTML = `
       <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints">${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button></nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div><button class="hint-button" data-action="hints" aria-label="ヒント">${icon('hint')}<span>ヒント</span></button></div>
         <div class="play-toolbar">
@@ -1607,7 +1781,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
           <p>会場でプレイされる方は、画面上の「手がかり」ボタンに加えて、印刷した資料を会場で受け取ってプレイすることも可能です。</p>
         </article>` : ''}
         ${showBoard ? investigationMarkup(peelingConclusions) : ''}
-        ${novel ? novelSceneMarkup(novelLine) : `<div id="messages" class="messages" role="log" aria-label="会話" aria-live="polite" aria-relevant="additions text">${showBoard ? '' : transcript.map(messageMarkup).join('')}</div>`}
+        ${novel && novelLine ? novelSceneMarkup(novelLine) : `<div id="messages" class="messages" role="log" aria-label="会話" aria-live="polite" aria-relevant="additions text">${showBoard ? '' : transcript.map(messageMarkup).join('')}</div>`}
         ${branchPending ? `<div class="branch-options" aria-label="会話の選択肢">${p.branches.map(b => `<button data-action="branch" data-id="${esc(b.id)}">${esc(b.label)}</button>`).join('')}</div>` : ''}
         ${sceneProblem.instruction && !hasStoryPageTurn(sceneProblem) && state.solved.includes(sceneProblem.id) && !isPlaying && !startView && !displayedMessages.some(message => !message.speaker && normalizePageTurnText(message.text) === normalizePageTurnText(sceneProblem.instruction)) ? instructionCardMarkup(sceneProblem.instruction) : ''}
         ${(solved || isPlaying) && storageWarning ? `<div class="feedback" role="status">${esc(storageWarning)}</div>` : ''}
@@ -1621,6 +1795,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
       ${historyView ? historyScreenMarkup() : ''}`;
   document.querySelector('.investigation-closing')?.remove();
   if (investigationClosing) workspace.insertAdjacentHTML('afterend', investigationClosingMarkup());
+  mountEpilogue(workspace);
   if (investigationClosing) document.querySelector('.investigation-closing button')?.focus({ preventScroll: true });
   document.querySelector('.chat-area').scrollTop = chatScrollTop;
   const historyBody = document.querySelector('.history-body');
@@ -1634,6 +1809,10 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   updateConversationNotice();
   if (scroll) scrollConversationToEnd();
   syncNavigation();
+  if (clueCount !== lastClueBadgeCount) {
+    lastClueBadgeCount = clueCount;
+    animateEmphasis(document.querySelector('.nav-badge'), reducedMotion());
+  }
   save();
 }
 
@@ -1654,11 +1833,17 @@ function switchClueTab(nextTab) {
 }
 
 function clueGalleryItems() {
-  return scenario.clueGallery ?? [];
+  const gallery = scenario.clueGallery ?? [];
+  return playSaves?.getStatus().mode === 'debug' ? gallery : unlockedGalleryCards(scenario, state);
 }
 
 function allPlayCards() {
   return [...(scenario.characterCards ?? []), ...clueGalleryItems()];
+}
+
+function combineCardLabel(id) {
+  const card = [...(scenario.characterCards ?? []), ...(scenario.clueGallery ?? [])].find(item => item.id === id);
+  return card?.number ?? scenario.cards?.find(item => item.id === id)?.mark ?? id;
 }
 
 function clearCombineSelecting() {
@@ -2263,7 +2448,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     }).join('')}</div><button type="button" class="answer-fab" data-action="combine-confirm" ${remaining === 0 ? '' : 'disabled'}>${icon('edit')}<span>${remaining === 0 ? '次へ' : `あと${remaining}枚`}</span></button></div>`;
   } else if (kind === 'clues') {
     title = '手がかり';
-    content = `${combineGuideMarkup()}<button type="button" class="primary-button full combine-open" data-action="combine-pick">合成</button><p id="combine-feedback" class="combine-feedback" role="status"></p><div class="findings">${scenario.combinations.filter(c => state.combinations.includes(c.id)).map(c => `<section class="finding" data-finding-id="${esc(c.id)}"><span class="eyebrow">DISCOVERY · ${esc(c.cards.join(' + '))}</span><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></section>`).join('')}</div>`;
+    content = `${combineGuideMarkup()}<button type="button" class="primary-button full combine-open" data-action="combine-pick">合成</button><p id="combine-feedback" class="combine-feedback" role="status"></p><div class="findings">${scenario.combinations.filter(c => state.combinations.includes(c.id)).map(c => `<section class="finding" data-finding-id="${esc(c.id)}"><span class="eyebrow">DISCOVERY · ${esc(c.cards.map(combineCardLabel).join(' + '))}</span><h3>${esc(c.title)}</h3><p>${esc(c.text)}</p></section>`).join('')}</div>`;
   } else if (kind === 'save-info') {
     const record = playSaves.getRecord();
     const status = playSaves.getStatus();
@@ -2920,6 +3105,15 @@ document.addEventListener('click', event => {
   else if (action === 'continue-conversation') {
     resetChatFollow(); updateConversationNotice(); scrollConversationToEnd(true);
   }
+  else if (action === 'epilogue-next' && epiloguePhase && isPlaying && !historyView && !gateVisible) {
+    haptics.trigger('dialogue');
+    if (epiloguePhase === 'title') {
+      epilogueToken += 1;
+      epilogueFading = false;
+      clearTimeout(epilogueTimer);
+    }
+    advanceNovel();
+  }
   else if (action === 'novel-next' && isPlaying && novelPlayback && !historyView && !gateVisible) {
     advanceNovel();
     haptics.trigger(panel.open && panel.classList.contains('page-turn-dialog') ? 'pageTurn' : 'dialogue');
@@ -3110,3 +3304,12 @@ if (modelContext?.registerTool) {
   try { Promise.resolve(modelContext.registerTool(tool, { signal: lifecycle.signal })).catch(() => {}); } catch { /* 対応状況により登録できない場合も、画面の操作は利用できます。 */ }
   window.addEventListener('pagehide', () => lifecycle.abort(), { once: true });
 }
+
+// 画像は読み込みが終わってからふわっと出す（公式サイトと同じ .is-loaded）。
+// load/error はバブルしないがキャプチャで拾えるので、後から挿入される画像にも効く。
+(function watchImages() {
+  const mark = event => { if (event.target?.tagName === 'IMG') event.target.classList.add('is-loaded'); };
+  document.addEventListener('load', mark, true);
+  document.addEventListener('error', mark, true);
+  for (const img of document.images ?? []) if (img.complete) img.classList.add('is-loaded');
+})();

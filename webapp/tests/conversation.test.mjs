@@ -188,7 +188,7 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
 function finishScene(h) {
   if (h.timer.pending.size) h.timer.drain();
   const limit = h.evaluate('state.messages.length + 1');
-  for (let i = 0; i < limit && h.evaluate('isPlaying'); i++) h.click('novel-next');
+  for (let i = 0; i < limit && h.evaluate('isPlaying'); i++) h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
   assert.equal(h.evaluate('isPlaying'), false);
 }
 
@@ -1809,7 +1809,7 @@ test('問題番号メニューは閉じる動きが終わるまで残り、連�
     return motion;
   };
   h.click('toggle-problems');
-  assert.equal(motions[0].frames[0].transform, 'translateY(-8px)');
+  assert.equal(motions[0].frames[0].transform, 'scale(.92)');
   assert.equal(h.problemMenu.hidden, false);
   h.click('toggle-problems');
   assert.equal(h.problemMenu.inert, true);
@@ -2073,7 +2073,7 @@ test('ハンバーガーメニューはボタン下の縦リストを開閉す�
   assert.equal(h.evaluate('menuExpanded'), true);
   assert.equal(h.menu.hidden, false);
   assert.equal(h.menu.inert, false);
-  assert.equal(animations[0].frames[0].transform, 'translateY(-8px)');
+  assert.equal(animations[0].frames[0].transform, 'scale(.92)');
   await Promise.resolve();
   h.click('toggle-menu');
   assert.equal(h.evaluate('menuExpanded'), false);
@@ -3434,6 +3434,56 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   await Promise.resolve();
   assert.equal(h.panel.open, false);
   assert.equal(h.evaluate('state.selected'), 'Q1');
+});
+
+test('手がかりカードは進行に応じて開示される', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' })");
+  h.click('select', 'Q1');
+  h.click('clues');
+  const tileIds = () => [...h.panel.innerHTML.matchAll(/data-action="clue-card-open" data-id="([^"]+)"/g)].map(match => match[1]);
+  const rerender = () => h.evaluate("openPanel('clues', { keepFocus: true })");
+  assert.deepEqual(tileIds(), scenario.clueGallery.filter(card => !card.requires).map(card => card.id));
+  h.evaluate("state.solved.push('Q1', 'Q1.1')"); rerender();
+  assert.ok(tileIds().includes('clue-18'));
+  assert.ok(!tileIds().includes('clue-19'));
+  h.evaluate("state.solved.push('Q2', 'Q2.1', 'Q2.2')"); rerender();
+  assert.ok(tileIds().includes('clue-22'));
+  assert.ok(!tileIds().includes('clue-23'));
+  h.evaluate("state.minigames.push('hex-cube')"); rerender();
+  assert.ok(tileIds().includes('clue-23'));
+  h.evaluate("state.combinations.push('combine-401', 'combine-402', 'combine-403')"); rerender();
+  for (const id of ['clue-24', 'clue-25', 'clue-26']) assert.ok(tileIds().includes(id));
+  assert.ok(!tileIds().includes('clue-27'));
+  h.evaluate("state.solved.push('Q3.3')"); rerender();
+  assert.ok(tileIds().includes('clue-27'));
+  assert.ok(!tileIds().includes('clue-28'));
+  h.evaluate("state.solved.push(...scenario.investigation.problemIds)"); rerender();
+  assert.ok(tileIds().includes('clue-28'));
+});
+
+test('デバッグモードでは手がかりカードを無条件で全件表示する', async t => {
+  const h = appHarness(null, false, { entryOnly: true });
+  t.after(() => h.dispose());
+  await h.evaluate("beginPlay('code', '000000')");
+  assert.equal(h.evaluate('playSaves.getStatus().mode'), 'debug');
+  h.click('select', 'Q1');
+  h.click('clues');
+  assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.clueGallery.length);
+});
+
+test('カードの合成で番号付きの手がかりカードを入手できる', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' })");
+  h.click('select', 'Q1');
+  h.click('clues');
+  h.evaluate("state.solved.push('Q1', 'Q1.1'); state.combinations.push('combine-401'); openPanel('clues', { keepFocus: true })");
+  assert.ok(h.panel.innerHTML.includes('data-action="clue-card-open" data-id="clue-24"'));
+  h.evaluate('switchClueTab("combine")');
+  assert.ok(h.panel.innerHTML.includes('DISCOVERY · 104 + 204'));
+  assert.ok(h.panel.innerHTML.includes('手がかりカード401'));
 });
 
 test('キャラ情報は横スクロールで切り替えられる', async t => {

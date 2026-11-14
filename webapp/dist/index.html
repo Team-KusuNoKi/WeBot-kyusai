@@ -8,30 +8,32 @@
   <title>KUSUNOKI — 物語と謎の作品集</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=kusunoki-20261031">
   <link rel="stylesheet" href="./site.css">
+  <script>document.documentElement.className += ' js';</script>
+  <script src="./site.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">本文へ移動</a>
   <div class="site-shell">
-    <header class="site-header">
+    <header class="site-header" data-reveal>
       <a class="site-brand" href="/" aria-label="KUSUNOKI ホーム"><span class="site-seal" aria-hidden="true"><i></i></span><span>KUSUNOKI<small>STORIES & MYSTERIES</small></span></a>
       <a class="header-link" href="#works">作品を見る <span aria-hidden="true">↓</span></a>
     </header>
     <main id="main">
       <section class="home-cover">
         <div class="cover-orbit orbit-one" aria-hidden="true"></div><div class="cover-orbit orbit-two" aria-hidden="true"></div>
-        <div class="cover-copy"><p class="eyebrow">STORIES BY TEAM KUSUNOKI</p><h1>物語のページを、<br>めくるように。</h1><p class="cover-description">物語と謎を、ひとつずつ。</p><a class="round-link cover-link" href="#works">作品を見にいく<span aria-hidden="true">↘</span></a></div>
-        <div class="cover-moon" aria-hidden="true"><span>11</span><i></i></div>
-        <p class="cover-caption">KUSUNOKI<br>STORY ARCHIVE</p>
+        <div class="cover-copy" data-stagger="110"><p class="eyebrow" data-reveal>STORIES BY TEAM KUSUNOKI</p><h1 data-split data-reveal>物語のページを、<br>めくるように。</h1><p class="cover-description" data-reveal>物語と謎を、ひとつずつ。</p><a class="round-link cover-link" href="#works" data-reveal>作品を見にいく<span aria-hidden="true">↘</span></a></div>
+        <div class="cover-moon" aria-hidden="true" data-reveal="scale"><span>11</span><i></i></div>
+        <p class="cover-caption" data-reveal>KUSUNOKI<br>STORY ARCHIVE</p>
       </section>
       <section id="works" class="works-section" aria-labelledby="works-title">
-        <div class="section-heading"><div><p class="eyebrow">SELECTED WORKS</p><h2 id="works-title">作品</h2></div><span class="section-count">ひとつの物語</span></div>
-        <a class="work-row" href="/works/november-kyusai/">
+        <div class="section-heading" data-reveal><div><p class="eyebrow">SELECTED WORKS</p><h2 id="works-title">作品</h2></div><span class="section-count">ひとつの物語</span></div>
+        <a class="work-row" href="/works/november-kyusai/" data-reveal="up">
           <span class="work-art" aria-hidden="true"><span>NOV</span><strong>11</strong><i></i></span>
           <span class="work-copy"><span class="work-category">謎解き · STORY 01</span><strong class="work-title">11月の救祭</strong><span class="work-description">冊子を読み進めながら、会話の中にある手がかりを探す物語。</span><span class="work-link">作品ページへ <span aria-hidden="true">↗</span></span></span>
         </a>
       </section>
     </main>
-    <footer class="site-footer"><a href="/" class="footer-brand">KUSUNOKI</a><span>物語と謎の作品集</span></footer>
+    <footer class="site-footer" data-reveal><a href="/" class="footer-brand">KUSUNOKI</a><span>物語と謎の作品集</span></footer>
   </div>
 </body>
 </html>
