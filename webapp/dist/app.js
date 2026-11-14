@@ -2713,7 +2713,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要3分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救済 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
   } else if (kind === 'start-answer') {
     title = '「次へ」ボタンについて';
-    content = '<p class="panel-intro">「次へ」を押すと問題と回答欄が表示されます。シナリオ上で指示があってから押してください。</p><div class="reset-actions"><button class="secondary-button" data-action="close">戻る</button><button class="primary-button" data-action="start-answer-confirm">理解した</button></div>';
+    content = '<p class="panel-intro">「次へ」を押すと問題と回答欄が表示されます。問題に回答するときに押してください。</p><div class="reset-actions"><button class="secondary-button" data-action="close">戻る</button><button class="primary-button" data-action="start-answer-confirm">理解した</button></div>';
   } else if (kind === 'reset') {
     title = 'はじめからやり直す';
     content = '<p class="panel-intro">新しい番号で最初から始めます。元の番号の記録は残ります。元の番号は、プレイ中のメニューにある「再開番号」で確認できます。</p><div class="reset-actions"><button class="secondary-button" data-action="close">キャンセル</button><button class="primary-button" data-action="confirm-reset">新しいプレイを始める</button></div>';
