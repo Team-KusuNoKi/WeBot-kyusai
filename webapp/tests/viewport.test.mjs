@@ -90,6 +90,42 @@ test('回答中のキーボードは両方のresize方式で判定し、大き�
   }
 });
 
+test('回答フォーカスが外れてもキーボードが残っている間はドックを維持し、退き切ってから戻す', () => {
+  const h = harness();
+  h.win.matchMedia = () => ({ matches: true });
+  const surface = { getBoundingClientRect: () => ({ top: 100, bottom: 460 }), animate: () => {} };
+  h.doc.activeElement = { matches: () => true, closest: () => surface, getBoundingClientRect: () => ({ top: 300, bottom: 340 }) };
+  h.viewport.height = 460;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), true);
+  h.doc.activeElement = null;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), true, '縮んだ可視高の間はドックを外さない');
+  h.viewport.height = 830;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), false, 'ほぼ戻りきった時点で解放する');
+  h.viewport.height = 844;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), false);
+});
+
+test('大きな段差は開閉どちらの向きにも補間し、小さな揺れでは動かさない', () => {
+  const h = harness();
+  const motions = [];
+  const surface = { getBoundingClientRect: () => ({ top: 100, bottom: 460 }), animate: frames => motions.push(frames) };
+  h.doc.activeElement = { matches: () => true, closest: () => surface, getBoundingClientRect: () => ({ top: 300, bottom: 340 }) };
+  h.viewport.height = 460;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(motions.length, 1);
+  h.viewport.height = 844;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(motions.length, 2, '収納の段差も補間する');
+  assert.match(motions[1][0].transform, /translateY\(-36px\)/);
+  h.viewport.height = 830;
+  h.viewport.emit('resize'); h.flush();
+  assert.equal(motions.length, 2);
+});
+
 test('デスクトップの上下余白を二重に引かず、画面回転後にも追従する', () => {
   const h = harness({ top: 16, gap: 18 });
   assert.equal(h.height(), 810);

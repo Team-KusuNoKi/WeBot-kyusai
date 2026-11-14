@@ -82,8 +82,15 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .history-entry > summary > svg { width: 18px; height: 18px; color: var(--muted); transition: transform var(--motion-state) var(--motion-ease); }
 .history-entry[open] > summary > svg { transform: rotate(180deg); }
 .history-entry > summary:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
-.history-entry > .history-messages { display: grid; gap: 8px; margin: 18px 0 24px; }
-.history-entry .history-messages .bubble { background: var(--white); font-size: 14px; }
+/* ヘッダーの見出しはスクリーンリーダー向けにフォーカスするだけなので枠線は出さない。 */
+#history-heading:focus { outline: none; }
+/* 開いたカードは summary ごと1枚のカードとして広がり、吹き出しは色を変えて中に収める。 */
+.history-entry[open] { padding: 0 16px 14px; border-radius: 14px; background: var(--white); box-shadow: 0 2px 8px #2020200b; }
+.history-entry[open] > summary { min-height: 56px; padding: 12px 0; border-radius: 0; border-bottom: 1px solid #ece6da; background: transparent; box-shadow: none; }
+.history-entry[open] > summary:focus-visible { outline-offset: -3px; border-radius: 8px; }
+.history-entry > .history-messages { display: grid; gap: 8px; margin: 14px 0 0; }
+.history-entry .history-messages .bubble { background: #f4efe6; font-size: 14px; }
+.history-entry .history-messages .narration { background: #f4efe6; }
 .history-empty { margin: 48px 4px; }
 .history-empty p { margin: 10px 0; }
 @media (prefers-reduced-motion: reduce) {
@@ -233,6 +240,11 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
   syntax: "<angle>";
   inherits: false;
   initial-value: 0deg;
+}
+@property --sheet-drag {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
 }
 .investigation-progress { grid-column: 2; grid-row: 1; width: 28px; height: 28px; box-sizing: border-box; border: 1px solid #898b78; border-radius: 50%; background: conic-gradient(#21613c 0deg var(--answered-angle), #e3e1d2 var(--answered-angle) 360deg); }
 .investigation-questions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 16px; max-width: 332px; margin: 0 auto; padding: 4px 4px 6px; }
@@ -458,7 +470,7 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 .answer-field { min-width: 0; }
 .answer-field-symbol { display: flex; align-items: center; gap: 10px; }
 .answer-field-symbol .text-composer { flex: 1; min-width: 0; }
-.answer-field-symbol-mark { display: grid; place-items: center; flex-shrink: 0; width: 36px; min-height: var(--answer-field-height); border-radius: var(--radius-md); background: var(--accent); color: var(--white); font: 700 17px var(--serif); }
+.answer-field-symbol-mark { display: grid; place-items: center; flex-shrink: 0; width: 36px; min-height: var(--answer-field-height); border-radius: var(--radius-md); background: var(--surface-hover); color: var(--ink); font: 700 17px var(--serif); }
 .answer-field .answer-field-label { display: block; margin-bottom: 5px; font-size: 12px; }
 .answer-fields-inline { display: block; font-size: 15px; line-height: 2.2; }
 .answer-fields-inline .answer-field { display: inline-block; width: 5.5em; margin: 0 4px; vertical-align: middle; line-height: normal; }
@@ -509,11 +521,22 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 #answer-form.is-incorrect .text-composer,
 #answer-form.is-incorrect .answer-choice-trigger,
 #answer-form.is-incorrect .symbol-slot-button,
-#answer-form.is-incorrect .option { background: var(--danger-soft); box-shadow: inset 0 0 0 2px var(--danger); }
+#answer-form.is-incorrect .option,
+#answer-form .answer-field.is-incorrect .text-composer,
+#answer-form .answer-options.is-incorrect .option,
+#answer-form .room-word-input.is-incorrect .symbol-slot-button,
+#answer-form .symbol-slot-button.is-incorrect,
+#answer-form .option.is-incorrect { background: var(--danger-soft); box-shadow: inset 0 0 0 2px var(--danger); }
 #answer-form.is-incorrect .answer-choice-trigger,
 #answer-form.is-incorrect .symbol-slot-button,
 #answer-form.is-incorrect .option,
-#answer-form.is-incorrect .text-composer input { color: var(--danger); }
+#answer-form.is-incorrect .text-composer input,
+#answer-form .answer-field.is-incorrect .text-composer input,
+#answer-form .answer-field.is-incorrect .select-composer select,
+#answer-form .answer-options.is-incorrect .option,
+#answer-form .room-word-input.is-incorrect .symbol-slot-button,
+#answer-form .symbol-slot-button.is-incorrect,
+#answer-form .option.is-incorrect { color: var(--danger); }
 .answer-fab { position: absolute; z-index: 2; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); display: flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--control-height-lg); padding: 0 20px; border-radius: var(--radius-pill); background: var(--accent); font-size: 13px; font-weight: 600; }
 .play-actions button { position: static; display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: var(--control-height); padding: 4px 11px; border-radius: var(--radius-pill); font-size: 12px; line-height: 1.35; box-shadow: 0 2px 8px #20202024; }
 .play-actions .clue-button { background: var(--white); color: var(--ink); }
@@ -527,8 +550,8 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 .answer-fab svg { width: 20px; height: 20px; }
 .answer-fab:focus-visible:not(:disabled) { background: var(--accent-hover); }@media (hover: hover) { .answer-fab:hover:not(:disabled) { background: var(--accent-hover); } }
 
-dialog { position: fixed; inset: auto 0 0; width: 100%; max-width: 480px; max-height: 85dvh; min-height: 260px; margin: 0 auto; padding: 0; overflow: auto; border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; background: var(--canvas); color: var(--ink); box-shadow: none; }
-dialog::backdrop { background: #141414cc; animation: backdrop-in var(--motion-enter) ease both; }
+dialog { position: fixed; inset: auto 0 0; width: 100%; max-width: 480px; max-height: 85dvh; min-height: 260px; margin: 0 auto; padding: 0; overflow: auto; border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; background: var(--canvas); color: var(--ink); box-shadow: none; transition: --sheet-drag var(--motion-exit) var(--motion-ease); }
+dialog::backdrop { background: rgb(20 20 20 / calc(80% - var(--sheet-drag, 0) * 55%)); animation: backdrop-in var(--motion-enter) ease both; }
 dialog.is-closing::backdrop { animation: backdrop-out var(--motion-state) ease both; }
 dialog.page-turn-dialog, dialog.start-answer-dialog { inset: 0; width: min(420px, calc(100vw - 32px)); height: fit-content; min-height: 0; margin: auto; border-radius: var(--radius-xl); background: var(--white); }
 dialog#panel.page-turn-dialog { background: transparent; border-radius: 18px; scrollbar-gutter: auto; }
@@ -917,7 +940,7 @@ dialog.resume-sheet {
   color: var(--ink);
   overscroll-behavior: contain;
 }
-dialog.resume-sheet::backdrop { background: #141414cc; }
+dialog.resume-sheet::backdrop { background: rgb(20 20 20 / calc(80% - var(--sheet-drag, 0) * 55%)); }
 .resume-sheet::before { content: ""; display: block; width: 36px; height: 4px; margin: 12px auto 0; border-radius: 999px; background: var(--muted); }
 .resume-sheet .panel-header { padding-top: 12px; background: transparent; border-bottom: 1px solid var(--surface); }
 .resume-sheet .icon-button:focus-visible { background: var(--surface-hover); color: var(--ink); }@media (hover: hover) { .resume-sheet .icon-button:hover { background: var(--surface-hover); color: var(--ink); } }
@@ -1200,7 +1223,7 @@ dialog.clue-gallery::backdrop { background: var(--canvas); }
 .combine-select-thumb + .combine-select-thumb { margin-left: -12px; }
 .combine-select-text { display: grid; min-width: 0; font-size: 12px; font-weight: 600; line-height: 1.4; }
 .combine-select-text small { color: var(--muted); font-size: 10px; font-weight: 400; }
-.combine-select-run { flex-shrink: 0; min-height: 40px; margin: 0; padding-inline: 14px; border-radius: var(--radius-pill); font-size: 13px; }
+.combine-select-run { flex-shrink: 0; min-height: var(--control-height); margin: 0; padding: 4px 15px; border-radius: var(--radius-pill); font-size: 14px; }
 .combine-select-bar.is-ready .combine-select-run { animation: combine-run-pop .5s var(--motion-ease); }
 @keyframes combine-run-pop { 40% { scale: 1.12; } }
 .clue-screen-content.is-combine-selecting .panel-body:has(.clue-card-grid),
@@ -1254,7 +1277,7 @@ dialog.hex-failure {
 .hex-face { fill: var(--white); stroke: none; cursor: pointer; transition: fill var(--motion-state) var(--motion-ease), filter var(--motion-state) var(--motion-ease); }
 .hex-face.is-filled { fill: var(--accent-soft); }
 .hex-face.hovered, .hex-face:focus-visible { filter: brightness(.92); }
-.hex-face:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 3px; }
+.hex-face:focus, .hex-face:focus-visible { outline: none; }
 .hex-edge {
   fill: none; stroke: var(--accent-ink); stroke-width: 2.6; stroke-linejoin: round;
   stroke-linecap: round; pointer-events: none; vector-effect: non-scaling-stroke;
@@ -1468,3 +1491,22 @@ button.epilogue-screen:focus-visible, button.epilogue-screen:active { background
     30%           { opacity: 1;   translate: 0 -3px; }
   }
 }
+
+/* アンケート */
+.survey-field { margin: 0 0 18px; padding: 0; border: 0; }
+.survey-legend { margin-bottom: 8px; font-size: 13px; font-weight: 600; line-height: 1.6; }
+.survey-required, .survey-optional { margin-left: 8px; font-size: 10px; font-weight: 600; }
+.survey-required { color: var(--danger); }
+.survey-optional { color: var(--muted); }
+.survey-note { margin: -4px 0 8px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.survey-choices { display: grid; gap: 6px; }
+.survey-scale { display: flex; align-items: center; gap: 8px; }
+.survey-scale-options { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; flex: 1; }
+.survey-scale-option { justify-content: center; min-height: 44px; padding: 8px 4px; }
+.survey-scale-end { flex-shrink: 0; color: var(--muted); font-size: 11px; }
+.survey-textarea { width: 100%; min-height: 96px; padding: 10px; border: 0; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: 400 var(--answer-field-font-size)/1.7 var(--sans); resize: vertical; }
+.survey-textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.survey-error { margin: 0 0 10px; color: var(--danger); font-size: 12px; }
+.survey-thanks { display: grid; place-content: center; gap: 6px; min-height: 140px; text-align: center; }
+#survey-form button[type="submit"] { margin-top: 4px; }
+#survey-form button[type="submit"]:disabled { opacity: var(--disabled-opacity-soft); }

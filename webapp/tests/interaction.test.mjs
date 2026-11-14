@@ -52,6 +52,14 @@ test('会話の連打をまとめ、ページ送りや章の完了は弱い振�
   assert.deepEqual(d.calls, [[6], [12, 32, 8], [18, 35, 18, 35, 30], [10, 18, 5]]);
 });
 
+test('閉じる操作には選択より弱い振動を使い分ける', () => {
+  const d = hapticDevice();
+  const h = d.create();
+  assert.equal(h.trigger('dismiss'), true);
+  assert.equal(h.trigger('dismiss'), false);
+  assert.deepEqual(d.calls, [[4]]);
+});
+
 test('非対応・API拒否・例外でも振動は操作を中断せず、再試行を予約しない', () => {
   assert.equal(createHaptics({ win: {}, doc: {} }).trigger(), false);
   const d = hapticDevice();

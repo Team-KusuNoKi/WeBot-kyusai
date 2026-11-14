@@ -53,9 +53,25 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
   const errorAnimations = [];
   const answerClasses = new Set();
   const answerFields = { animate(frames, options) { const animation = { frames, options, cancelled: false, cancel() { this.cancelled = true; } }; errorAnimations.push(animation); return animation; } };
+  const fieldStubs = Array.from({ length: 8 }, () => {
+    const classes = new Set();
+    return {
+      classList: { add(name) { classes.add(name); }, remove(name) { classes.delete(name); }, contains(name) { return classes.has(name); }, toggle(name, enabled) { if (enabled) classes.add(name); else classes.delete(name); } },
+      attributes: {},
+      setAttribute(name, value) { this.attributes[name] = value; },
+      removeAttribute(name) { delete this.attributes[name]; },
+      matches() { return false; },
+      querySelector() { return null; },
+      querySelectorAll() { return []; },
+      animate(frames, options) { const animation = { frames, options, cancelled: false, cancel() { this.cancelled = true; } }; errorAnimations.push(animation); return animation; },
+    };
+  });
   const answerForm = {
     classList: { toggle(name, enabled) { if (enabled) answerClasses.add(name); else answerClasses.delete(name); }, contains(name) { return answerClasses.has(name); } },
-    querySelector() { return answerFields; }, querySelectorAll() { return [answerField]; },
+    querySelector() { return answerFields; },
+    querySelectorAll(selector) {
+      return ['.answer-field, fieldset.answer-options, .room-word-input', '.option', '.symbol-slot-button', '.is-incorrect'].includes(selector) ? fieldStubs : [answerField];
+    },
   };
   const choiceLabel = { textContent: '' };
   const symbolSubmit = { disabled: true };
@@ -175,7 +191,7 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
     storageItems, storageCalls, networkCalls, registeredTools, renders, resumeDigits, entryTransitions,
     windowEvent(name, event = {}) { windowListeners[name]?.(event); },
     dispose() { vm.runInContext('conversationPlayer.stop(); playSaves.dispose()', context); },
-    timer, gestureTimer, app, workspace, historyBody, historyScreen, composer, panel, answerField, answerForm, answerError, errorAnimations, choiceLabel, navigation, problemMenu, menu, menuListeners, appended, animations, scrolls, chat, notice, visual, fullImage, galleryPages, symbolSubmit, symbolSlots,
+    timer, gestureTimer, app, workspace, historyBody, historyScreen, composer, panel, answerField, answerForm, answerError, errorAnimations, fieldStubs, choiceLabel, navigation, problemMenu, menu, menuListeners, appended, animations, scrolls, chat, notice, visual, fullImage, galleryPages, symbolSubmit, symbolSlots,
     panelEvent(name, event) { panelListeners[name](event); },
     chatEvent(name, event = {}) { chatListeners[name](event); },
     documentEvent(name, event = {}) { listeners[name](event); },
@@ -640,9 +656,12 @@ test('文字入力・記号選択・選択式でも不正解後の会話と回�
     assert.equal(h.evaluate('JSON.stringify({ state, displayedMessages })'), before);
     assert.equal(h.composer.hidden, false);
     assert.equal(h.answerField.value, String(value));
-    assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
+    const marked = () => id === 'N4'
+      ? h.fieldStubs.some(el => el.classList.contains('is-incorrect'))
+      : h.answerForm.classList.contains('is-incorrect');
+    assert.equal(marked(), true);
     h.documentEvent('input', { target: { closest: () => h.answerForm } });
-    assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+    assert.equal(marked(), false);
     assert.equal(h.answerField.attributes['aria-invalid'], undefined);
   }
 });
@@ -1149,11 +1168,14 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.equal(h.panel.open, false);
   const saved = JSON.parse(h.snapshot());
   h.click('play-mei');
-  assert.ok(h.app.innerHTML.includes('data-action="continue-at-venue"><span>会場でプレイする</span></button>'));
-  assert.ok(h.app.innerHTML.includes('data-action="continue-online"><span>オンラインでプレイする</span></button>'));
-  assert.ok(!h.app.innerHTML.includes('data-action="play-mei"'));
+  assert.equal(h.panel.open, true);
+  assert.equal(h.panel.dataset.kind, 'clear-post');
+  assert.ok(h.panel.innerHTML.includes('data-action="continue-at-venue"><span>会場でプレイする</span></button>'));
+  assert.ok(h.panel.innerHTML.includes('data-action="continue-online"><span>オンラインでプレイする</span></button>'));
   assert.ok(h.app.innerHTML.includes('data-action="tour-thanks"'));
   h.click('continue-at-venue');
+  await h.evaluate('Promise.resolve()');
+  assert.equal(h.panel.open, false);
   assert.equal(h.evaluate('yoiEndView'), false);
   assert.equal(h.evaluate('state.selected'), 'Q1');
   assert.equal(h.composer.hidden, true);
@@ -1336,7 +1358,7 @@ test('オンラインを選ぶと推理パートの説明から始まり、STOP�
   h.click('select', 'Q1.1');
   assert.equal(h.evaluate('displayedMessages.length'), 0);
   h.click('select', 'Q8');
-  assert.ok(h.app.innerHTML.includes('class="workspace chapter-mei"'));
+  assert.match(h.app.innerHTML, /class="workspace[^"]*chapter-mei/);
   assert.ok(!h.app.innerHTML.includes('id="deduction-guide-heading"'));
   h.click('yoi-end');
   assert.ok(!h.app.innerHTML.includes('chapter-mei'));
@@ -2571,11 +2593,12 @@ test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒ
   assert.ok(h.composer.innerHTML.includes('時刻を選択…'));
   assert.equal((h.composer.innerHTML.match(/type="radio"/g) ?? []).length, 0);
   assert.ok(h.composer.innerHTML.includes('手がかり番号'));
-  assert.ok(h.composer.innerHTML.includes('3桁の手がかり番号を入力…'));
+  assert.ok(h.composer.innerHTML.includes('placeholder="手がかり番号"'));
   assert.ok(h.composer.innerHTML.includes('id="answer-1" name="answer" type="text" inputmode="numeric"'));
   assert.ok(!h.app.innerHTML.includes('幽煙の間：スタッフの証言'));
   assert.equal(h.evaluate("answer(['16:00', '203']).status"), 'incorrect');
-  assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 2), [true, false]);
   assert.equal(h.evaluate("answer(['16:30', '203']).status"), 'correct');
   assert.equal(h.composer.hidden, true);
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
@@ -2625,8 +2648,11 @@ test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む
   assert.equal((h.composer.innerHTML.match(/inputmode="numeric"/g) ?? []).length, 4);
   assert.equal((h.composer.innerHTML.match(/name="answer" type="text"[^>]*required/g) ?? []).length, 2);
   assert.equal(h.evaluate("answer(['203', '', '', '003']).status"), 'incorrect');
-  assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  // Q7は空欄が「矛盾なし」の印になるため、空欄の欄は揺らさず間違えたDの欄だけ揺れる。
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, false, false, true]);
   assert.equal(h.evaluate("answer(['203', '001', '', '302']).status"), 'incorrect');
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, true, false, false]);
   assert.equal(h.evaluate("answer(['２０３', '', '', '３０２']).status"), 'correct');
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   finishScene(h);
@@ -2681,7 +2707,7 @@ test('手がかり番号を答える全4問の入力案内を統一し、番号�
   t.after(() => h.dispose());
   for (const id of ['Q3.3', 'Q4', 'Q6.2', 'Q7']) {
     h.click('select', id);
-    assert.ok(h.app.innerHTML.includes('placeholder="3桁の手がかり番号を入力…"'));
+    assert.ok(h.app.innerHTML.includes('placeholder="手がかり番号"'));
     assert.ok(h.app.innerHTML.includes('inputmode="numeric"'));
   }
 });
@@ -2693,7 +2719,9 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   assert.equal(h.evaluate('state.selected'), 'Q8');
   assert.equal(h.evaluate('displayedMessages.length'), scenario.problems.find(p => p.id === 'Q7').dialogue.length);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "Q7")'), true);
-  assert.ok(h.app.innerHTML.includes('この先は会場を離れても進められます'));
+  // 会場向けの案内はめくり確認のポップアップだけに出し、背景には最後の台詞を残す。
+  assert.ok(!h.app.innerHTML.includes('会場でプレイされている方へ'));
+  assert.ok(h.app.innerHTML.includes('お前しかいない！！'));
   assert.ok(h.app.innerHTML.includes('全ての謎を解明せよ'));
   assert.equal(h.composer.hidden, false);
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
@@ -2714,8 +2742,17 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   assert.ok(h.app.innerHTML.includes('を集める」という段階'));
   assert.ok(!h.app.innerHTML.includes('知恵深き者'));
   assert.ok(!h.app.innerHTML.includes('畏怖を集める'));
+  // Q9の背景も同じく、直前の会話の最後の台詞だけを出す。
+  h.click('select', 'Q9');
+  assert.equal(h.evaluate('state.selected'), 'Q9');
+  assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "Q7")'), true);
+  assert.ok(!h.app.innerHTML.includes('会場でプレイされている方へ'));
+  h.click('select', 'Q8');
+  assert.equal(h.evaluate('state.selected'), 'Q8');
   assert.equal(h.evaluate("answer(['ハナ', '知恵', '恐怖', '大地震']).status"), 'incorrect');
-  assert.equal(h.answerForm.classList.contains('is-incorrect'), true);
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  // 4欄中「恐怖」の欄だけが間違いなので、その欄だけが揺れる。
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, false, true, false]);
   assert.equal(h.evaluate("answer(['ハナ', '知恵', '畏怖', '大地震']).status"), 'correct');
   assert.ok(!h.app.innerHTML.includes('class="composer-area answer-page"'));
   assert.ok(!h.app.innerHTML.includes('class="novel-bubble"'));
@@ -3525,6 +3562,49 @@ test('デバッグモードでは手がかりカードを無条件で全件表�
   h.click('select', 'Q1');
   h.click('clues');
   assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.clueGallery.length);
+});
+
+test('デバッグモードでは未クリアでも問題番号トグルに「宵 終幕」を表示して開ける', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  assert.equal(h.evaluate('playSaves.getStatus().mode'), 'debug');
+  assert.equal(h.evaluate('state.solved.includes("N5.5")'), false);
+  assert.ok(h.navigation.innerHTML.includes('data-action="yoi-end"'));
+  assert.ok(h.navigation.innerHTML.includes('宵 終幕'));
+  h.click('yoi-end');
+  assert.equal(h.evaluate('yoiEndView'), true);
+  assert.ok(h.app.innerHTML.includes('id="yoi-completion-title"'));
+});
+
+test('通常モードではN5.5をクリアするまで「宵 終幕」を表示しない', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' })");
+  h.evaluate('render()');
+  assert.ok(!h.navigation.innerHTML.includes('宵 終幕'));
+  h.evaluate("state.solved.push('N5.5'); render()");
+  assert.ok(h.navigation.innerHTML.includes('宵 終幕'));
+});
+
+test('複数選択問題では間違えて選んだ選択肢だけが揺れる', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.click('select', 'Q3.2');
+  assert.equal(h.evaluate('state.selected'), 'Q3.2');
+  assert.equal(h.evaluate("answer(['1', '2']).status"), 'incorrect');
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  // 正解の「蝋人形の間」は揺れず、誤りの「深紅の間」だけが揺れる。
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [true, false, false, false]);
+});
+
+test('スロット入力では間違えたスロットだけが揺れる', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.click('select', 'N4');
+  assert.equal(h.evaluate('state.selected'), 'N4');
+  assert.equal(h.evaluate("answer('88↙').status"), 'incorrect');
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 3), [false, true, false]);
 });
 
 test('カードの合成で番号付きの手がかりカードを入手できる', async t => {
