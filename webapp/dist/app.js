@@ -787,9 +787,41 @@ function animateScale(element, opening, from = .94, duration = null) {
   return animateFrames(element, opening, `scale(${from})`, 'scale(1)', duration);
 }
 
+// 開いたトリガの位置から中央ダイアログを膨らませて出す。
+function animateFromRect(element, from) {
+  if (!element?.animate || !from?.width || !from?.height || reducedMotion()) return false;
+  const to = element.getBoundingClientRect();
+  if (!to.width || !to.height) return false;
+  const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+  const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+  const animation = element.animate([
+    { transformOrigin: 'center', transform: `translate(${dx}px, ${dy}px) scale(${Math.max(.05, from.width / to.width)})`, opacity: .4 },
+    { transformOrigin: 'center', transform: 'translate(0px, 0px) scale(1)', opacity: 1 },
+  ], { duration: MOTION.enter, easing: MOTION.ease, fill: 'both' });
+  trackSurface(element, animation);
+  return true;
+}
+
 // 位置を transform で決めている要素は、不透明度だけを動かす。
 function animateFade(element, opening, duration = null) {
   return animateFrames(element, opening, null, null, duration);
+}
+
+// フローティングボタンの位置・形からシートを膨らませて開く。
+function morphFromFab(composer, fab) {
+  if (!composer?.animate || reducedMotion()) return null;
+  surfaceAnimations.get(composer)?.cancel();
+  surfaceAnimations.delete(composer);
+  const from = fab.getBoundingClientRect();
+  const to = composer.getBoundingClientRect();
+  if (!from.width || !to.width || !to.height) return null;
+  const dx = from.left + from.width / 2 - (to.left + to.width / 2);
+  const dy = from.top + from.height / 2 - (to.top + to.height / 2);
+  const animation = composer.animate([
+    { transformOrigin: 'center', transform: `translate(${dx}px, ${dy}px) scale(${Math.max(.05, from.width / to.width)}, ${Math.max(.05, from.height / to.height)})`, opacity: 0, borderRadius: '999px' },
+    { transformOrigin: 'center', transform: 'translate(0px, 0px) scale(1, 1)', opacity: 1, borderRadius: getComputedStyle(composer).borderRadius },
+  ], { duration: MOTION.enter, easing: MOTION.ease, fill: 'both' });
+  return trackSurface(composer, animation);
 }
 
 function animateFrames(element, opening, hiddenTransform, visibleTransform, duration) {
@@ -1040,7 +1072,10 @@ function setComposerExpanded(expanded) {
   if (expanded) composer.focus({ preventScroll: true });
   fab.disabled = expanded;
   if (fab.dataset?.action !== 'travel-next') fab.setAttribute('aria-expanded', String(expanded));
-  animateSurface(composer, expanded, 0).then(finished => {
+  // シートの背後に残るFABは、開閉と同じ速さで透過させる。
+  if (fab.style) fab.style.opacity = expanded ? '0' : '';
+  const opened = expanded && !composer.classList?.contains('answer-page') ? morphFromFab(composer, fab) : null;
+  (opened ?? animateSurface(composer, expanded, 40)).then(finished => {
     if (finished && !composerExpanded && composer.isConnected) composer.hidden = true;
   });
   if (!expanded && focusWasInside) fab.focus({ preventScroll: true });
@@ -1101,6 +1136,7 @@ function closePanel() {
     if (!finished) return;
     const outsideFocus = document.activeElement && document.activeElement !== document.body && !panel.contains?.(document.activeElement) ? document.activeElement : null;
     panel.style?.removeProperty('transform');
+    panel.style?.removeProperty('--sheet-drag');
     panel.close();
     panel.classList.remove('is-closing');
     panel.inert = false;
@@ -1184,6 +1220,8 @@ function setResumeDigits(index, raw) {
   });
   const error = panel.querySelector('#resume-error');
   if (error) error.textContent = '';
+  // 確定した桁を小さく弾いて、次の入力へ進んだことを視覚的にも返す。
+  if (digits) popElement(panel.querySelector(`#resume-digit-${index + digits.length - 1}`));
   panel.querySelector(`#resume-digit-${Math.min(index + digits.length, 5)}`)?.focus({ preventScroll: true });
   if (gateDigits.every(digit => /^[0-9]$/.test(digit))) void beginPlay('code', gateCode);
 }
@@ -1316,7 +1354,7 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
     if (gateVisible) {
       if (requestedMinigame) gateInput = true;
       renderEntry();
-      if (gateInput) shakeElement(panel.querySelector('.resume-digits'));
+      if (gateInput) { shakeElement(panel.querySelector('.resume-digits')); haptics.trigger('error'); }
     }
     else openPanel('save-info');
   }
@@ -1594,6 +1632,7 @@ function setProblemMenuExpanded(expanded) {
   menu.hidden = false;
   menu.inert = !expanded;
   if (expanded) alignCurrentProblem(menu);
+  if (expanded) revealItems(':scope > button', menu);
   animatePop(menu, expanded).then(finished => {
     if (finished && !problemMenuExpanded && menu.isConnected) menu.hidden = true;
   });
@@ -2608,6 +2647,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   }
   imageViewer?.dispose(); imageViewer = null;
   sheetDismiss?.dispose(); sheetDismiss = null;
+  panel.style?.removeProperty('--sheet-drag');
   if (panel.dataset) panel.dataset.kind = kind;
   const scrollTop = panel.scrollTop;
   const bodyScrollTop = panel.querySelector('.panel-body')?.scrollTop ?? 0;
@@ -2773,7 +2813,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   if (draggableSheet) {
     const header = panel.querySelector('.panel-header');
     header?.insertAdjacentHTML?.('afterbegin', '<button class="sheet-handle" type="button" data-action="close" aria-label="パネルを閉じる。下に引いて閉じることもできます"><span></span></button>');
-    sheetDismiss = bindSheetDismiss(panel, { onDismiss: closePanel, canDismiss: () => !gateBusy, motion: reducedMotion, onThreshold: () => haptics.trigger(), onStart() { surfaceAnimations.get(panel)?.cancel(); surfaceAnimations.delete(panel); } });
+    sheetDismiss = bindSheetDismiss(panel, { onDismiss() { haptics.trigger('dismiss'); closePanel(); }, canDismiss: () => !gateBusy, motion: reducedMotion, onThreshold: () => haptics.trigger(), onStart() { surfaceAnimations.get(panel)?.cancel(); surfaceAnimations.delete(panel); } });
   }
   if (kind === 'hints') {
     const summary = panel.querySelector('.hint-answer summary');
@@ -2812,7 +2852,8 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     else if (!wasOpen) animateSurface(panel, true, 16, 'X');
     else if (previousPanelKind !== kind) animateSurface(panel.querySelector('.clue-screen-content'), true, 0, 'Y', MOTION.state);
   } else if (centeredDialog && !wasOpen) {
-    animateScale(panel, true, .94);
+    const fromTrigger = ['answer-choices', 'symbol-choices'].includes(kind) && animateFromRect(panel, panelReturnFocus?.getBoundingClientRect?.());
+    if (!fromTrigger) animateScale(panel, true, .94);
   } else if (!isImagePanel && (kind !== 'resume' || !wasOpen) && (!wasOpen || previousPanelKind !== kind || revealSelector)) {
     animateSurface(wasOpen ? panel.querySelector(revealSelector ?? '.panel-body') ?? panel.querySelector('.symbol-choice-grid, .answer-choice-grid, .image-viewer-stage') : panel, true, kind === 'resume' ? '100%' : wasOpen ? 8 : 24);
   }
@@ -3076,7 +3117,7 @@ function answer(value) {
 
 document.addEventListener('click', event => {
   const summary = event.target.closest('summary');
-  if (summary?.parentElement?.matches('.history-entry, .answer-reveal:not(.hint-answer)') && toggleDisclosure(summary.parentElement, reducedMotion())) {
+  if (summary?.parentElement?.matches('.history-entry, .answer-reveal:not(.hint-answer), .trouble-photos') && toggleDisclosure(summary.parentElement, reducedMotion())) {
     event.preventDefault();
     return;
   }
@@ -3091,7 +3132,8 @@ document.addEventListener('click', event => {
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
-  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'yoi-next', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues'].includes(action)) haptics.trigger();
+  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'yoi-page-turn', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues', 'chat', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-card', 'hex-save-retry', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
+  if (['close', 'close-menu', 'save-entry-back'].includes(action)) haptics.trigger('dismiss');
   if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
   if (action === 'hex-save-retry') {if(!miniSaving){miniSaving=true;void confirmHexReward().finally(()=>{miniSaving=false;});}return;}
   if (action === 'hex-card') {clueTab='cards';expandedCharacter=null;expandedClueId=null;clearCombineSelecting();openPanel('clues');return;}
@@ -3287,6 +3329,7 @@ document.addEventListener('click', event => {
     else {
       if (!deleting) activeSymbolSlot = values.findIndex(letter => !letter);
       openPanel('symbol-choices');
+      animateSurface(panel.querySelector(`#picker-symbol-slot-${activeSymbolSlot}`), true, 3);
     }
   }
   else if (action === 'choose-answer') {
@@ -3424,6 +3467,7 @@ document.addEventListener('click', event => {
     panel.querySelector('.hint-answer-button')?.focus({ preventScroll: true });
   }
   else if (action === 'hint-answer-confirm') {
+    haptics.trigger('paper');
     setHintConfirm(panel.querySelector('.hint-confirm'), false);
     const flip = panel.querySelector('.hint-ema-flip');
     const back = panel.querySelector('.hint-ema-back');
@@ -3646,8 +3690,8 @@ document.addEventListener('submit', event => {
     else reveal();
   }
 });
-panel.addEventListener('click', event => { const rect = panel.getBoundingClientRect(); if (event.target === panel && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) closePanel(); });
-panel.addEventListener('cancel', event => { event.preventDefault(); closePanel(); });
+panel.addEventListener('click', event => { const rect = panel.getBoundingClientRect(); if (event.target === panel && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) { haptics.trigger('dismiss'); closePanel(); } });
+panel.addEventListener('cancel', event => { event.preventDefault(); haptics.trigger('dismiss'); closePanel(); });
 let browserStorage;
 try { browserStorage = window.localStorage; } catch { browserStorage = null; }
 playSaves = createPlaySaveController({ scenarioId: scenario.id, storage: browserStorage,

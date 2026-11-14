@@ -241,6 +241,11 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
   inherits: false;
   initial-value: 0deg;
 }
+@property --sheet-drag {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 .investigation-progress { grid-column: 2; grid-row: 1; width: 28px; height: 28px; box-sizing: border-box; border: 1px solid #898b78; border-radius: 50%; background: conic-gradient(#21613c 0deg var(--answered-angle), #e3e1d2 var(--answered-angle) 360deg); }
 .investigation-questions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 16px; max-width: 332px; margin: 0 auto; padding: 4px 4px 6px; }
 .investigation-question { grid-column: span 2; }
@@ -545,8 +550,8 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 .answer-fab svg { width: 20px; height: 20px; }
 .answer-fab:focus-visible:not(:disabled) { background: var(--accent-hover); }@media (hover: hover) { .answer-fab:hover:not(:disabled) { background: var(--accent-hover); } }
 
-dialog { position: fixed; inset: auto 0 0; width: 100%; max-width: 480px; max-height: 85dvh; min-height: 260px; margin: 0 auto; padding: 0; overflow: auto; border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; background: var(--canvas); color: var(--ink); box-shadow: none; }
-dialog::backdrop { background: #141414cc; animation: backdrop-in var(--motion-enter) ease both; }
+dialog { position: fixed; inset: auto 0 0; width: 100%; max-width: 480px; max-height: 85dvh; min-height: 260px; margin: 0 auto; padding: 0; overflow: auto; border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; background: var(--canvas); color: var(--ink); box-shadow: none; transition: --sheet-drag var(--motion-exit) var(--motion-ease); }
+dialog::backdrop { background: rgb(20 20 20 / calc(80% - var(--sheet-drag, 0) * 55%)); animation: backdrop-in var(--motion-enter) ease both; }
 dialog.is-closing::backdrop { animation: backdrop-out var(--motion-state) ease both; }
 dialog.page-turn-dialog, dialog.start-answer-dialog { inset: 0; width: min(420px, calc(100vw - 32px)); height: fit-content; min-height: 0; margin: auto; border-radius: var(--radius-xl); background: var(--white); }
 dialog#panel.page-turn-dialog { background: transparent; border-radius: 18px; scrollbar-gutter: auto; }
@@ -935,7 +940,7 @@ dialog.resume-sheet {
   color: var(--ink);
   overscroll-behavior: contain;
 }
-dialog.resume-sheet::backdrop { background: #141414cc; }
+dialog.resume-sheet::backdrop { background: rgb(20 20 20 / calc(80% - var(--sheet-drag, 0) * 55%)); }
 .resume-sheet::before { content: ""; display: block; width: 36px; height: 4px; margin: 12px auto 0; border-radius: 999px; background: var(--muted); }
 .resume-sheet .panel-header { padding-top: 12px; background: transparent; border-bottom: 1px solid var(--surface); }
 .resume-sheet .icon-button:focus-visible { background: var(--surface-hover); color: var(--ink); }@media (hover: hover) { .resume-sheet .icon-button:hover { background: var(--surface-hover); color: var(--ink); } }

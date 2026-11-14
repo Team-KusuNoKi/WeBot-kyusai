@@ -7,6 +7,7 @@ export function createHaptics({ win = globalThis.window, doc = globalThis.docume
   const supported = typeof nav?.vibrate === 'function';
   const signals = {
     dialogue: { pulses: [6], priority: 0 },
+    dismiss: { pulses: [4], priority: 0 },
     selection: { pulses: [8], priority: 0 },
     paper: { pulses: [10, 18, 5], priority: 0 },
     ready: { pulses: [6, 25, 6], priority: 1 },
@@ -221,7 +222,7 @@ export function bindSheetDismiss(panel, { onDismiss, canDismiss = () => true, mo
   const threshold = () => Math.min(120, Math.max(72, panel.getBoundingClientRect().height * .22));
   const markReady = ready => panel.classList?.toggle('dismiss-ready', ready);
   const listen = (name, fn, options) => { panel.addEventListener(name, fn, options); listeners.push(() => panel.removeEventListener(name, fn, options)); };
-  function clearTransform() { panel.style.removeProperty('transform'); }
+  function clearTransform() { panel.style.removeProperty('transform'); panel.style.removeProperty('--sheet-drag'); }
   function reset() {
     markReady(false);
     if (!panel.style) return;
@@ -253,6 +254,8 @@ export function bindSheetDismiss(panel, { onDismiss, canDismiss = () => true, mo
     markReady(ready);
     if (ready && !drag.thresholdNotified) { drag.thresholdNotified = true; onThreshold(); }
     panel.style.transform = `translateY(${drag.distance}px)`;
+    // 引き下ろすほど背景を薄くし、掴んで離す感覚を形にする。
+    panel.style.setProperty?.('--sheet-drag', String(Math.min(1, drag.distance / (threshold() * 1.6))));
   }, { passive: false });
   function finish(event) {
     if (!drag || drag.id !== event.pointerId) return;
