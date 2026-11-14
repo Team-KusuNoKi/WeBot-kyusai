@@ -6,6 +6,7 @@ export function bindVisualViewport(win = window, doc = document) {
   let restingHeight = 0;
   let lastWidth;
   let lastHeight = 0;
+  let settleTimer = 0;
   const listeners = [];
 
   function update() {
@@ -31,7 +32,10 @@ export function bindVisualViewport(win = window, doc = document) {
 
     const workspace = doc.querySelector('.workspace');
     if (workspace) {
+      const wasKeyboard = workspace.hasAttribute?.('data-answer-keyboard');
       workspace.toggleAttribute?.('data-answer-keyboard', Boolean(keyboard));
+      // キーボードを上げたまま送信すると閉じる最後のresizeが来ない端末があるため、収納後にもう一度測り直す。
+      if (wasKeyboard && !keyboard) settle();
       const gap = parseFloat(win.getComputedStyle(workspace).getPropertyValue('--workspace-bottom-gap')) || 0;
       // DOM rects and offsetTop use layout-viewport coordinates, including browser panning.
       workspace.style.setProperty('--workspace-height', `${Math.max(0, bottom - workspace.getBoundingClientRect().top - gap)}px`);
@@ -60,6 +64,12 @@ export function bindVisualViewport(win = window, doc = document) {
     }
   }
 
+  function settle() {
+    if (!win.setTimeout) return;
+    win.clearTimeout?.(settleTimer);
+    settleTimer = win.setTimeout(() => { settleTimer = 0; update(); }, 400);
+  }
+
   function schedule() {
     if (queued) return;
     queued = true;
@@ -76,5 +86,5 @@ export function bindVisualViewport(win = window, doc = document) {
   for (const name of ['resize', 'scroll', 'orientationchange', 'pageshow']) listen(win, name);
   for (const name of ['focusin', 'focusout']) listen(doc, name);
   update();
-  return { update, schedule, dispose() { for (const [target, name] of listeners) target.removeEventListener(name, schedule); } };
+  return { update, schedule, dispose() { win.clearTimeout?.(settleTimer); for (const [target, name] of listeners) target.removeEventListener(name, schedule); } };
 }

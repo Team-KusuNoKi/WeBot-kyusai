@@ -1576,8 +1576,9 @@ function headerActionsMarkup() {
 // 問題の展開・解除だけでは全面を再描画しないので、ヘッダー右端だけを差し替える。
 function updateHeaderActions() {
   const slot = document.querySelector('.play-header .header-actions');
-  if (!slot || slot.matches('button') === composerExpanded) return;
-  slot.outerHTML = headerActionsMarkup();
+  if (slot && slot.matches('button') !== composerExpanded) slot.outerHTML = headerActionsMarkup();
+  const hints = document.querySelector('#navigation-menu [data-action="hints"]');
+  if (hints) hints.hidden = !composerExpanded;
 }
 
 function setProblemMenuExpanded(expanded) {
@@ -1734,18 +1735,19 @@ function historyProblems() {
   return scenario.problems.filter(item => state.solved.includes(item.id) && !item.advanceTo).reverse();
 }
 
-function secondaryScreenHeader(backAction, { showHint = true } = {}) {
+function secondaryScreenHeader(backAction, { showHint = true, title, headingId } = {}) {
   const trailing = showHint
     ? `<button class="hint-button" data-action="hints" aria-label="ヒント">${icon('hint')}<span>ヒント</span></button>`
     : '<span class="header-spacer" aria-hidden="true"></span>';
-  return `<header class="topbar clue-screen-header"><div class="brand"><button class="menu-button clue-back" data-action="${backAction}" aria-label="戻る">${icon('arrow')}</button><span${backAction === 'close' ? ' id="panel-title"' : ''} class="brand-title">${esc(playBrandTitle())}</span></div>${trailing}</header>`;
+  const titleId = headingId ?? (backAction === 'close' ? 'panel-title' : '');
+  return `<header class="topbar clue-screen-header"><div class="brand"><button class="menu-button clue-back" data-action="${backAction}" aria-label="戻る">${icon('arrow')}</button><span${titleId ? ` id="${esc(titleId)}"` : ''}${headingId ? ' tabindex="-1"' : ''} class="brand-title">${esc(title ?? playBrandTitle())}</span></div>${trailing}</header>`;
 }
 
 function historyScreenMarkup() {
   const visibleMessages = isPlaying ? [...state.messages.slice(0, sceneStart), ...displayedMessages] : state.messages;
   const entries = historyProblems().map(item =>
     `<details class="history-entry" data-history-problem="${esc(item.id)}" ${historyOpenProblems.has(item.id) ? 'open' : ''}><summary><span class="history-question">${esc(problemLabel(item))}</span><span class="history-title">${esc(problemTitle(item))}</span>${icon('chevron')}</summary><div class="history-messages">${visibleMessages.filter(m => m.problemId === item.id && isConversationLine(m)).map(messageMarkup).join('')}</div></details>`).join('');
-  return `<section class="history-screen" aria-labelledby="history-heading">${secondaryScreenHeader('history-back', { showHint: false })}<div class="history-body"><h1 id="history-heading" tabindex="-1">会話履歴</h1><p class="history-intro">問題を開くと、これまでの会話を読み返せます。</p>${entries || '<div class="empty-state history-empty"><p>まだ会話履歴はありません。</p><p>問題に正解すると、ここに会話が届きます。</p></div>'}</div></section>`;
+  return `<section class="history-screen" aria-labelledby="history-heading">${secondaryScreenHeader('history-back', { showHint: false, title: '会話履歴', headingId: 'history-heading' })}<div class="history-body"><p class="history-intro">問題を開くと、これまでの会話を読み返せます。</p>${entries || '<div class="empty-state history-empty"><p>まだ会話履歴はありません。</p><p>問題に正解すると、ここに会話が届きます。</p></div>'}</div></section>`;
 }
 
 function openHistoryScreen() {
@@ -1843,7 +1845,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}${sceneDim ? ' scene-dim' : ''}${sceneDimLate ? ' scene-dim-late' : ''}`;
   workspace.inert = investigationClosing || Boolean(epiloguePhase);
   workspace.innerHTML = `
-      <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints">${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button></nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
+      <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button></nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
         <div class="play-toolbar">
           <div id="problem-navigation" class="problem-navigation">${problemNavigationMarkup()}</div>
           <div class="play-actions">
@@ -2368,7 +2370,8 @@ function bindCombineCardGestures() {
     const tile = event.target?.closest?.('[data-action="clue-card-open"][data-id]');
     if (tile) return { id: tile.dataset.id, kind: 'tile', el: tile };
     const card = event.target?.closest?.('.clue-gallery-card[data-combine-id]');
-    if (card) return { id: card.dataset.combineId, kind: 'gallery', el: card };
+    // 公開情報タブは常時拡大表示なので、タップのプレス演出（拡大）をカードに付けない。
+    if (card) return clueTab === 'characters' && !combineSelecting ? null : { id: card.dataset.combineId, kind: 'gallery', el: card };
     return null;
   };
 
@@ -2911,6 +2914,9 @@ function answer(value) {
   else if (['incorrect', 'empty'].includes(result.status)) haptics.trigger('error');
   if (startView || repeatAnswer) result.state = { ...result.state, solved: [...new Set([...state.solved, ...result.state.solved])] };
   state = result.state;
+  // フォームが閉じ・差し替えになる送信ではフォーカスを外してキーボードを確実に下げる。
+  // フォーカス済み入力の削除だけではキーボードが閉じず、可視領域の高さが戻らない端末があるため。
+  if (result.status !== 'empty' && !(result.status === 'incorrect' && !result.response)) document.activeElement?.blur?.();
   if (result.status === 'correct' || result.status === 'progress') { repeatAnswer = false; delete answerDrafts[problem.id]; }
   if (result.status === 'correct' && problem.advanceTo && answerOrigin) answerOrigin.answerId = state.selected;
   feedback = result.status === 'empty' ? problem.answerSlots ? `${problem.answerSlots}つすべての空欄を選択してください。` : '答えを入力・選択してください。' : '';

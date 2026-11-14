@@ -2571,7 +2571,7 @@ test('Q4の会話後にQ5の時間4択とカード番号欄へ進み、アサヒ
   assert.ok(h.composer.innerHTML.includes('時刻を選択…'));
   assert.equal((h.composer.innerHTML.match(/type="radio"/g) ?? []).length, 0);
   assert.ok(h.composer.innerHTML.includes('手がかり番号'));
-  assert.ok(h.composer.innerHTML.includes('3桁の手がかり番号を入力…'));
+  assert.ok(h.composer.innerHTML.includes('placeholder="手がかり番号"'));
   assert.ok(h.composer.innerHTML.includes('id="answer-1" name="answer" type="text" inputmode="numeric"'));
   assert.ok(!h.app.innerHTML.includes('幽煙の間：スタッフの証言'));
   assert.equal(h.evaluate("answer(['16:00', '203']).status"), 'incorrect');
@@ -2681,7 +2681,7 @@ test('手がかり番号を答える全4問の入力案内を統一し、番号�
   t.after(() => h.dispose());
   for (const id of ['Q3.3', 'Q4', 'Q6.2', 'Q7']) {
     h.click('select', id);
-    assert.ok(h.app.innerHTML.includes('placeholder="3桁の手がかり番号を入力…"'));
+    assert.ok(h.app.innerHTML.includes('placeholder="手がかり番号"'));
     assert.ok(h.app.innerHTML.includes('inputmode="numeric"'));
   }
 });

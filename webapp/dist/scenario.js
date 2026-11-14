@@ -484,7 +484,7 @@ export const scenario = {
       listPrompt: '幽煙の間の北壁に貼られていた紙は今どこに？',
       conclusion: '幽煙の間にあった紙は、N6の問題用紙であり、答えは「かべおせ」だった。',
       prompt: '幽煙の間の北壁に貼られていた紙は今どこに？紙があると考えられる場所を、手がかり番号で答えよ',
-      placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric',
+      placeholder: '手がかり番号', inputMode: 'numeric',
       answers: ['102'], hints: [
         '「幽煙の間：北壁」によると、貼られていた紙からは「N」の文字が読み取れるようだ。今日一日、この文字を何度も見たような気がする。',
         '「N」は今日解いた謎の問題用紙にも書かれていたはずだ。だとすると、残りの部分は誰が剥がしたのだろうか。',
@@ -539,7 +539,7 @@ export const scenario = {
       prompt: '「秘密裏に隠し部屋が造られていた」という事実から、非常に疑わしくなる人物がいる。それは誰か？証拠となる手がかり番号と共に答えよ',
       fields: [
         { label: '人物名', placeholder: '人物を選択…', answerChoices: personChoices, answers: ['マヤ'] },
-        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['002'] },
+        { label: '手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: ['002'] },
       ],
       hints: [
         'この隠し部屋のトリックには、事前に相当大がかりな準備が必要だろう。容疑者の中に、このような準備ができる人物はいなかっただろうか。',
@@ -564,7 +564,7 @@ export const scenario = {
             { id: '17:30', label: '17:30' },
           ],
         },
-        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['203'] },
+        { label: '手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: ['203'] },
       ],
       hints: [
         'ミサメが入った時間を覚えている係員やスタッフはいなかったはずだ。ほかに、ミサメがお化け屋敷に入った時間を推測できる情報があるはずだ。',
@@ -612,7 +612,7 @@ export const scenario = {
       prompt: '犯人は誰か？そして「血まみれの軍手」がなぜ犯人特定の決め手となるのか、関連する手がかり番号(「隠し部屋について」以外)を示して答えよ。',
       fields: [
         { label: '人物名', placeholder: '人物を選択…', answerChoices: personChoices, answers: ['ハナ'] },
-        { label: '手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['003'] },
+        { label: '手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: ['003'] },
       ],
       hints: [
         '発見された軍手をよく見てみよう。何か特徴的な部分はないだろうか。',
@@ -626,13 +626,14 @@ export const scenario = {
     },
     {
       id: 'Q7', title: 'Q7', chapter: '第二章', type: 'fields',
-      prompt: '矛盾があるブロックを全て指摘せよ',
+      answerFieldsLayout: 'pairs',
+      prompt: '矛盾があるブロックを全て指摘せよ\n該当しない記号の回答欄は空欄にせよ',
       // 記号は行ごとに固定。矛盾するブロックの手がかり番号だけを埋め、矛盾しない行は空欄のまま送る。
       fields: [
-        { symbol: 'A', label: 'ブロックAの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['203'] },
-        { symbol: 'B', label: 'ブロックBの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: [''], optional: true },
-        { symbol: 'C', label: 'ブロックCの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: [''], optional: true },
-        { symbol: 'D', label: 'ブロックDの手がかり番号', placeholder: '3桁の手がかり番号を入力…', inputMode: 'numeric', answers: ['302'] },
+        { symbol: 'A', label: 'ブロックAの手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: ['203'] },
+        { symbol: 'B', label: 'ブロックBの手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: [''], optional: true },
+        { symbol: 'C', label: 'ブロックCの手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: [''], optional: true },
+        { symbol: 'D', label: 'ブロックDの手がかり番号', placeholder: '手がかり番号', inputMode: 'numeric', answers: ['302'] },
       ],
       hints: [
         'ハナのプロフィールや評判をおさらいしてみよう。何か特徴的なものはないだろうか。',
