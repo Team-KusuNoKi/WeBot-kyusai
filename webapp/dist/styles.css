@@ -1567,9 +1567,9 @@ button.epilogue-screen:focus-visible, button.epilogue-screen:active { background
    動きの追加（2026.11）— 公式サイトと揃える細かい演出
    ========================================================= */
 
-/* 画像は読み込みが終わってからふわっと出す（app.js が .is-loaded を付ける） */
-.js img { opacity: 0; transition: opacity .7s ease; }
-.js img.is-loaded { opacity: 1; }
+/* 未読込の画像だけ短く隠す。キャッシュ済みは .is-pending を付けないので、その場で出る。 */
+.js img.is-pending:not(.is-loaded) { opacity: 0; }
+.js img.is-pending.is-loaded { opacity: 1; transition: opacity .18s ease; }
 
 /* ページ遷移: ポータル⇄アプリもクロスフェードで繋ぐ */
 @media (prefers-reduced-motion: no-preference) {

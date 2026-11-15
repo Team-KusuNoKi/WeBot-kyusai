@@ -258,10 +258,19 @@ const preloadedSceneSources = new Set();
 
 function preloadSceneImages(scene = []) {
   if (typeof Image === 'undefined' || !scene.length) return;
-  const sources = new Set(scene.flatMap(line => (line.speaker || '').split('＆').map(name => scenario.portraits[name])).filter(Boolean));
-  const preview = current().travelGuide?.steps[0]?.preview;
-  if (preview) sources.add(preview);
-  for (const line of scene) if (line.background) sources.add(line.background);
+  const sources = new Set();
+  for (const line of scene) {
+    for (const name of (line.speaker || '').split('＆')) {
+      const portrait = scenario.portraits?.[name];
+      if (portrait) sources.add(portrait);
+    }
+    if (line.appear && scenario.portraits?.[line.appear]) sources.add(scenario.portraits[line.appear]);
+    if (line.background) sources.add(line.background);
+  }
+  for (const step of current().travelGuide?.steps ?? []) {
+    if (step.preview) sources.add(step.preview);
+    if (step.image) sources.add(step.image);
+  }
   for (const src of sources) {
     if (preloadedSceneSources.has(src)) continue;
     preloadedSceneSources.add(src);
@@ -831,7 +840,7 @@ function showInvestigation() {
 }
 
 function answeredInvestigationCount(solved) {
-  return scenario.investigation.entries.filter(id => solved.includes(id)).length;
+  return scenario.investigation.entries.filter(id => investigationEntryStatus(id, solved) === 2).length;
 }
 
 function investigationEntryStatus(id, solved) {
@@ -893,7 +902,8 @@ function investigationMarkup(peelingConclusions = []) {
     const answered = state.solved.includes(p.id);
     const solved = investigationEntryStatus(p.id, state.solved) === 2;
     const continuation = answered && !solved ? '<span class="investigation-status">続きの謎あり</span>' : '';
-    return `<button class="investigation-question" data-solved="${solved}" data-answered="${answered}" data-action="investigation-open" data-id="${esc(p.id)}">${questionSymbolMarkup(p)}<span class="investigation-stamp">${answered ? '回答済み' : '未回答'}</span>${continuation}<strong><span class="investigation-question-text">${esc(p.listPrompt)}</span></strong></button>`;
+    const stamp = solved ? '回答済み' : answered ? '' : '未回答';
+    return `<button class="investigation-question" data-solved="${solved}" data-answered="${solved}" data-action="investigation-open" data-id="${esc(p.id)}">${questionSymbolMarkup(p)}${stamp ? `<span class="investigation-stamp">${stamp}</span>` : ''}${continuation}<strong><span class="investigation-question-text">${esc(p.listPrompt)}</span></strong></button>`;
   });
   const answeredCount = answeredInvestigationCount(state.solved);
   const progress = `<span class="investigation-progress" role="meter" aria-label="Q3の回答状況" aria-valuemin="0" aria-valuemax="${entries.length}" aria-valuenow="${answeredCount}" aria-valuetext="${entries.length}問中${answeredCount}問回答済み" style="--answered-angle: ${360 * answeredCount / entries.length}deg"></span>`;
@@ -1544,7 +1554,7 @@ function travelGuideMarkup(guide, problemId) {
     <figure class="travel-guide-photo">
       <div class="travel-guide-step"><span>${index + 1}</span>${esc(step.title)}</div>
       <button type="button" class="travel-guide-image" data-action="travel-image" data-id="${esc(problemId)}" data-index="${index}" aria-label="${esc(guide.destination)}の案内写真${index + 1}を拡大表示" aria-haspopup="dialog">
-        <img src="${esc(step.preview)}" alt="${esc(step.imageAlt)}" loading="${index === 0 ? 'eager' : 'lazy'}">${placeholder}
+        <img src="${esc(step.preview)}" alt="${esc(step.imageAlt)}" decoding="async">${placeholder}
         <span class="travel-guide-zoom" aria-hidden="true">タップして拡大</span>
       </button>
       <figcaption class="travel-guide-copy">${esc(step.directions)}</figcaption>
@@ -2388,7 +2398,7 @@ function clueCardMarkup(card) {
   const selectedLabel = order ? `${card.title}（手がかり番号 ${card.number}）、${order}` : label;
   const check = combineSelecting && !selected ? '<span class="select-check" aria-hidden="true"></span>' : '';
   return `<button type="button" class="clue-card-tile" data-action="clue-card-open" data-id="${esc(card.id)}"${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(combineSelecting ? selectedLabel : label)}">
-    <span class="clue-card-thumb">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span>
+    <span class="clue-card-thumb">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="" decoding="async"></span>
   </button>`;
 }
 
@@ -2961,7 +2971,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
       const selected = combineSelection.includes(card.id);
       const label = selected ? `${card.title}を入れ替える` : `${card.title}（手がかり番号 ${card.number}）`;
       const order = combineOrderMark(card.id);
-      return `<div role="listitem"><button type="button" class="clue-card-tile" data-action="combine-toggle" data-id="${esc(card.id)}" aria-pressed="${selected}" aria-label="${esc(order ? `${label}、${order}` : label)}"><span class="clue-card-thumb">${combineOrderBadge(card.id)}${selected ? '' : '<span class="select-check" aria-hidden="true"></span>'}<img src="${esc(card.image)}" alt="" loading="lazy" decoding="async"></span></button></div>`;
+      return `<div role="listitem"><button type="button" class="clue-card-tile" data-action="combine-toggle" data-id="${esc(card.id)}" aria-pressed="${selected}" aria-label="${esc(order ? `${label}、${order}` : label)}"><span class="clue-card-thumb">${combineOrderBadge(card.id)}${selected ? '' : '<span class="select-check" aria-hidden="true"></span>'}<img src="${esc(card.image)}" alt="" decoding="async"></span></button></div>`;
     }).join('')}</div><button type="button" class="answer-fab" data-action="combine-confirm" ${remaining === 0 ? '' : 'disabled'}>${icon('edit')}<span>${remaining === 0 ? '次へ' : `あと${remaining}枚`}</span></button></div>`;
   } else if (kind === 'clues') {
     title = '手がかり';
@@ -3242,13 +3252,24 @@ function answer(value) {
   // スタートからは、進行を消さずにN1を再回答できる。
   const submissionState = startView || repeatAnswer ? { ...state, solved: state.solved.filter(id => id !== problem.id) } : state;
   const result = submitAnswer(scenario, submissionState, value);
+  let replayStart = start;
   if (result.status === 'correct') {
     const milestone = !wasSolved && (problem.completionScreen || (!investigationWasComplete && investigationComplete(scenario, result.state)));
     haptics.trigger(milestone ? 'complete' : 'success');
   }
   else if (result.status === 'progress') haptics.trigger('success');
   else if (['incorrect', 'empty'].includes(result.status)) haptics.trigger('error');
-  if (startView || repeatAnswer) result.state = { ...result.state, solved: [...new Set([...state.solved, ...result.state.solved])] };
+  if (startView || repeatAnswer) {
+    let messages = result.state.messages;
+    // 正解の再回答は、同じ問題の会話を積み増さず新しい一回分に置き換える。
+    if (result.status === 'correct' && messages.length > start) {
+      const added = messages.slice(start);
+      const kept = state.messages.filter(message => message.problemId !== problem.id);
+      messages = [...kept, ...added];
+      replayStart = kept.length;
+    }
+    result.state = { ...result.state, solved: [...new Set([...state.solved, ...result.state.solved])], messages };
+  }
   state = result.state;
   // フォームが閉じ・差し替えになる送信ではフォーカスを外してキーボードを確実に下げる。
   // フォーカス済み入力の削除だけではキーボードが閉じず、可視領域の高さが戻らない端末があるため。
@@ -3260,7 +3281,7 @@ function answer(value) {
   if (result.status === 'incorrect') {
     if (result.response) {
       setAnswerError(false);
-      playConversation(start);
+      playConversation(replayStart);
       return { status: result.status, problemId: problem.id };
     }
     const feedbackArea = document.querySelector('.composer-area .feedback');
@@ -3333,7 +3354,7 @@ function answer(value) {
     focusTarget?.focus({ preventScroll: true });
     animateQuestionAdvance(composer);
   }
-  else if (result.status === 'correct') playConversation(start, { fromCorrectAnswer: true });
+  else if (result.status === 'correct') playConversation(replayStart, { fromCorrectAnswer: true });
   else render();
   return { status: result.status, problemId: problem.id };
 }
@@ -3974,11 +3995,27 @@ if (modelContext?.registerTool) {
   window.addEventListener('pagehide', () => lifecycle.abort(), { once: true });
 }
 
-// 画像は読み込みが終わってからふわっと出す（公式サイトと同じ .is-loaded）。
+// 未読込の画像だけ短く隠す。キャッシュ済みは挿入時点で complete なので、その場で出す。
 // load/error はバブルしないがキャプチャで拾えるので、後から挿入される画像にも効く。
 (function watchImages() {
+  const settle = img => {
+    if (img?.tagName !== 'IMG' || img.classList.contains('is-loaded')) return;
+    if (img.complete) img.classList.add('is-loaded');
+    else img.classList.add('is-pending');
+  };
+  const scan = node => {
+    if (node?.nodeType !== 1) return;
+    if (node.tagName === 'IMG') settle(node);
+    node.querySelectorAll?.('img').forEach(settle);
+  };
   const mark = event => { if (event.target?.tagName === 'IMG') event.target.classList.add('is-loaded'); };
   document.addEventListener('load', mark, true);
   document.addEventListener('error', mark, true);
-  for (const img of document.images ?? []) if (img.complete) img.classList.add('is-loaded');
+  if (typeof MutationObserver === 'function') {
+    const observer = new MutationObserver(records => {
+      for (const record of records) for (const node of record.addedNodes) scan(node);
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+  for (const img of document.images ?? []) settle(img);
 })();
