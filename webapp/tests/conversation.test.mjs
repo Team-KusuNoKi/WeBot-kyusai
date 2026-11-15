@@ -176,7 +176,7 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
     getElementById(id) { return id.startsWith('symbol-slot-') ? symbolSlots[Number(id.at(-1))] : null; },
       addEventListener(name, callback) { const previous = listeners[name]; listeners[name] = previous ? event => { previous(event); callback(event); } : callback; },
     },
-    window: { location: {href:entryUrl}, localStorage: storage, addEventListener(name, callback) { windowListeners[name] = callback; }, matchMedia() { return { matches: reducedMotion }; } },
+    window: { location: {href:entryUrl}, localStorage: storage, setTimeout: gestureTimer.schedule, clearTimeout: gestureTimer.cancel, addEventListener(name, callback) { windowListeners[name] = callback; }, matchMedia() { return { matches: reducedMotion }; } },
     localStorage: storage,
     requestAnimationFrame(callback) { callback(); },
     getComputedStyle: () => ({ opacity: '1', transform: 'none' }),
@@ -204,7 +204,10 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
 function finishScene(h) {
   if (h.timer.pending.size) h.timer.drain();
   const limit = h.evaluate('state.messages.length + 1');
-  for (let i = 0; i < limit && h.evaluate('isPlaying'); i++) h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+  for (let i = 0; i < limit && h.evaluate('isPlaying'); i++) {
+    h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+    h.gestureTimer.drain();
+  }
   assert.equal(h.evaluate('isPlaying'), false);
 }
 
@@ -1164,6 +1167,7 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.ok(h.panel.innerHTML.includes('book-mei.webp'));
   assert.ok(h.panel.innerHTML.includes('付属図書館前で販売中'));
   assert.ok(h.panel.innerHTML.includes('アンケートはこちら'));
+  assert.ok(h.panel.innerHTML.includes('（所要1分）'));
   await h.evaluate('closePanel()');
   assert.equal(h.panel.open, false);
   const saved = JSON.parse(h.snapshot());
@@ -3830,6 +3834,96 @@ test('旧保存の番号発行リクエスト中にクリアした更新も発�
   assert.deepEqual(h.networkCalls.map(call=>call.action),['create','save']);
   assert.ok(h.networkCalls[1].state.minigames.includes('hex-cube'));assert.equal(h.evaluate('playSaves.getRecord().pending'),false);
   assert.ok(h.panel.innerHTML.includes('新しい手がかり'));
+});
+
+test('Q9神ハカエッタはエピローグの次の吹き出しから先へ進める', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate('window.setTimeout = setTimeout; window.clearTimeout = clearTimeout');
+  h.evaluate("selectProblem('Q9')");
+  assert.match(h.app.innerHTML, /class="clue-button"/);
+  h.evaluate("answer('神ハカエッタ')");
+  assert.doesNotMatch(h.app.innerHTML, /clue-button|data-action="clues"/);
+  const line = () => {
+    const html = h.app.innerHTML;
+    return html.match(/class="epilogue-line">([^<]*)/)?.[1]
+      ?? html.match(/class="novel-line">([^<]*)/)?.[1]
+      ?? '';
+  };
+  for (let i = 0; i < 8 && !line().includes('先輩、絶対に'); i++) {
+    h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+    h.gestureTimer.drain();
+  }
+  assert.match(line(), /先輩、絶対に/);
+  assert.equal(h.evaluate('isPlaying'), true);
+  assert.match(h.app.innerHTML, /data-action="novel-next"/);
+  h.click('novel-next');
+  assert.match(line(), /そうはいうが/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).speaker'), 'タツ');
+  for (let i = 0; i < 16 && !line().includes('何してるんですか'); i++) {
+    h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+    h.gestureTimer.drain();
+  }
+  assert.match(line(), /何してるんですか/);
+  assert.doesNotMatch(h.app.innerHTML, /clue-button|data-action="clues"/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).speaker'), '');
+  assert.equal(h.evaluate('epiloguePhase'), null);
+  assert.doesNotMatch(h.app.innerHTML, /novel-speaker|asahi-cutout/);
+  h.click('novel-next');
+  h.gestureTimer.drain();
+  assert.match(line(), /聞き慣れた/);
+  assert.doesNotMatch(h.app.innerHTML, /scene-appear|epilogue-appear|asahi-cutout/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).speaker'), '');
+  h.click('epilogue-next');
+  assert.match(line(), /手伝ってくださいよ/);
+  assert.match(h.app.innerHTML, /class="scene-appear"/);
+  assert.match(h.app.innerHTML, /asahi-cutout\.webp/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).speaker'), 'アサヒ');
+});
+
+test('Q9の会話が最後まで進むと冥の終幕を開く', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate('window.setTimeout = setTimeout; window.clearTimeout = clearTimeout');
+  h.evaluate("selectProblem('Q9'); answer('神ハカエッタ')");
+  for (let i = 0; i < 60 && h.evaluate('isPlaying'); i++) {
+    h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+    h.gestureTimer.drain();
+  }
+  assert.equal(h.evaluate('isPlaying'), false);
+  assert.equal(h.evaluate('meiEndView'), true);
+  assert.ok(h.app.innerHTML.includes('class="yoi-completion mei-completion"'));
+  assert.ok(h.app.innerHTML.includes('id="mei-completion-title"'));
+  assert.ok(h.app.innerHTML.includes('>冥</h1>'));
+  assert.ok(h.app.innerHTML.includes('「11月の救祭 冥」はここで終了です。'));
+  assert.ok(h.app.innerHTML.includes('今後の参考にするためアンケートにご協力ください。（1分）'));
+  assert.ok(h.app.innerHTML.includes('アンケート回答後はクリアポストを利用できません。先にご利用ください。'));
+  assert.ok(h.app.innerHTML.indexOf('今後の参考にするためアンケートにご協力ください。（1分）') < h.app.innerHTML.indexOf('アンケート回答後はクリアポストを利用できません。先にご利用ください。'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line"'));
+  assert.ok(h.app.innerHTML.includes('https://x.com/intent/post?text='));
+  assert.ok(h.app.innerHTML.includes('>クリアをポスト</span>'));
+  assert.ok(h.app.innerHTML.indexOf('ありがとうございました。') < h.app.innerHTML.indexOf('class="clear-post-line"'));
+  assert.ok(h.app.innerHTML.indexOf('class="clear-post-line"') < h.app.innerHTML.indexOf('今後の参考にするためアンケートにご協力ください。（1分）'));
+  assert.ok(h.app.innerHTML.indexOf('今後の参考にするためアンケートにご協力ください。（1分）') < h.app.innerHTML.indexOf('data-action="tour-survey"'));
+  assert.ok(h.app.innerHTML.includes('class="primary-button" data-action="tour-survey"'));
+  assert.ok(!h.app.innerHTML.includes('class="x-post-button"'));
+  assert.ok(h.navigation.innerHTML.includes('冥 終幕'));
+  assert.ok(!h.app.innerHTML.includes('class="clue-button"'));
+  h.click('select', 'Q8');
+  assert.equal(h.evaluate('meiEndView'), false);
+  h.click('mei-end');
+  assert.equal(h.evaluate('meiEndView'), true);
+  assert.equal(h.evaluate('state.selected'), 'Q9');
+  h.click('tour-survey');
+  assert.equal(h.panel.dataset.kind, 'survey');
+  assert.ok(h.panel.innerHTML.includes('id="survey-form"'));
+  assert.ok(!h.panel.innerHTML.includes('最初に辿り着いた結末はどれですか？'));
+  assert.ok(!h.panel.innerHTML.includes('name="ending"'));
+  assert.equal(h.evaluate('surveyEndingAnswer()'), '神ハカエッタ');
+  assert.ok(h.panel.innerHTML.includes('id="survey-mei" hidden'));
+  assert.ok(!h.panel.innerHTML.includes('value="宵と冥" required checked'));
+  h.click('select', 'Q8');
+  assert.equal(h.evaluate('surveyEndingAnswer()'), '');
 });
 
 

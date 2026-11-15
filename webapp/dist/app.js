@@ -69,6 +69,7 @@ let menuExpanded = false;
 let problemMenuExpanded = false;
 let startView = true;
 let yoiEndView = false;
+let meiEndView = false;
 let meiPlayChoiceVisible = false;
 let pageTurnRevealed = false;
 let showVenueDirections = false;
@@ -85,6 +86,9 @@ let epiloguePhase = null;
 let epilogueToken = 0;
 let epilogueTimer = 0;
 let epilogueFading = false;
+let epilogueBlackoutReady = false;
+let epilogueBlackoutActive = false;
+let epilogueEnteredFromBlack = false;
 let followChat = true;
 let unreadConversationCount = 0;
 let chatPointerDown = false;
@@ -212,14 +216,24 @@ const conversationPlayer = createConversationPlayer({
   onComplete: finishConversation,
 });
 
+function meiEndingReady() {
+  const problem = current();
+  const branch = problem?.answerBranches?.find(item => item.id === state.branches?.[problem.id]);
+  if (problem?.id !== 'Q9' || !branch) return false;
+  const shown = displayedMessages.filter(message => message.problemId === 'Q9' && message.kind === 'dialogue');
+  return shown.length >= branch.dialogue.length && shown.at(-1)?.text === branch.dialogue.at(-1).text;
+}
+
 function finishConversation({ scroll = true } = {}) {
   isPlaying = false;
   epiloguePhase = null;
   cancelEpilogueMotion();
+  if (meiEndingReady()) meiEndView = true;
   save();
   render({ scroll });
   const pageTurnOpened = openFinishedPageTurn();
-  if (yoiEndView) document.querySelector('#yoi-completion-title')?.focus({ preventScroll: true });
+  if (meiEndView) document.querySelector('#mei-completion-title')?.focus({ preventScroll: true });
+  else if (yoiEndView) document.querySelector('#yoi-completion-title')?.focus({ preventScroll: true });
   revealItems('.chat-area .instruction-card, .travel-guide-photo, .branch-options button');
   for (const selector of ['.answer-fab', '.chapter-end', '.yoi-completion']) animateSurface(document.querySelector(selector), true, 8);
   return pageTurnOpened;
@@ -247,6 +261,7 @@ function preloadSceneImages(scene = []) {
   const sources = new Set(scene.flatMap(line => (line.speaker || '').split('＆').map(name => scenario.portraits[name])).filter(Boolean));
   const preview = current().travelGuide?.steps[0]?.preview;
   if (preview) sources.add(preview);
+  for (const line of scene) if (line.background) sources.add(line.background);
   for (const src of sources) {
     if (preloadedSceneSources.has(src)) continue;
     preloadedSceneSources.add(src);
@@ -259,6 +274,9 @@ function preloadSceneImages(scene = []) {
 function cancelEpilogueMotion() {
   epilogueToken += 1;
   epilogueFading = false;
+  epilogueBlackoutReady = false;
+  epilogueBlackoutActive = false;
+  epilogueEnteredFromBlack = false;
   clearTimeout(epilogueTimer);
 }
 
@@ -269,12 +287,56 @@ function resumeEpiloguePhase(displayed, remaining) {
   return null;
 }
 
+function sakuraFallMarkup() {
+  const petals = [
+    [4, 18, 15, -3, 34, .9], [13, 13, 18, -11, -26, .78], [22, 24, 16, -7, 30, .62],
+    [31, 16, 13, -9, -36, .92], [40, 12, 17, -2, 18, .84], [48, 22, 20, -14, -22, .58],
+    [57, 15, 14, -6, 40, .86], [66, 26, 19, -4, -32, .55], [73, 14, 12, -8, 24, .9],
+    [81, 20, 17, -12, -28, .7], [89, 16, 15, -1, 32, .82], [17, 11, 21, -16, 16, .94],
+    [53, 19, 16, -5, -38, .74], [95, 13, 14, -10, -18, .86], [36, 28, 22, -18, 20, .5],
+  ];
+  const marks = petals.map(([x, size, duration, delay, drift, opacity]) =>
+    `<span class="sakura-petal" style="--x:${x}%;--s:${size}px;--d:${duration}s;--delay:${delay}s;--drift:${drift}px;--o:${opacity}"></span>`).join('');
+  return `<div class="sakura-fall" aria-hidden="true">${marks}</div>`;
+}
+
+function syncPlayChrome() {
+  const header = document.querySelector('.play-header');
+  const workspace = document.querySelector('.workspace');
+  const height = header?.offsetHeight;
+  if (workspace?.style && Number.isFinite(height)) workspace.style.setProperty('--play-header-height', `${height}px`);
+}
+
+// Covers sit inside the workspace, under the header. The test harness has no child list and keeps the cover beside the workspace.
+function mountWorkspaceCover(html) {
+  const workspace = document.querySelector('.workspace');
+  if (workspace?.children) workspace.insertAdjacentHTML('beforeend', html);
+  else workspace?.insertAdjacentHTML('afterend', html);
+}
+
+function lockPlayContent(locked) {
+  const workspace = document.querySelector('.workspace');
+  if (workspace) workspace.inert = false;
+  if (!workspace?.children) return;
+  for (const child of workspace.children) {
+    if (child.classList?.contains('play-header')) continue;
+    if (locked) child.setAttribute?.('inert', '');
+    else child.removeAttribute?.('inert');
+  }
+}
+
 function epilogueMarkup() {
   if (epiloguePhase === 'title') {
     return `<button type="button" class="epilogue-screen is-title" data-action="epilogue-next" aria-label="Epilogue"><span class="epilogue-script" aria-hidden="true">Epilogue</span></button>`;
   }
   const line = displayedMessages.findLast(message => message.epilogue);
-  return `<button type="button" class="epilogue-screen is-line" data-action="epilogue-next"><span class="epilogue-line">${esc(line?.text ?? '')}</span><span class="epilogue-cue" aria-hidden="true">▷</span><span class="sr-only">読み進める</span></button>`;
+  const scene = line?.background ? ' has-scene' : '';
+  const appear = line?.appear ? ' has-appear' : '';
+  const image = line?.background ? ` style="background-image:url('${esc(line.background)}')"` : '';
+  const veil = epilogueEnteredFromBlack && line?.background ? '<span class="epilogue-veil" aria-hidden="true"></span>' : '';
+  const portrait = scenario.portraits?.[line?.appear];
+  const figure = portrait ? `<span class="epilogue-appear" aria-hidden="true"><img src="${esc(portrait)}" alt=""></span>` : '';
+  return `<button type="button" class="epilogue-screen is-line${scene}${appear}" data-action="epilogue-next"${image}>${figure}<span class="epilogue-line">${esc(line?.text ?? '')}</span><span class="epilogue-cue" aria-hidden="true">▷</span>${veil}<span class="sr-only">読み進める</span></button>`;
 }
 
 function fitEpilogueTitle(script) {
@@ -296,6 +358,7 @@ function fadeEpilogueTitle(token) {
     if (token !== epilogueToken || epiloguePhase !== 'title') return;
     epilogueTimer = window.setTimeout(() => {
       if (token !== epilogueToken || epiloguePhase !== 'title') return;
+      epilogueFading = false;
       advanceNovel();
     }, reducedMotion() ? 0 : 180);
   };
@@ -341,19 +404,99 @@ function beginEpilogueTitle() {
 
 function revealEpilogueLine() {
   const line = document.querySelector('.epilogue-line');
-  if (!line || reducedMotion()) return;
+  const veil = document.querySelector('.epilogue-veil');
+  if (reducedMotion()) {
+    if (veil) veil.style.opacity = '0';
+    return;
+  }
+  veil?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 720, easing: 'ease', fill: 'forwards' });
+  if (!line) return;
   line.animate([
     { opacity: 0, transform: 'translateY(10px)' },
     { opacity: 1, transform: 'translateY(0)' },
   ], { duration: 720, easing: MOTION.ease, fill: 'both' });
 }
 
+function tremorScene() {
+  if (reducedMotion()) return;
+  const scene = document.querySelector('.workspace');
+  scene?.getAnimations?.().find(animation => animation.id === 'scene-tremor')?.cancel();
+  scene?.animate?.([
+    { transform: 'translate3d(0, 0, 0) rotate(0deg)' },
+    { transform: 'translate3d(3px, 1px, 0) rotate(.1deg)', offset: .5 },
+    { transform: 'translate3d(0, 0, 0) rotate(0deg)' },
+  ], { id: 'scene-tremor', duration: 760, easing: 'ease-in-out' });
+}
+
+function releaseSceneBlackout() {
+  let cover = document.querySelector('.scene-blackout');
+  if (!cover) {
+    syncPlayChrome();
+    mountWorkspaceCover('<button type="button" class="scene-blackout is-held" data-action="scene-blackout" aria-label="暗転"></button>');
+    cover = document.querySelector('.scene-blackout');
+  }
+  if (!cover) return;
+  if (reducedMotion() || !cover.animate) { cover.remove(); return; }
+  cover.classList.add('is-held');
+  cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 420, easing: 'ease', fill: 'forwards' })
+    .finished.then(() => cover.remove(), () => cover.remove());
+}
+
+function beginSceneBlackout() {
+  const token = ++epilogueToken;
+  epilogueFading = true;
+  epilogueBlackoutActive = true;
+  clearTimeout(epilogueTimer);
+  const proceed = () => {
+    if (token !== epilogueToken) return;
+    epilogueFading = false;
+    epilogueBlackoutActive = false;
+    epilogueBlackoutReady = true;
+    advanceNovel();
+  };
+  const hold = () => {
+    if (token !== epilogueToken) return;
+    epilogueTimer = window.setTimeout(proceed, reducedMotion() ? 0 : 520);
+  };
+  document.querySelector('.scene-blackout')?.remove();
+  syncPlayChrome();
+  mountWorkspaceCover('<button type="button" class="scene-blackout" data-action="scene-blackout" aria-label="暗転"></button>');
+  const cover = document.querySelector('.scene-blackout');
+  if (!cover?.animate || reducedMotion()) { hold(); return; }
+  cover.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: 'ease', fill: 'forwards' }).finished.then(hold, hold);
+}
+
+function beginEpilogueBlackout() {
+  const token = ++epilogueToken;
+  epilogueFading = true;
+  epilogueBlackoutActive = true;
+  clearTimeout(epilogueTimer);
+  const proceed = () => {
+    if (token !== epilogueToken || epiloguePhase !== 'line') return;
+    epilogueFading = false;
+    epilogueBlackoutActive = false;
+    epilogueBlackoutReady = true;
+    advanceNovel();
+  };
+  const hold = () => {
+    if (token !== epilogueToken) return;
+    epilogueTimer = window.setTimeout(proceed, reducedMotion() ? 0 : 640);
+  };
+  const line = document.querySelector('.epilogue-line');
+  const cue = document.querySelector('.epilogue-cue');
+  if (!line || reducedMotion()) { hold(); return; }
+  const fade = [{ opacity: 1 }, { opacity: 0 }];
+  const options = { duration: 480, easing: 'ease', fill: 'forwards' };
+  const lineFade = line.animate(fade, options);
+  cue?.animate(fade, options);
+  lineFade.finished.then(hold, hold);
+}
+
 function mountEpilogue(workspace) {
   document.querySelector('.epilogue-screen')?.remove();
   if (!epiloguePhase || historyView || gateVisible) return;
-  const markup = epilogueMarkup();
-  if (document.body?.insertAdjacentHTML) document.body.insertAdjacentHTML('beforeend', markup);
-  else document.querySelector('.workspace')?.insertAdjacentHTML('afterend', markup);
+  syncPlayChrome();
+  mountWorkspaceCover(epilogueMarkup());
   if (!panel.open) document.querySelector('[data-action="epilogue-next"]')?.focus({ preventScroll: true });
   if (epiloguePhase === 'title') beginEpilogueTitle();
   else revealEpilogueLine();
@@ -362,7 +505,7 @@ function mountEpilogue(workspace) {
 function playConversation(start, { fromCorrectAnswer = false } = {}) {
   answerOrigin = null;
   startView = false;
-  yoiEndView = meiPlayChoiceVisible = false;
+  yoiEndView = meiEndView = meiPlayChoiceVisible = false;
   resetChatFollow();
   sceneStart = start;
   displayedMessages = [];
@@ -424,10 +567,27 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
   }
   const previous = displayedMessages.at(-1);
   const line = remaining[0];
-  if (epiloguePhase && line?.epilogue) {
+  if (line?.blackout && !epilogueBlackoutReady) {
+    beginSceneBlackout();
+    return;
+  }
+  const openedFromBlackout = Boolean(line?.blackout && epilogueBlackoutReady);
+  if (openedFromBlackout) epilogueBlackoutReady = false;
+  if (line?.epilogue) {
+    if (epiloguePhase && line.background && !previous?.background && !line.blackout) {
+      if (!epilogueBlackoutReady) {
+        beginEpilogueBlackout();
+        return;
+      }
+      epilogueBlackoutReady = false;
+      epilogueEnteredFromBlack = true;
+    }
     displayedMessages.push(line);
     epiloguePhase = 'line';
     render();
+    epilogueEnteredFromBlack = false;
+    if (openedFromBlackout) releaseSceneBlackout();
+    if (line.tremor) tremorScene();
     document.querySelector('.chat-area').scrollTop = 0;
     document.querySelector('[data-action="epilogue-next"]')?.focus({ preventScroll: true });
     return;
@@ -435,6 +595,14 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
   if (epiloguePhase) {
     epiloguePhase = null;
     cancelEpilogueMotion();
+    displayedMessages.push(line);
+    render();
+    if (openedFromBlackout) releaseSceneBlackout();
+    revealNovelContent(document.querySelector('.novel-line'));
+    if (line.tremor) tremorScene();
+    document.querySelector('.chat-area').scrollTop = 0;
+    if (!panel.open) document.querySelector('[data-action="novel-next"]')?.focus({ preventScroll: true });
+    return;
   }
   displayedMessages.push(line);
   const bubble = previous && document.querySelector('[data-action="novel-next"]');
@@ -447,6 +615,7 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
     if (historyView) document.querySelector('#history-heading')?.focus({ preventScroll: true });
     else if (!panel.open) document.querySelector('[data-action="novel-next"]')?.focus({ preventScroll: true });
   }
+  if (line.tremor) tremorScene();
   document.querySelector('.chat-area').scrollTop = 0;
 }
 
@@ -488,6 +657,7 @@ function revealNovelContent(element) {
 }
 
 function updateNovelBubble(bubble, line) {
+  if (!line.appear) document.querySelector('.scene-appear')?.remove();
   const stage = bubble.parentElement;
   const outgoings = [...stage.querySelectorAll('.novel-portrait:not(.portrait-leaving)')];
   const speaker = line.speaker || '';
@@ -540,7 +710,7 @@ function novelSceneMarkup(line) {
     : (current().completionScreen === 'booklet' || current().deferPageTurn) && showsGuideStop(current()) ? 'travel-next' : '';
   const tag = action ? 'button' : 'article';
   return `<div class="novel-stage${line.speaker === 'タツ' ? ' novel-right' : ''}">
-    ${novelPortraitMarkup(line.speaker)}
+    ${line.appear ? '' : novelPortraitMarkup(line.speaker)}
     <${tag} class="novel-bubble"${action ? ` type="button" data-action="${action}" aria-live="polite" aria-atomic="true"` : ''}>${novelBubbleContent(line, Boolean(action))}</${tag}>
   </div>`;
 }
@@ -614,7 +784,7 @@ function showInvestigation() {
   const previousSolved = investigationSnapshot;
   rememberAnswerDraft();
   conversationPlayer.stop(); isPlaying = false;
-  startView = yoiEndView = repeatAnswer = composerExpanded = menuExpanded = problemMenuExpanded = meiPlayChoiceVisible = false;
+  startView = yoiEndView = meiEndView = repeatAnswer = composerExpanded = menuExpanded = problemMenuExpanded = meiPlayChoiceVisible = false;
   investigationView = true;
   state = { ...state, selected: scenario.investigation.id };
   displayedMessages = [];
@@ -1163,7 +1333,7 @@ function closePanel() {
 }
 
 function capturePlayView() {
-  return { startView, yoiEndView, showVenueDirections, investigationView, ...(investigationClosing ? { investigationClosing: true } : {}), investigationScrollTop, investigationReturnId,
+  return { startView, yoiEndView, meiEndView, showVenueDirections, investigationView, ...(investigationClosing ? { investigationClosing: true } : {}), investigationScrollTop, investigationReturnId,
     ...(scenario.investigation.entries.some(id => investigationEntryStatus(id, state.solved) === 2) ? { seenConclusions: [...seenConclusions] } : {}),
     repeatAnswer, composerExpanded, ...(answerOrigin ? { answerOrigin: { ...answerOrigin } } : {}), sceneStart,
     displayedCount: displayedMessages.length, isPlaying,
@@ -1246,7 +1416,7 @@ function enterPlay(record) {
     ? { investigationView: true, answerDrafts: record.view?.answerDrafts }
     : record.view;
   const view = restorePlayView(scenario, state, savedView, record.state.scenarioRevision ?? 0, record.state);
-  ({ startView, yoiEndView, showVenueDirections, investigationView, investigationClosing = false, investigationScrollTop, investigationReturnId,
+  ({ startView, yoiEndView, meiEndView = false, showVenueDirections, investigationView, investigationClosing = false, investigationScrollTop, investigationReturnId,
     repeatAnswer, composerExpanded, answerOrigin = null, sceneStart, displayedMessages, isPlaying, puzzleImageIndex,
     selectedPuzzleAnswer, selectedSymbols, answerDrafts } = view);
   // Older saves already on the board have seen its completed entries.
@@ -1600,8 +1770,8 @@ function answerInputsMarkup(p) {
 }
 
 function problemNavigationMarkup() {
-  const label = yoiEndView ? '宵 終幕' : startView ? 'スタート' : investigationView ? scenario.investigation.id : problemLabel(current());
-  return `<button class="problem-toggle" data-action="toggle-problems" aria-label="問題番号を選択：${esc(label)}" aria-expanded="${problemMenuExpanded}" aria-controls="problem-menu"><span>問題番号 <strong>${esc(label)}</strong></span>${icon('chevron')}</button><nav id="problem-menu" class="problem-menu" aria-label="問題番号" ${problemMenuExpanded ? '' : 'hidden'}><button data-action="start" ${startView ? 'aria-current="step"' : ''}><span>スタート</span></button>${navigationProblems().map(p => `<button data-action="select" data-id="${esc(p.id)}" ${canOpenProblem(p, state) ? '' : 'disabled'} ${!startView && !yoiEndView && (p.id === state.selected || isInvestigation(state.selected) && p.id === scenario.investigation.id) ? 'aria-current="step"' : ''} aria-label="${esc(p.id)}${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? ' 解答済み' : ''}"><span>${esc(p.id)}</span>${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? icon('check') : ''}</button>${p.completionScreen === 'yoi' && (state.solved.includes(p.id) || playSaves?.getStatus().mode === 'debug') ? `<button data-action="yoi-end" ${yoiEndView ? 'aria-current="step"' : ''}><span>宵 終幕</span></button>` : ''}`).join('')}</nav>`;
+  const label = meiEndView ? '冥 終幕' : yoiEndView ? '宵 終幕' : startView ? 'スタート' : investigationView ? scenario.investigation.id : problemLabel(current());
+  return `<button class="problem-toggle" data-action="toggle-problems" aria-label="問題番号を選択：${esc(label)}" aria-expanded="${problemMenuExpanded}" aria-controls="problem-menu"><span>問題番号 <strong>${esc(label)}</strong></span>${icon('chevron')}</button><nav id="problem-menu" class="problem-menu" aria-label="問題番号" ${problemMenuExpanded ? '' : 'hidden'}><button data-action="start" ${startView ? 'aria-current="step"' : ''}><span>スタート</span></button>${navigationProblems().map(p => `<button data-action="select" data-id="${esc(p.id)}" ${canOpenProblem(p, state) ? '' : 'disabled'} ${!startView && !yoiEndView && !meiEndView && (p.id === state.selected || isInvestigation(state.selected) && p.id === scenario.investigation.id) ? 'aria-current="step"' : ''} aria-label="${esc(p.id)}${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? ' 解答済み' : ''}"><span>${esc(p.id)}</span>${(p.id === scenario.investigation.id ? investigationComplete(scenario, state) : state.solved.includes(p.id)) ? icon('check') : ''}</button>${p.completionScreen === 'yoi' && (state.solved.includes(p.id) || playSaves?.getStatus().mode === 'debug') ? `<button data-action="yoi-end" ${yoiEndView ? 'aria-current="step"' : ''}><span>宵 終幕</span></button>` : ''}${p.id === 'Q9' && (state.solved.includes(p.id) || playSaves?.getStatus().mode === 'debug') ? `<button data-action="mei-end" ${meiEndView ? 'aria-current="step"' : ''}><span>冥 終幕</span></button>` : ''}`).join('')}</nav>`;
 }
 
 function alignCurrentProblem(menu = document.querySelector('#problem-menu')) {
@@ -1757,6 +1927,21 @@ function puzzleCardMarkup(p) {
   </article>`;
 }
 
+const MEI_CLEAR_POST_TEXT = '「11月の救祭 冥」をクリアしました。\nすべての謎を解き明かしました。';
+
+function meiClearPostUrl() {
+  return `https://x.com/intent/post?text=${encodeURIComponent(MEI_CLEAR_POST_TEXT)}`;
+}
+
+function meiCompletionMarkup() {
+  return `<section class="yoi-completion mei-completion" aria-labelledby="mei-completion-title">
+    <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="mei-completion-title" tabindex="-1">冥</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 冥」はここで終了です。<br>遊んでいただきありがとうございました。</p><div class="clear-post"><a class="clear-post-line" href="${meiClearPostUrl()}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>クリアをポスト</span></a></div><p>今後の参考にするためアンケートにご協力ください。（1分）</p><p>アンケート回答後はクリアポストを利用できません。先にご利用ください。</p></div>
+    <div class="yoi-completion-actions">
+      <button type="button" class="primary-button" data-action="tour-survey"><span>アンケートに答える</span></button>
+    </div>
+  </section>`;
+}
+
 function yoiCompletionMarkup() {
   return `<section class="yoi-completion" aria-labelledby="yoi-completion-title">
     <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="yoi-completion-title" tabindex="-1">宵</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 宵」はここで終了です。<br>遊んでいただきありがとうございました。</p><p>冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、<br>お好きな時間にプレイすることが可能です。</p></div>
@@ -1771,6 +1956,13 @@ function yoiCompletionMarkup() {
     </div>
     ${storageWarning ? `<p class="feedback" role="status">${esc(storageWarning)}</p>` : ''}
   </section>`;
+}
+
+function surveyEndingAnswer() {
+  if (!meiEndView) return '';
+  const problem = scenario.problems.find(item => item.id === 'Q9');
+  const branch = problem?.answerBranches?.find(item => item.id === state.branches?.Q9);
+  return branch?.answer === '神ハカエッタ' ? '神ハカエッタ' : '';
 }
 
 function surveyFormMarkup() {
@@ -1788,7 +1980,6 @@ function surveyFormMarkup() {
     <div id="survey-mei" hidden>
       <fieldset class="survey-field">${legend('冥（推理）のボリューム', true, '1＝少ない、3＝丁度良い、5＝多い')}${scale('meiVolume', '少ない', '多い', true)}</fieldset>
       <fieldset class="survey-field">${legend('冥（推理）の難易度', true, '1＝簡単、3＝丁度良い、5＝難しい')}${scale('meiDifficulty', '簡単', '難しい', true)}</fieldset>
-      <fieldset class="survey-field">${legend('最初に辿り着いた結末はどれですか？')}${choices('ending', ['Aエンド', 'Bエンド', 'Cエンド'], true)}</fieldset>
     </div>
     <fieldset class="survey-field">${legend('ご感想やご意見をお聞かせください。', false)}<textarea name="feedback" class="survey-textarea" rows="4"></textarea></fieldset>
     <p id="survey-error" class="survey-error" role="alert" hidden></p>
@@ -1798,6 +1989,7 @@ function surveyFormMarkup() {
 
 function showChapterTransition() {
   if (reducedMotion()) return;
+  syncPlayChrome();
   const workspace = document.querySelector('.workspace');
   workspace?.insertAdjacentHTML('beforeend', '<div class="chapter-transition" role="presentation"></div>');
   const cover = document.querySelector('.chapter-transition');
@@ -1902,7 +2094,8 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const sceneDimLate = sceneDim && peelingConclusions.length > 0;
   const answerPageVisible = p.answerPresentation === 'page' && composerVisible;
   const showStartGuide = startView || (p.id === 'N1' && !isPlaying && (!solved || repeatAnswer) && !displayedMessages.length);
-  const showClues = p.chapter === '第二章' && !startView && !yoiEndView;
+  const inFinalEpilogue = Boolean(epiloguePhase) || displayedMessages.some(message => message.epilogue);
+  const showClues = p.chapter === '第二章' && !startView && !yoiEndView && !meiEndView && !inFinalEpilogue;
   const clueCount = showClues ? unlockedCards(scenario, state).length : 0;
   const showDeductionGuide = ['Q1', 'Q1.1'].includes(sceneProblem.id) && !isPlaying && !displayedMessages.length;
   const characterScene = displayedMessages.some(message => message.speaker && message.kind === 'dialogue');
@@ -1920,32 +2113,37 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const novelLine = completionPending
     ? displayedMessages.findLast(m => m.problemId === p.id && m.speaker) ?? p.dialogue.findLast(m => m.speaker)
     : lastStoryLine || lastMessage;
+  const sceneArt = meiEndView || yoiEndView ? '' : displayedMessages.findLast(message => message.background)?.background;
+  const showPetals = Boolean(displayedMessages.at(-1)?.flashback);
+  const appearPortrait = !epiloguePhase && scenario.portraits?.[displayedMessages.at(-1)?.appear];
+  const appearMarkup = appearPortrait ? `<span class="scene-appear" aria-hidden="true"><img src="${esc(appearPortrait)}" alt=""></span>` : '';
   const branchPending = solved && !isPlaying && !startView && p.branches && !state.branches[p.id];
   let workspace = document.querySelector('.workspace');
   if (!workspace) {
     app.innerHTML = '<div class="shell"><main id="main" class="workspace"></main></div>';
     workspace = document.querySelector('.workspace');
   }
-  workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}${sceneDim ? ' scene-dim' : ''}${sceneDimLate ? ' scene-dim-late' : ''}`;
-  workspace.inert = investigationClosing || Boolean(epiloguePhase);
+  workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}${sceneDim ? ' scene-dim' : ''}${sceneDimLate ? ' scene-dim-late' : ''}${sceneArt ? ' has-scene-art' : ''}`;
+  workspace.inert = false;
   workspace.innerHTML = `
+      ${sceneArt ? `<div class="scene-art" style="background-image:url('${esc(sceneArt)}')">${showPetals ? sakuraFallMarkup() : ''}${appearMarkup}</div>` : ''}
       <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button></nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
         <div class="play-toolbar">
           <div id="problem-navigation" class="problem-navigation">${problemNavigationMarkup()}</div>
           <div class="play-actions">
             ${showClues ? `<button class="clue-button" data-action="clues" aria-label="手がかり">${icon('cards')}<span>手がかり</span></button>` : ''}
             ${investigationView ? `<button class="answer-fab investigation-next" data-action="investigation-next" ${investigationComplete(scenario, state) ? '' : 'disabled'} aria-describedby="investigation-next-status">${icon('edit')}<span>次へ</span></button>`
-              : completionPending || p.type === 'pending' || isPlaying || branchPending || yoiEndView || sectionFinished ? '' : guideNext
+              : completionPending || p.type === 'pending' || isPlaying || branchPending || yoiEndView || meiEndView || sectionFinished ? '' : guideNext
               ? `<button class="answer-fab" data-action="travel-next" aria-haspopup="dialog" aria-controls="panel" ${composerVisible ? 'disabled' : ''}>${icon('edit')}<span>次へ</span></button>`
               : `<button class="answer-fab" data-action="open-composer" ${composerVisible ? 'disabled' : ''} ${opensProblemList ? '' : `aria-controls="composer-area" aria-expanded="${composerExpanded}"`}>${icon('edit')}<span>次へ</span></button>`}
           </div>
         </div>
       </header>
       ${playSaves?.getStatus().mode === 'debug' ? '' : `<div class="save-status-strip${storageWarning ? ' save-warning' : ''}"><span data-save-status>${esc(playSaves?.getStatus().message ?? '')}</span></div>`}
-      ${yoiEndView ? yoiCompletionMarkup() : ''}
+      ${meiEndView ? meiCompletionMarkup() : yoiEndView ? yoiCompletionMarkup() : ''}
       ${p.type === 'pending' ? `<section class="q4-pending"><h1>${esc(p.title)}</h1><p>${esc(p.prompt)}</p><button class="primary-button" data-action="investigation-back">問題一覧へ戻る</button></section>` : ''}
       ${inInvestigation && !investigationReturnVisible ? '<button class="investigation-back" data-action="investigation-back">問題一覧へ</button>' : ''}
-      <section class="chat-area${novel ? ' novel-area' : ''}${showStartGuide ? ' start-view' : ''}${showBoard ? ' investigation-hub' : ''}${inInvestigation ? ' investigation-detail' : ''}" aria-label="${showStartGuide ? 'WeBotの使い方' : showDeductionGuide ? '推理パートの進め方' : showBoard ? '残された違和感の一覧' : '謎解き会話'}" tabindex="0" ${boardBackground && composerVisible ? 'inert' : ''} ${yoiEndView || p.type === 'pending' || answerPageVisible ? 'hidden' : ''}>
+      <section class="chat-area${novel ? ' novel-area' : ''}${showStartGuide ? ' start-view' : ''}${showBoard ? ' investigation-hub' : ''}${inInvestigation ? ' investigation-detail' : ''}" aria-label="${showStartGuide ? 'WeBotの使い方' : showDeductionGuide ? '推理パートの進め方' : showBoard ? '残された違和感の一覧' : '謎解き会話'}" tabindex="0" ${boardBackground && composerVisible ? 'inert' : ''} ${yoiEndView || meiEndView || p.type === 'pending' || answerPageVisible ? 'hidden' : ''}>
         ${showStartGuide ? `<article class="start-guide guide-card" aria-labelledby="start-guide-heading">
           <header class="guide-card-heading"><span class="guide-card-icon" aria-hidden="true">${icon('chat')}</span><h1 id="start-guide-heading">WeBotの使い方</h1></header>
           <p>「11月の救祭」では、謎の回答提出やヒントの閲覧、各地点への誘導などに独自開発のWebBot、通称「WeBot」を使用します。本アプリでは進行状況を記録するため、時間を空けて途中からプレイすることも可能です。</p>
@@ -1987,6 +2185,8 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
         ${p.answerPresentation === 'page' && !composerVisible ? '' : composerContentMarkup(p)}
       </section>
       ${historyView ? historyScreenMarkup() : ''}`;
+  lockPlayContent(investigationClosing || Boolean(epiloguePhase));
+  syncPlayChrome();
   const previousClosing = document.querySelector('.investigation-closing:not(.is-leaving)');
   if (previousClosing && !investigationClosing && previousClosing.animate && !reducedMotion()) {
     previousClosing.classList.add('is-leaving');
@@ -1994,7 +2194,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
     previousClosing.animate([{ opacity: 1 }, { opacity: 0 }], { duration: MOTION.enter, easing: MOTION.ease, fill: 'forwards' })
       .finished.catch(() => {}).finally(() => previousClosing.remove());
   } else previousClosing?.remove();
-  if (investigationClosing) workspace.insertAdjacentHTML('afterend', investigationClosingMarkup());
+  if (investigationClosing) mountWorkspaceCover(investigationClosingMarkup());
   mountEpilogue(workspace);
   if (investigationClosing) document.querySelector('.investigation-closing button')?.focus({ preventScroll: true });
   document.querySelector('.chat-area').scrollTop = chatScrollTop;
@@ -2798,7 +2998,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     content = pageTurnCardMarkup(p.pageTurnText, { action: 'yoi-next', buttonLabel: '宵の最後まで読んだら次へ' });
   } else if (kind === 'tour-thanks') {
     title = '周遊版のアンケート';
-    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要3分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救済 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
+    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要1分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救済 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
   } else if (kind === 'survey') {
     title = 'アンケート';
     surveyStatus = 'idle';
@@ -2916,11 +3116,15 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
   }
   if (!preserveConversation || current().images !== nextProblem.images) puzzleImageIndex = 0;
   conversationPlayer.stop(); isPlaying = false;
+  if (switchingProblem) {
+    epiloguePhase = null;
+    cancelEpilogueMotion();
+  }
   problemMenuExpanded = false;
   const resetBackground = !preserveConversation || (!openOverScene && nextProblem.conversationBackground === 'empty');
   if (resetBackground) resetChatFollow();
   startView = start;
-  yoiEndView = meiPlayChoiceVisible = false;
+  yoiEndView = meiEndView = meiPlayChoiceVisible = false;
   repeatAnswer = answering && state.solved.includes(id);
   selectedPuzzleAnswer = id === 'N1' ? answerDrafts[id]?.[0] ?? '' : '';
   state = { ...state, selected: id };
@@ -3151,7 +3355,7 @@ document.addEventListener('click', event => {
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
-  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'yoi-page-turn', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues', 'chat', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-card', 'hex-save-retry', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
+  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'mei-end', 'yoi-page-turn', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues', 'chat', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-card', 'hex-save-retry', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
   if (['close', 'close-menu', 'save-entry-back'].includes(action)) haptics.trigger('dismiss');
   if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
   if (action === 'hex-save-retry') {if(!miniSaving){miniSaving=true;void confirmHexReward().finally(()=>{miniSaving=false;});}return;}
@@ -3230,6 +3434,12 @@ document.addEventListener('click', event => {
   else if (action === 'history') openHistoryScreen();
   else if (action === 'history-back') closeHistoryScreen();
   else if (action === 'chat') { if (historyView) closeHistoryScreen(); closePanel(); document.querySelector('.menu-button')?.focus({ preventScroll: true }); }
+  else if (action === 'mei-end' && (state.solved.includes('Q9') || playSaves?.getStatus().mode === 'debug')) {
+    composerExpanded = false; selectProblem('Q9');
+    meiEndView = true; resetChatFollow(); render();
+    document.querySelector('#mei-completion-title')?.focus({ preventScroll: true });
+    animateSurface(document.querySelector('.mei-completion'), true, 8);
+  }
   else if (action === 'yoi-end' && (state.solved.includes(scenario.problems.find(p => p.completionScreen === 'yoi')?.id) || playSaves?.getStatus().mode === 'debug')) {
     composerExpanded = false; selectProblem(scenario.problems.find(p => p.completionScreen === 'yoi').id);
     yoiEndView = true; meiPlayChoiceVisible = false; resetChatFollow(); render();
@@ -3507,9 +3717,13 @@ document.addEventListener('click', event => {
   else if (action === 'continue-conversation') {
     resetChatFollow(); updateConversationNotice(); scrollConversationToEnd(true);
   }
+  else if (action === 'scene-blackout' && epilogueBlackoutActive && isPlaying && !historyView && !gateVisible) {
+    return;
+  }
   else if (action === 'epilogue-next' && epiloguePhase && isPlaying && !historyView && !gateVisible) {
+    if (epilogueBlackoutActive) return;
     haptics.trigger('dialogue');
-    if (epiloguePhase === 'title') {
+    if (epiloguePhase === 'title' || epilogueFading) {
       epilogueToken += 1;
       epilogueFading = false;
       clearTimeout(epilogueTimer);
@@ -3517,6 +3731,7 @@ document.addEventListener('click', event => {
     advanceNovel();
   }
   else if (action === 'novel-next' && isPlaying && novelPlayback && !historyView && !gateVisible) {
+    if (epilogueBlackoutActive) return;
     advanceNovel();
     haptics.trigger(panel.open && panel.classList.contains('page-turn-dialog') ? 'pageTurn' : 'dialogue');
   }
@@ -3633,10 +3848,12 @@ async function submitSurvey(form) {
   const data = new FormData(form);
   const params = new URLSearchParams();
   params.set(SURVEY_ENTRIES.code, code);
-  for (const [name, entry] of Object.entries({ progress: SURVEY_ENTRIES.progress, affiliation: SURVEY_ENTRIES.affiliation, yoiVolume: SURVEY_ENTRIES.yoiVolume, yoiDifficulty: SURVEY_ENTRIES.yoiDifficulty, meiVolume: SURVEY_ENTRIES.meiVolume, meiDifficulty: SURVEY_ENTRIES.meiDifficulty, ending: SURVEY_ENTRIES.ending, feedback: SURVEY_ENTRIES.feedback })) {
+  for (const [name, entry] of Object.entries({ progress: SURVEY_ENTRIES.progress, affiliation: SURVEY_ENTRIES.affiliation, yoiVolume: SURVEY_ENTRIES.yoiVolume, yoiDifficulty: SURVEY_ENTRIES.yoiDifficulty, meiVolume: SURVEY_ENTRIES.meiVolume, meiDifficulty: SURVEY_ENTRIES.meiDifficulty, feedback: SURVEY_ENTRIES.feedback })) {
     const value = data.get(name);
     if (typeof value === 'string' && value) params.set(entry, value);
   }
+  const ending = surveyEndingAnswer();
+  if (ending) params.set(SURVEY_ENTRIES.ending, ending);
   const revision = panelRevision;
   try {
     await fetch(SURVEY_ENDPOINT, { method: 'POST', mode: 'no-cors', body: params });
