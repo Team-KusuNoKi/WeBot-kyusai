@@ -243,7 +243,7 @@ test('Q3の円は付箋の新規正解でだけ前の角度から広がり、動
       document.querySelector = selector => selector === '.investigation-progress'
         ? { animate: frames => sweeps.push(frames.map(f => f['--answered-angle'])) } : query(selector);`);
     h.click('select', 'Q3');
-    for (const id of ['Q3.3', 'Q3.3.1', 'Q3', 'Q3.2']) {
+    for (const id of ['Q3.3', 'Q3.3.1', 'Q3.2', 'Q3', 'Q3.scaffold']) {
       h.evaluate(`state.solved.push('${id}'); showInvestigation(); showInvestigation();`);
     }
     assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(sweeps)')), reduced ? [] : [
@@ -1611,8 +1611,8 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   assert.ok(!h.app.innerHTML.includes('追加カード404を取得'));
   assert.equal(h.evaluate('unlockedCards(scenario, state).some(c => c.id === "404")'), true);
   h.click('investigation-back');
-  assert.ok(h.app.innerHTML.includes('--answered-angle: 120deg'));
-  assert.equal((h.app.innerHTML.match(/class="investigation-stamp">回答済み</g) ?? []).length, 1);
+  assert.ok(h.app.innerHTML.includes('--answered-angle: 0deg'));
+  assert.equal((h.app.innerHTML.match(/class="investigation-stamp">回答済み</g) ?? []).length, 0);
   assert.equal((h.app.innerHTML.match(/class="investigation-stamp">未回答</g) ?? []).length, 2);
   assert.ok(h.app.innerHTML.includes('続きの謎あり'));
   assert.ok(!h.app.innerHTML.includes(paper.conclusion));
@@ -2112,6 +2112,8 @@ test('解答済みのN2もN1の会話と回答欄へ戻り、不正解と正解�
   finishScene(h);
   assert.equal(h.evaluate('displayedMessages.every(m => m.problemId === "N2")'), true);
   assert.equal(h.evaluate('state.solved.filter(id => id === "N2").length'), 1);
+  const n2Lines = scenario.problems.find(p => p.id === 'N2').dialogue.length;
+  assert.equal(h.evaluate('state.messages.filter(m => m.problemId === "N2" && m.kind === "dialogue").length'), n2Lines);
 });
 
 test('番号選択では会話のない小問も直前の会話を背景に回答欄を開く', () => {
