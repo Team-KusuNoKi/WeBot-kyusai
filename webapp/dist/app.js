@@ -1314,7 +1314,7 @@ function closePanel() {
   panel.inert = true;
   syncNavigation();
   const clueScreen = panel.classList.contains('clue-gallery');
-  const centered = ['page-turn-dialog', 'tour-thanks-dialog', 'start-answer-dialog', 'answer-choice-dialog'].some(name => panel.classList.contains(name));
+  const centered = ['page-turn-dialog', 'tour-thanks-dialog', 'afterword-dialog', 'start-answer-dialog', 'answer-choice-dialog'].some(name => panel.classList.contains(name));
   const exit = clueScreen ? animateSurface(panel, false, 16, 'X')
     : centered && !closingImageViewer ? animateScale(panel, false, .96)
     : animateSurface(panel, false, closingImageViewer ? 0 : panel.classList.contains('draggable-sheet') ? '100%' : 24, 'Y', imageExit ? MOTION.enter : null);
@@ -1938,6 +1938,8 @@ function puzzleCardMarkup(p) {
 }
 
 const MEI_CLEAR_POST_TEXT = '「11月の救祭 冥」をクリアしました。\nすべての謎を解き明かしました。';
+// 終幕のアンケートのあとに開くあとがき。本文ができたら、この配列へ段落を足す。
+const AFTERWORD_PARAGRAPHS = [];
 
 function meiClearPostUrl() {
   return `https://x.com/intent/post?text=${encodeURIComponent(MEI_CLEAR_POST_TEXT)}`;
@@ -1948,6 +1950,25 @@ function meiCompletionMarkup() {
     <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="mei-completion-title" tabindex="-1">冥</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 冥」はここで終了です。<br>遊んでいただきありがとうございました。</p><div class="clear-post"><a class="clear-post-line" href="${meiClearPostUrl()}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>クリアをポスト</span></a></div><p>今後の参考にするためアンケートにご協力ください。（1分）</p><p>アンケート回答後はクリアポストを利用できません。先にご利用ください。</p></div>
     <div class="yoi-completion-actions">
       <button type="button" class="primary-button" data-action="tour-survey"><span>アンケートに答える</span></button>
+    </div>
+  </section>`;
+}
+
+function afterwordMarkup() {
+  const paragraphs = AFTERWORD_PARAGRAPHS.filter(text => typeof text === 'string' && text.trim());
+  const body = paragraphs.length
+    ? paragraphs.map(text => `<p>${esc(text)}</p>`).join('')
+    : '<p class="afterword-placeholder">あとがきの本文は、ここに表示されます。</p>';
+  return `<section class="afterword" aria-labelledby="panel-title">
+    <button class="icon-button afterword-close" data-action="close" aria-label="閉じる">${icon('close')}</button>
+    <header class="afterword-heading">
+      <p class="afterword-kicker">11月の救祭</p>
+      <h1 id="panel-title" tabindex="-1">あとがき</h1>
+      <div class="afterword-rule" aria-hidden="true"></div>
+    </header>
+    <div class="afterword-scroll" tabindex="0">${body}</div>
+    <div class="afterword-actions">
+      <button type="button" class="secondary-button" data-action="close">終幕に戻る</button>
     </div>
   </section>`;
 }
@@ -2895,6 +2916,8 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   panel.classList.toggle('page-turn-dialog', pageTurnDialog);
   const tourThanksDialog = kind === 'tour-thanks';
   panel.classList.toggle('tour-thanks-dialog', tourThanksDialog);
+  const afterwordDialog = kind === 'afterword';
+  panel.classList.toggle('afterword-dialog', afterwordDialog);
   const saveInfo = kind === 'save-info';
   panel.classList.toggle('save-info-sheet', saveInfo);
   panel.inert = false;
@@ -3013,6 +3036,9 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     title = 'アンケート';
     surveyStatus = 'idle';
     content = surveyFormMarkup();
+  } else if (kind === 'afterword') {
+    title = 'あとがき';
+    content = afterwordMarkup();
   } else if (kind === 'clear-post') {
     title = 'クリア';
     content = `<p class="panel-intro">${continuation ? '「11月の救祭 宵」をクリアしました。' : 'すべての謎を解き明かしました。'}</p>`;
@@ -3030,14 +3056,14 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   const clueTabs = [['cards', 'カード'], ['characters', '公開情報'], ['combine', '合成']];
   panel.innerHTML = kind === 'clues'
     ? `${secondaryScreenHeader('close', { showHint: false })}<div class="clue-screen-bg" aria-hidden="true"></div><div class="clue-screen-content${combineSelecting && !combinePicker && clueTab !== 'combine' ? ' is-combine-selecting' : ''}"><div class="clue-tabs" role="tablist" aria-label="手がかりの表示">${clueTabs.map(([id, label]) => `<button id="clue-tab-${id}" role="tab" data-action="clue-tab" data-tab="${id}" aria-selected="${clueTab === id}" aria-controls="clue-tab-content" tabindex="${clueTab === id ? 0 : -1}">${label}</button>`).join('')}</div><div id="clue-tab-content" class="panel-body" role="tabpanel" aria-labelledby="clue-tab-${clueTab}">${content}</div>${combineSelectBarMarkup()}${combineFabMarkup()}</div>`
-    : tourThanksDialog ? content
+    : tourThanksDialog || afterwordDialog ? content
     : pageTurnDialog ? content
     : ['answer-choices', 'symbol-choices'].includes(kind)
     ? `<div class="answer-choice-header"><h2 id="panel-title">${title}</h2><button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button></div>${content}`
     : isImagePanel
     ? `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button image-viewer-close" data-action="close" aria-label="${imageLabel}を閉じる">${icon('close')}</button><div class="image-viewer-stage" tabindex="0" aria-label="${imageLabel}。ピンチまたはプラス・マイナスで拡大縮小。拡大中はドラッグで移動できます。">${content}</div><div class="image-zoom-controls" role="group" aria-label="画像の拡大縮小"><button data-action="image-zoom-out" aria-label="画像を縮小">−</button><button data-action="image-zoom-reset" aria-label="画像の倍率をリセット"><span data-zoom-label>100%</span></button><button data-action="image-zoom-in" aria-label="画像を拡大">＋</button></div>${kind === 'puzzle-image' ? puzzlePagesMarkup(p) : ''}`
     : `<div class="panel-header"><div><h2 id="panel-title"${saveInfo ? ' tabindex="-1"' : ''}>${title}</h2></div>${kind === 'hints' ? (p?.explanation ? `<button type="button" class="hint-answer-button" data-action="hint-answer" aria-expanded="false"${!p.hints.length || (state.hints[p.id] || 1) >= p.hints.length ? '' : ' hidden'}>解答を見る</button>` : '') : `<button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button>`}</div><div class="panel-body">${content}</div>`;
-  const draggableSheet = !isImagePanel && !pageTurnDialog && !tourThanksDialog && !['start-answer', 'answer-choices', 'symbol-choices', 'clues', 'hex-cube'].includes(kind);
+  const draggableSheet = !isImagePanel && !pageTurnDialog && !tourThanksDialog && !afterwordDialog && !['start-answer', 'answer-choices', 'symbol-choices', 'clues', 'hex-cube'].includes(kind);
   panel.classList.toggle('draggable-sheet', draggableSheet);
   if (draggableSheet) {
     const header = panel.querySelector('.panel-header');
@@ -3075,7 +3101,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   if (kind === 'clues' && clueTab === 'combine' && !combinePicker) animateSurface(panel.querySelector('.combine-tab-fab'), true, 16);
   if (kind === 'clues' && ['cards', 'characters'].includes(clueTab) && !combinePicker) bindCombineCardGestures();
   viewportLayout.schedule();
-  const centeredDialog = pageTurnDialog || tourThanksDialog || ['start-answer', 'answer-choices', 'symbol-choices'].includes(kind);
+  const centeredDialog = pageTurnDialog || tourThanksDialog || afterwordDialog || ['start-answer', 'answer-choices', 'symbol-choices'].includes(kind);
   if (kind === 'clues') {
     if (revealSelector) animateSurface(panel.querySelector(revealSelector), true, 8);
     else if (!wasOpen) animateSurface(panel, true, 16, 'X');
@@ -3887,8 +3913,8 @@ async function submitSurvey(form) {
   surveyStatus = 'done';
   haptics.trigger('success');
   const body = panel.querySelector('.panel-body');
-  if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>ご回答ありがとうございました。</p><p class="muted">まもなく画面が切り替わります。</p></div>';
-  setTimeout(() => { if (panel.open && panel.dataset?.kind === 'survey' && panelRevision === revision) openPanel('clear-post'); }, 1800);
+  if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>ご回答ありがとうございました。</p><p class="muted">まもなくあとがきを開きます。</p></div>';
+  setTimeout(() => { if (panel.open && panel.dataset?.kind === 'survey' && panelRevision === revision) openPanel('afterword'); }, 1800);
 }
 
 document.addEventListener('change', event => {
