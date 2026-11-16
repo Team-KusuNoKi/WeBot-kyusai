@@ -2116,6 +2116,43 @@ test('解答済みのN2もN1の会話と回答欄へ戻り、不正解と正解�
   assert.equal(h.evaluate('state.messages.filter(m => m.problemId === "N2" && m.kind === "dialogue").length'), n2Lines);
 });
 
+test('解答済みのQ6でトンカチを繰り返しても、反応は見せて履歴には足さない', () => {
+  const h = appHarness();
+  h.click('select', 'Q6');
+  assert.equal(h.evaluate("answer('トンカチ').status"), 'incorrect');
+  assert.ok(h.app.innerHTML.includes('深紅の間にあったトンカチ'));
+  finishScene(h);
+  const firstReaction = h.evaluate('state.messages.filter(m => m.problemId === "Q6" && m.kind === "dialogue").length');
+  assert.equal(firstReaction, 3);
+  assert.equal(h.evaluate("answer('ドライアイス').status"), 'correct');
+  finishScene(h);
+  const solvedLines = h.evaluate('state.messages.filter(m => m.problemId === "Q6" && m.kind === "dialogue").length');
+  h.click('select', 'Q6');
+  assert.equal(h.evaluate('repeatAnswer'), true);
+  assert.equal(h.evaluate("answer('トンカチ').status"), 'incorrect');
+  assert.ok(h.app.innerHTML.includes('深紅の間にあったトンカチ'));
+  finishScene(h);
+  h.click('select', 'Q6');
+  assert.equal(h.evaluate("answer('トンカチ').status"), 'incorrect');
+  finishScene(h);
+  assert.equal(h.evaluate('state.solved.includes("Q6")'), true);
+  assert.equal(h.evaluate('state.messages.filter(m => m.problemId === "Q6" && m.kind === "dialogue").length'), solvedLines);
+  assert.equal(h.evaluate('historyScreenMarkup().split("トンカチが凶器なら").length - 1'), 1);
+});
+
+test('合成の選択をやめても例外にならない', () => {
+  const h = appHarness();
+  h.click('select', 'Q1');
+  h.click('clues');
+  h.evaluate('beginCombineSelecting("clue-1")');
+  h.evaluate('openPanel("clues", { keepFocus: true })');
+  assert.equal(h.evaluate('combineSelecting'), true);
+  h.click('combine-select-cancel');
+  assert.equal(h.evaluate('combineSelecting'), false);
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), []);
+  assert.ok(!h.panel.innerHTML.includes('合成 1/2'));
+});
+
 test('番号選択では会話のない小問も直前の会話を背景に回答欄を開く', () => {
   const h = appHarness();
   for (const [id, previousId] of [['N3', 'N2'], ['N4', 'N3'], ['N4.1', 'N3'], ['N5', 'N4.1'], ['N5.5', 'N5'], ['Q2', 'Q1.1'], ['Q2.1', 'Q1.1'], ['Q2.2', 'Q1.1']]) {
