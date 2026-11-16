@@ -620,6 +620,20 @@ dialog.tour-thanks-dialog { inset: 0; width: min(440px, calc(100vw - 24px)); hei
 .tour-thanks-book-note { font-size: 13px; color: var(--muted); }
 .tour-thanks .primary-button { width: 100%; min-height: var(--control-height-lg); border-radius: var(--radius-pill); font-size: 15px; }
 .tour-thanks-close { position: absolute; z-index: 1; top: 4px; right: 4px; }
+dialog.afterword-dialog { inset: 0; width: min(440px, calc(100vw - 24px)); height: min(720px, calc(100dvh - 24px)); max-height: calc(100dvh - 24px); min-height: 0; margin: auto; padding: 0; border-radius: 22px; background: #fffcf8; color: #1c140f; overflow: hidden; box-shadow: 0 18px 48px #14141466; }
+.afterword { display: flex; flex-direction: column; height: 100%; min-height: 0; text-align: center; }
+.afterword-close { position: absolute; z-index: 1; top: 4px; right: 4px; color: #1c140f; }
+.afterword-heading { flex: none; padding: 36px 28px 0; }
+.afterword-kicker { margin: 0; font: 15px var(--serif); letter-spacing: .18em; }
+.afterword-heading h1 { margin: 8px 0 0; font: 32px/1.2 var(--serif); font-weight: 400; letter-spacing: .22em; }
+.afterword-rule { width: 36px; height: 1px; margin: 18px auto 0; background: #1c140f33; }
+.afterword-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 28px 8px; text-align: left; }
+.afterword-scroll:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -6px; }
+.afterword-scroll p { margin: 0 0 1.15em; font-size: 15px; line-height: 2; white-space: pre-wrap; }
+.afterword-placeholder { margin: 28px 0 0; color: var(--muted); text-align: center; font-size: 14px; line-height: 1.9; }
+.afterword-actions { flex: none; padding: 8px 22px 22px; }
+.afterword-actions .secondary-button { width: 100%; min-height: var(--control-height-lg); border: 1px solid #1c140f55; border-radius: var(--radius-pill); background: transparent; color: #1c140f; font-size: 14px; box-shadow: none; }
+.afterword-actions .secondary-button:focus-visible { background: #1c140f0d; }@media (hover: hover) { .afterword-actions .secondary-button:hover { background: #1c140f0d; } }
 .start-answer-dialog .panel-header { padding: 18px 24px 0; }
 .start-answer-dialog .panel-header > div { width: 100%; }
 .start-answer-dialog .panel-header h2 { margin: 0; padding-bottom: 10px; border-bottom: 1px solid #c8c8c8; line-height: 1.5; }

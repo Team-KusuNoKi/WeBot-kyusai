@@ -3928,4 +3928,29 @@ test('Q9の会話が最後まで進むと冥の終幕を開く', t => {
   assert.equal(h.evaluate('surveyEndingAnswer()'), '');
 });
 
+test('アンケート送信後はあとがきの画面を開く', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate(`globalThis.FormData = class { get() { return ''; } };
+    globalThis.URLSearchParams = class { set() {} };
+    globalThis.fetch = async () => ({});`);
+  h.evaluate("openPanel('afterword')");
+  assert.equal(h.panel.dataset.kind, 'afterword');
+  assert.equal(h.panel.classList.contains('afterword-dialog'), true);
+  assert.equal(h.panel.classList.contains('draggable-sheet'), false);
+  assert.match(h.panel.innerHTML, /class="afterword-kicker">11月の救祭</);
+  assert.match(h.panel.innerHTML, /id="panel-title"[^>]*>あとがき</);
+  assert.match(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  assert.match(h.panel.innerHTML, /data-action="close">終幕に戻る</);
+  assert.doesNotMatch(h.panel.innerHTML, /クリアをポスト|すべての謎を解き明かしました|会場でプレイする/);
+  h.click('tour-survey');
+  assert.equal(h.panel.dataset.kind, 'survey');
+  await h.evaluate('submitSurvey({ querySelector() { return null; } })');
+  assert.equal(h.panel.dataset.kind, 'survey');
+  h.gestureTimer.drain();
+  assert.equal(h.panel.dataset.kind, 'afterword');
+  assert.equal(h.panel.classList.contains('afterword-dialog'), true);
+  assert.match(h.panel.innerHTML, />あとがき</);
+});
+
 
