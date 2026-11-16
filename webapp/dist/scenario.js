@@ -797,10 +797,11 @@ export const scenario = {
     { id: 'clue-28', number: '405', title: '隠し部屋について', image: '../assets/clue-cards/clue-28.webp', requires: { investigation: true } },
   ],
   characterCards: [
-    { id: 'clue-29', number: '001', title: 'マヤ', image: '../assets/clue-cards/clue-29.webp' },
-    { id: 'clue-30', number: '001', title: 'ハナ', image: '../assets/clue-cards/clue-30.webp' },
-    { id: 'clue-31', number: '002', title: 'アツヤ', image: '../assets/clue-cards/clue-31.webp' },
-    { id: 'clue-32', number: '003', title: 'サダヲ', image: '../assets/clue-cards/clue-32.webp' },
+    { id: 'clue-33', number: '001', title: 'お化け屋敷について', image: '../assets/clue-cards/clue-33.webp' },
+    { id: 'clue-29', number: '002', title: 'マヤ', image: '../assets/clue-cards/clue-29.webp' },
+    { id: 'clue-30', number: '003', title: 'ハナ', image: '../assets/clue-cards/clue-30.webp' },
+    { id: 'clue-32', number: '004', title: 'サダヲ', image: '../assets/clue-cards/clue-32.webp' },
+    { id: 'clue-31', number: '005', title: 'アツヤ', image: '../assets/clue-cards/clue-31.webp' },
   ],
   combinations: [
     { id: 'combine-401', cards: ['clue-5', 'clue-16'], title: '鏡の間：違和感', text: '手がかりカード401「鏡の間：違和感」を手に入れた。カード一覧で確認できる。' },

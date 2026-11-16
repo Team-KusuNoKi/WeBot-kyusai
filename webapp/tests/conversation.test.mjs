@@ -3651,7 +3651,7 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   h.evaluate('switchClueTab("characters")');
   assert.equal((h.panel.innerHTML.match(/clue-gallery-card/g) ?? []).length, scenario.characterCards.length);
   assert.equal((h.panel.innerHTML.match(/data-action="character-dot"/g) ?? []).length, scenario.characterCards.length);
-  assert.ok(h.panel.innerHTML.includes('aria-selected="true" aria-label="マヤ"'));
+  assert.ok(h.panel.innerHTML.includes('aria-selected="true" aria-label="お化け屋敷について"'));
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
   assert.ok(h.panel.innerHTML.includes('マヤ'));
   h.evaluate('state.solved = [...new Set([...state.solved, "Q1"])]');
