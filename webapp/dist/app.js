@@ -2789,11 +2789,15 @@ function hexEntryButton() {
   return `<button type="button" class="clue-hex-entry" data-action="hex-open"${locked ? ' disabled' : ''} aria-label="${locked ? '控室のパズルは解答済み' : '控室のパズルを解く'}"></button>`;
 }
 
+function luminolEntryButton() {
+  return '<button type="button" class="clue-luminol-entry" data-action="luminol-open" aria-label="ルミノール検査を始める"></button>';
+}
+
 function cluePhotoCardMarkup(card, { current = false } = {}) {
   const selected = combineSelecting && combineSelection.includes(card.id);
   const order = combineOrderMark(card.id);
   const check = combineSelecting && !selected ? '<span class="select-check" aria-hidden="true"></span>' : '';
-  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}</article>`;
+  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}${card.puzzle === 'luminol' ? luminolEntryButton() : ''}</article>`;
 }
 
 function clueCardExpandedMarkup(gallery, index) {
