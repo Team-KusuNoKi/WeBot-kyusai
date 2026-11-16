@@ -23,10 +23,12 @@ export function verifyPuzzleSolution(moves) {
   } catch { return false; }
 }
 
+const MINIGAME_ENTRIES = new Set([HEX_CUBE_ID, 'luminol']);
 export function readMinigameEntry(value) {
   if(typeof value!=='string'||!value)return null;
   try {
     const url=new URL(value),path=decodeURIComponent(url.pathname);
-    return ['/11月の救祭/app/','/app/'].includes(path)&&url.searchParams.get('minigame')===HEX_CUBE_ID?HEX_CUBE_ID:null;
+    const id=url.searchParams.get('minigame');
+    return ['/11月の救祭/app/','/app/'].includes(path)&&MINIGAME_ENTRIES.has(id)?id:null;
   } catch {return null;}
 }

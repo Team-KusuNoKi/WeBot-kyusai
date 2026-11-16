@@ -1604,7 +1604,7 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
       viewportLayout.update();
     }
     else await transitionToPlay(record);
-    if (requestedMinigame) {const id=requestedMinigame;requestedMinigame=null;await openHexCube(id);}
+    if (requestedMinigame) {const id=requestedMinigame;requestedMinigame=null;if(id==='luminol')await openLuminol();else await openHexCube(id);}
     if (kind === 'continue') void playSaves.retry();
   } catch (error) {
     gateBusy = false;
@@ -2973,7 +2973,11 @@ async function openHexCube(id='hex-cube', { replay = false } = {}) {
 }
 async function openLuminol() {
   if (gateVisible) return;
-  if (!resolvedMountLuminol) resolvedMountLuminol = (await import('./luminol.js')).mountLuminol;
+  if (!resolvedMountLuminol) {
+    // テストハーネスは mountLuminol を注入する。本番は初回だけ動的 import する。
+    if (typeof mountLuminol === 'function') resolvedMountLuminol = mountLuminol;
+    else resolvedMountLuminol = (await import('./luminol.js')).mountLuminol;
+  }
   if (gateVisible) return;
   openPanel('luminol');
 }

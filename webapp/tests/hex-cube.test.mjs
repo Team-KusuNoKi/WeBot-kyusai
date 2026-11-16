@@ -62,6 +62,8 @@ test('控え室と本編で開いたヒントは別々に復元される', () =>
 test('QR用の入口は11月の救祭の日本語URLと旧リダイレクトURLを認識する',()=>{
   assert.equal(readMinigameEntry('https://example.test/11月の救祭/app/?minigame=hex-cube'),'hex-cube');
   assert.equal(readMinigameEntry('https://example.test/app/?minigame=hex-cube'),'hex-cube');
+  assert.equal(readMinigameEntry('https://example.test/11月の救祭/app/?minigame=luminol'),'luminol');
+  assert.equal(readMinigameEntry('https://example.test/app/?minigame=luminol'),'luminol');
   for(const value of ['',undefined,'https://example.test/takehome/app/?minigame=hex-cube','https://example.test/11月の救祭/app/?minigame=unknown'])assert.equal(readMinigameEntry(value),null);
 });
 test('11月の救祭の既存保存APIでカード取得を保存し6桁番号から復元できる',async t=>{

@@ -31,7 +31,7 @@ function clock() {
   };
 }
 
-function appHarness(saved = null, reducedMotion = false, { entryOnly = false, records = {}, fetchImpl, webMCP = false, entryAnimations = false, entryUrl = '', minigameMount = () => ({destroy(){},refresh(){}}) } = {}) {
+function appHarness(saved = null, reducedMotion = false, { entryOnly = false, records = {}, fetchImpl, webMCP = false, entryAnimations = false, entryUrl = '', minigameMount = () => ({destroy(){},refresh(){}}), luminolMount = () => ({destroy(){},refresh(){}}) } = {}) {
   const storageItems = new Map(Object.entries(records));
   if (saved !== null && entryOnly) storageItems.set(`webbot:${scenario.id}`, saved);
   const storageCalls = [];
@@ -165,7 +165,7 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
     showModal() { this.open = true; }, close() { this.open = false; },
   };
   const context = vm.createContext({
-    mountHexCube: minigameMount, scenario, MOTION, createHaptics, answerReadiness, isComposingSubmit, bindImageViewer, bindSheetDismiss, animateEmphasis, toggleDisclosure, animateCombination, copyWithFeedback, createOverlayHistory, sanitizeAnswerDraft, ...engine, latestSceneStart, normalizePlayCode, isConversationLine, restorePlayView, pendingConversation, bindVisualViewport, crypto: globalThis.crypto, AbortController,
+    mountHexCube: minigameMount, mountLuminol: luminolMount, scenario, MOTION, createHaptics, answerReadiness, isComposingSubmit, bindImageViewer, bindSheetDismiss, animateEmphasis, toggleDisclosure, animateCombination, copyWithFeedback, createOverlayHistory, sanitizeAnswerDraft, ...engine, latestSceneStart, normalizePlayCode, isConversationLine, restorePlayView, pendingConversation, bindVisualViewport, crypto: globalThis.crypto, AbortController,
     createPlaySaveController: options => createPlaySaveController({ ...options, debounceMs: 60000, persistDebounceMs: 0, maxAutoRetries: 0,
       fetchImpl: async (url, init) => { networkCalls.push(JSON.parse(init.body)); if (fetchImpl) return fetchImpl(url, init); throw new Error('Harness network is offline'); } }),
     createConversationPlayer: options => createConversationPlayer({ ...options, schedule: timer.schedule, cancel: timer.cancel }),
@@ -4078,6 +4078,15 @@ test('装置の保存待ち中に別画面へ移動したらシステム通知�
   assert.equal(h.panel.classList.contains('clue-gallery'),true);
   assert.ok(h.panel.innerHTML.includes('data-id="clue-23"'));
   assert.ok(!h.panel.innerHTML.includes('装置から出てきたメモ'));
+});
+test('ルミノールのQR入口は記録がなければ6桁入力後に検査を開き、記録があればすぐ開く',async t=>{
+  let mounts=0;const seed=engine.initialState(scenario),view=restorePlayView(scenario,seed,null);
+  const fresh=appHarness(null,false,{entryOnly:true,entryUrl:'https://example.test/11月の救祭/app/?minigame=luminol',luminolMount:()=>{mounts++;return{destroy(){},refresh(){}};},fetchImpl:async()=>new Response(JSON.stringify({code:'001234',revision:1,state:seed,view}),{status:200})});t.after(()=>fresh.dispose());
+  await fresh.evaluate('startup');assert.equal(fresh.panel.classList.contains('resume-sheet'),true);
+  await fresh.evaluate('beginPlay("code","001234")');assert.equal(fresh.evaluate('gateVisible'),false);assert.equal(fresh.panel.dataset.kind,'luminol');assert.equal(mounts,1);
+  mounts=0;
+  const stored=appHarness(null,false,{entryOnly:true,records:{[`play-save:${scenario.id}`]:storedPlay(seed,view)},entryUrl:'https://example.test/11月の救祭/app/?minigame=luminol',luminolMount:()=>{mounts++;return{destroy(){},refresh(){}};},fetchImpl:async()=>new Response(JSON.stringify({code:'001234',revision:1,state:seed,view}),{status:200})});t.after(()=>stored.dispose());
+  await stored.evaluate('startup');assert.equal(stored.evaluate('gateVisible'),false);assert.equal(stored.panel.dataset.kind,'luminol');assert.equal(mounts,1);
 });
 test('QR入口で端末に記録があれば入力を要求せず装置を開く',async t=>{
   let mounts=0;const seed=engine.initialState(scenario),view=restorePlayView(scenario,seed,null);
