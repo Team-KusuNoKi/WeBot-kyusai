@@ -39,8 +39,8 @@ test('N1正解後に指定の会話と地の文を順番に追加し、保存か
     ['ミサメ', '「もっと楽しんでおきたかったなっていうのもありますけど、自分にとっての大事な時間、大事な場所を手放してしまった気がして寂しかったんです。」'],
     ['ミサメ', '「だからNFの危機が迫る今、なんとしてでもこの祭りを未来につなぎたいって思ってます。」'],
     ['タツ', '「そういうことなら協力するしかないな。ミサメに落ち込まれたら、この巡回班も楽しくないからな。」'],
-    ['アサヒ', '「そうですね。ミサメ先輩の熱い思いも聞けたことだし、とりあえずこの不審なチラシをどうにかしましょう。」'],
-    ['タツ＆ミサメ', '「いつの間に！！」'],
+    ['アサヒ', '「そうですね。ミサメ先輩の熱い思いも聞けたことですし、とりあえずこの不審なチラシをどうにかしましょう。」'],
+    ['タツ＆ミサメ', '「「いつの間に！！」」'],
     ['', '指示：総合研究10号館へ向かおう。以下の写真を参考にしてください。現地でN2と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'],
     ['', '〈ここに、総合研究10号館までの行き方を写真付きで分かりやすく解説する。解いている人が図書館前にいないかもしれないことにも留意〉'],
     ['', '〈N2が貼ってある場所の写真をここに挿入〉'],
@@ -141,7 +141,7 @@ test('N2は法経済学部北館の漢字入力で正解となり、指定の会
     ['タツ', '「ミサメ、実は結構楽しんでない？」'],
     ['ミサメ', '「そ、そんなことないですよ！ほら、早く行きますよ！」'],
     ['ミサメ', '「もう！こんな問題の紙も規約違反なので回収します！」'],
-    ['', 'ミサメはN2の問題用紙を壁から剥がすとクシャクシャに丸めポケットに入れた。'],
+    ['', 'ミサメはN2の問題用紙を剥がすとクシャクシャに丸めポケットに入れた。'],
     ['', '指示：法経済学部北館へ向かおう。以下の写真を参考にしてください。現地でN3と書かれた問題を見つけたら上部の「次へ」ボタンを押しましょう。'],
     ['', '〈ここに、法経済学部北館までの行き方を写真付きで分かりやすく解説する〉'],
     ['', '〈N3が貼ってある場所の写真をここに挿入〉'],
@@ -448,7 +448,7 @@ test('Q6は凶器・証拠・犯人とカード番号を順番に判定し、既
     assert.deepEqual(state, result.state);
     assert.equal(submitAnswer(scenario, state, answer).status, 'already-solved');
   }
-  assert.equal(state.messages.at(-1).text, '冊子の次のページをめくろう');
+  assert.equal(state.messages.at(-1).text, 'テープを破って冊子の次のページへ進もう');
   assert.equal(state.messages.at(-1).emphasis, true);
 });
 
@@ -485,7 +485,7 @@ test('Q5は16:30とカード番号203が揃った場合だけ正解し、会話�
 
 test('Q7はA+203とD+302を埋めB・Cを空欄で送ると正解し、前問の記録と推理・会場案内を保存する', () => {
   const problem = scenario.problems.find(p => p.id === 'Q7');
-  assert.equal(problem.prompt, '矛盾があるブロックを全て指摘せよ\n該当しない記号の回答欄は空欄にせよ');
+  assert.equal(problem.prompt, '矛盾があるブロックを全て指摘せよ\n矛盾がないと考えるブロックの回答欄は空欄にせよ');
   assert.deepEqual(problem.fields.map(field => [field.symbol, field.optional ?? false]), [['A', false], ['B', true], ['C', true], ['D', false]]);
   const start = restoreState(scenario, JSON.stringify({ ...initialState(scenario), selected: 'Q6.2', solved: scenario.problems.slice(0, scenario.problems.indexOf(problem)).map(p => p.id) }));
   const state = { ...start, selected: 'Q7' };
@@ -620,12 +620,12 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
   assert.equal(ending.at(-1).text, 'ただ、それでも俺は前を向く。');
   assert.equal(ending.find(line => line.text.includes('約束ですよ')).speaker, 'ミサメ');
   const broken = problem.answerBranches.find(branch => branch.id === 'world-saved').dialogue;
-  assert.deepEqual(broken.map(line => line.scene), ['hallway', 'hallway', 'hallway', 'library', 'library', 'bookstore', 'bookstore', 'void', 'void', 'ginkgo']);
+  assert.deepEqual(broken.map(line => line.scene), ['hallway', 'hallway', 'hallway', 'hallway', 'hallway', 'library', 'library', 'library', 'bookstore', 'bookstore', 'bookstore', 'bookstore', 'void', 'void', 'void', 'ginkgo', 'ginkgo', 'ginkgo']);
   assert.ok(broken.every(line => line.epilogue === true && line.speaker === ''));
-  assert.equal(broken[2].text.endsWith('二度目の死を迎えた。'), true);
-  assert.equal(broken[4].text.endsWith('俺は残酷な旅の道すがらにいた。'), true);
-  assert.equal(broken[6].text.endsWith('安堵さえしていた。'), true);
-  assert.equal(broken[8].text.endsWith('信じていた。'), true);
+  assert.equal(broken[4].text.endsWith('二度目の死を迎えた。'), true);
+  assert.equal(broken[7].text.endsWith('俺は残酷な旅の道すがらにいた。'), true);
+  assert.equal(broken[11].text.endsWith('安堵さえしていた。'), true);
+  assert.equal(broken[14].text.endsWith('信じていた。'), true);
   assert.equal(broken.at(-1).text.endsWith('日の昇りきらぬNFを後にした。'), true);
   assert.equal(problem.answerBranches.find(branch => branch.id === 'all-saved').dialogue.length, 1);
 });

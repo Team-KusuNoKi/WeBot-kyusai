@@ -1,6 +1,11 @@
 // 保存した画面を、現在のシナリオで表示できる範囲に戻す。
 import { restoreProblemId } from './engine.js';
 
+function restoreSeenClueIds(scenario, raw) {
+  const ids = new Set((scenario.clueGallery ?? []).map(card => card.id));
+  return Array.isArray(raw) ? [...new Set(raw.filter(id => typeof id === 'string' && ids.has(id)))].slice(0, 200) : [];
+}
+
 // 古い保存データの会話位置を保ちながら、廃止したカード案内を表示から除く。
 export function isConversationLine(message) {
   return !['answer', 'success', 'error'].includes(message.kind)
@@ -17,7 +22,8 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
   // 削除された問いの表示位置と入力欄は、新Q4の画面に引き継がない。
   if (sourceState && p.id === 'Q4' && !rename(sourceState.selected)) {
     return { ...restorePlayView(scenario, state, null),
-      answerDrafts: restoreAnswerDrafts(scenario, raw?.answerDrafts, sourceRevision, sourceState.version) };
+      answerDrafts: restoreAnswerDrafts(scenario, raw?.answerDrafts, sourceRevision, sourceState.version),
+      seenClueIds: restoreSeenClueIds(scenario, raw?.seenClueIds) };
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     const messages = state.messages.filter(m => m.problemId === p.id && isConversationLine(m));
@@ -25,7 +31,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
       yoiEndView: false, meiEndView: false, showVenueDirections: false, investigationView: false,
       repeatAnswer: false, composerExpanded: p.openAnswerOnEntry !== false && !state.solved.includes(p.id) && !(!state.solved.length && p.id === scenario.problems[0].id), sceneStart: state.messages.length,
       displayedMessages: messages, isPlaying: false, investigationScrollTop: 0, investigationReturnId: null,
-      puzzleImageIndex: 0, chatScrollTop: 0, selectedPuzzleAnswer: '', selectedSymbols: [], answerDrafts: {} };
+      puzzleImageIndex: 0, chatScrollTop: 0, selectedPuzzleAnswer: '', selectedSymbols: [], answerDrafts: {}, seenClueIds: [] };
   }
   const investigationView = Boolean(raw.investigationView) && scenario.investigation.problemIds.includes(p.id);
   const resumeMigratedDialogue = !raw.repeatAnswer && state.solved.includes(p.id)
@@ -77,6 +83,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
     sceneStart, displayedMessages, isPlaying: (resumeDialogue || Boolean(raw.isPlaying)) && scene.length > 0 && !investigationView,
     investigationScrollTop: number(raw.investigationScrollTop, 1000000),
     investigationReturnId: scenario.investigation.problemIds.includes(raw.investigationReturnId) ? raw.investigationReturnId : null,
+    seenClueIds: restoreSeenClueIds(scenario, raw.seenClueIds),
     puzzleImageIndex: number(raw.puzzleImageIndex, Math.max(0, (p.images?.length ?? 1) - 1)),
     chatScrollTop: number(raw.chatScrollTop, 1000000),
     selectedPuzzleAnswer: p.id === 'N1' && answerDrafts.N1 ? answerDrafts.N1[0] : p.options?.some(item => item.id === raw.selectedPuzzleAnswer) ? raw.selectedPuzzleAnswer : '',

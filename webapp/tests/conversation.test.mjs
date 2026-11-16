@@ -1063,7 +1063,7 @@ test('N4.1からN5へ進み、お化け屋敷で正解すると会話とペー�
   assert.equal(h.evaluate('displayedMessages.length'), 8);
   assert.ok(h.evaluate('historyScreenMarkup()').includes('（……そういえば、この子、さっきお腹鳴らしてたな…）'));
   assert.ok(h.app.innerHTML.includes('以上で、構内での周遊、滞在が必須な部分は終了となります。'));
-  assert.ok(h.app.innerHTML.includes('<p class="page-turn-text">案内を確認したら、冊子のページをめくろう。指示があれば上部の「次へ」ボタンを押してください。</p>'));
+  assert.ok(h.app.innerHTML.includes('<p class="page-turn-text">案内を確認したら、冊子のページをめくろう。</p>'));
   assert.match(h.app.innerHTML, /data-action="open-composer"[^>]*>.*?<span>次へ<\/span>/);
   h.click('open-composer');
   assert.equal(h.evaluate('state.selected'), 'N5.5');
@@ -1164,9 +1164,11 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   assert.equal(h.composer.hidden, true);
   assert.ok(h.app.innerHTML.includes('data-action="play-mei"><span>11月の救祭 冥 をプレイする</span></button>'));
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/1KNjU" target="_blank" rel="noopener noreferrer">クリアポスト'));
-  assert.ok(h.app.innerHTML.indexOf('data-action="play-mei"') < h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"'));
-  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"') < h.app.innerHTML.indexOf('data-action="tour-thanks"'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/1KNjU" target="_blank" rel="noopener noreferrer"'));
+  assert.ok(h.app.innerHTML.includes('クリアをポスト'));
+  assert.ok(h.app.innerHTML.indexOf('遊んでいただきありがとうございました。') < h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"') < h.app.innerHTML.indexOf('冊子後半、「11月の救祭 冥」'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"') < h.app.innerHTML.indexOf('data-action="play-mei"'));
   assert.ok(h.app.innerHTML.includes('data-action="tour-thanks"><span>周遊版をご購入の方はこちら</span></button>'));
   assert.ok(h.app.innerHTML.includes('遊んでいただきありがとうございました。'));
   assert.ok(h.app.innerHTML.includes('冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、<br>お好きな時間にプレイすることが可能です。'));
@@ -1235,7 +1237,7 @@ test('宵から会場で解く場合は解答済みでもQ1を再表示し、正
   h.click('travel-next');
   assert.equal(h.composer.hidden, true);
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q1</strong>を見つけましたか？'));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q1</strong>を確認しましたか？'));
   assert.ok(h.panel.innerHTML.includes('data-action="travel-found">問題を確認した</button>'));
   h.click('travel-found');
   h.evaluate("answer(['5'])");
@@ -1368,7 +1370,7 @@ test('オンラインを選ぶと推理パートの説明から始まり、STOP�
   h.click('travel-next');
   assert.equal(h.composer.hidden, true);
   assert.equal(h.panel.open, true);
-  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q1</strong>を見つけましたか？'));
+  assert.ok(h.panel.innerHTML.includes('冊子で問題<strong class="page-turn-target">Q1</strong>を確認しましたか？'));
   assert.ok(h.panel.innerHTML.includes('data-action="travel-found">問題を確認した</button>'));
   h.click('travel-found');
   assert.equal(h.composer.hidden, false);
@@ -2543,7 +2545,7 @@ test('Q6からQ6.2は会話完了を待って進み、犯人とカード番号�
   assert.equal(h.panel.open, false);
   assert.equal(h.composer.hidden, false);
   assert.equal(h.evaluate('state.selected'), 'Q6.1');
-  assert.ok(h.composer.innerHTML.includes('漢字2文字で答えよ'));
+  assert.ok(h.composer.innerHTML.includes('1単語で答えよ'));
   assert.equal(h.evaluate("answer('軍手').status"), 'correct');
   h.click('open-composer');
   assert.equal(h.evaluate('state.selected'), 'Q6.1');
@@ -2572,7 +2574,7 @@ test('Q6からQ6.2は会話完了を待って進み、犯人とカード番号�
   const restored = appHarness(h.snapshot());
   restored.click('history');
   assert.ok(restored.workspace.innerHTML.includes('犯人はハナだ！！！'));
-  assert.ok(restored.workspace.innerHTML.includes('冊子の次のページをめくろう'));
+  assert.ok(restored.workspace.innerHTML.includes('テープを破って冊子の次のページへ進もう'));
 });
 
 test('Q6.2回答済みでもQ6.1の最後の台詞からQ6.2の回答欄を開く', t => {
@@ -3493,6 +3495,7 @@ test('カード長押しで合成選択になり2枚で合成できる', async t
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'Q1');
+  h.evaluate('state.solved = [...new Set([...state.solved, "Q1"])]');
   h.click('clues');
   assert.equal(h.evaluate('combineSelecting'), false);
   h.evaluate('beginCombineSelecting("clue-1")');
@@ -3564,6 +3567,7 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes('aria-selected="true" aria-label="マヤ"'));
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
   assert.ok(h.panel.innerHTML.includes('マヤ'));
+  h.evaluate('state.solved = [...new Set([...state.solved, "Q1"])]');
   h.evaluate('switchClueTab("combine")');
   assert.ok(h.panel.innerHTML.includes('class="answer-fab combine-tab-fab"'));
   assert.ok(h.panel.innerHTML.includes('data-action="combine-pick"'));
@@ -3645,9 +3649,11 @@ test('デバッグの問題番号は冥の終幕を3画面出し、通常は到�
   assert.ok(h.app.innerHTML.includes('id="mei-completion-title"'));
   assert.ok(h.app.innerHTML.includes('>冥</h1>'));
   assert.ok(h.app.innerHTML.includes('data-action="mei-survey"><span>アンケートに答える</span>'));
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/1zl4B"'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/1zl4B"'));
+  assert.ok(h.app.innerHTML.includes('クリアをポスト'));
+  assert.ok(h.app.innerHTML.includes('アンケート回答後はクリアポストを利用できません。先にご利用ください。'));
   assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
-  assert.ok(h.app.innerHTML.indexOf('data-action="mei-survey"') < h.app.innerHTML.indexOf('href="https://x.gd/1zl4B"'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1zl4B"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
   h.click('mei-end', 'god-returned');
   assert.equal(h.evaluate('meiEndRoute'), 'god-returned');
@@ -3823,7 +3829,7 @@ test('控室カードのカプセルから六角形を開き、デバッグで�
 test('装置クリア後は会話を増やさず手がかり400を取得する',async t=>{
   const h=appHarness();t.after(()=>h.dispose());const before=JSON.parse(h.snapshot());
   assert.ok(h.app.innerHTML.includes('data-action="hex-replay"'));
-  assert.ok(h.app.innerHTML.includes('>控室の問題</span>'));
+  assert.ok(h.app.innerHTML.includes('>控室の問題をもう一度解く</span>'));
   assert.ok(!h.app.innerHTML.includes('控室の問題を再度解く'));
   await h.evaluate('finishHexCube([[4],[3,4]])');
   assert.ok(h.panel.innerHTML.includes('新しい手がかり「控室について」'));
@@ -3831,7 +3837,7 @@ test('装置クリア後は会話を増やさず手がかり400を取得する',
   assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
   assert.ok(!h.panel.innerHTML.includes('装置から出てきたメモ'));
   assert.ok(h.app.innerHTML.includes('data-action="hex-replay"'));
-  assert.ok(h.app.innerHTML.includes('控室の問題を再度解く'));
+  assert.ok(h.app.innerHTML.includes('控室の問題をもう一度解く'));
   const after=JSON.parse(h.snapshot());assert.equal(after.messages.length,before.messages.length);assert.equal(after.messages.some(message=>message.speaker==='システム'&&message.minigameId==='hex-cube'),false);assert.deepEqual(after.solved,before.solved);
   await h.evaluate('finishHexCube([[4],[3,4]])');
   assert.equal(JSON.parse(h.snapshot()).messages.length,after.messages.length);
@@ -3859,7 +3865,7 @@ test('000000ではクリア画面と手がかりから六角形を何度でも�
   await onComplete([[4], [3, 4]]);
   assert.ok(h.panel.innerHTML.includes('もう一度解く'));
   assert.ok(h.panel.innerHTML.includes('新しい手がかり「控室について」'));
-  assert.ok(h.app.innerHTML.includes('控室の問題を再度解く'));
+  assert.ok(h.app.innerHTML.includes('控室の問題をもう一度解く'));
   h.click('hex-card');
   h.click('clue-card-open', 'clue-9');
   assert.match(h.panel.innerHTML, /class="clue-hex-entry"/);
@@ -4121,9 +4127,10 @@ test('Q9の会話が最後まで進むと冥の終幕を開く', t => {
   assert.ok(h.app.innerHTML.includes('>冥</h1>'));
   assert.ok(h.app.innerHTML.includes('「11月の救祭 冥」はここで終了です。'));
   assert.ok(h.app.innerHTML.includes('data-action="mei-survey"'));
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/MTZvo"'));
-  assert.ok(h.app.innerHTML.includes('クリアポスト'));
-  assert.ok(h.app.innerHTML.indexOf('data-action="mei-survey"') < h.app.innerHTML.indexOf('href="https://x.gd/MTZvo"'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/MTZvo"'));
+  assert.ok(h.app.innerHTML.includes('クリアをポスト'));
+  assert.ok(h.app.innerHTML.indexOf('遊んでいただきありがとうございました。') < h.app.innerHTML.indexOf('href="https://x.gd/MTZvo"'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/MTZvo"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
   assert.ok(h.navigation.innerHTML.includes('冥 終幕'));
   assert.ok(!h.app.innerHTML.includes('class="clue-button"'));
   h.click('select', 'Q8');

@@ -11,6 +11,8 @@ dialog.hex-success {
   border-radius: 0;
   background: transparent;
   overflow: hidden;
+  min-height: 0;
+  box-shadow: none;
   scrollbar-gutter: auto;
 }
 .hex-success[open] { display: grid; place-items: center; }
