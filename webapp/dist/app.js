@@ -623,6 +623,7 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
     && !current().instruction && !displayedMessages.some(isSceneNotice);
   if (remaining.every(isSceneNotice) || lastInvestigationLine) {
     displayedMessages.push(...remaining);
+    if (continuationPending()) composerExpanded = true;
     const pageTurnOpened = finishConversation({ scroll: false });
     document.querySelector('.chat-area').scrollTop = 0;
     if (pageTurnOpened || openAutomaticContinuation()) return;
@@ -883,7 +884,6 @@ function showInvestigation() {
   if (previousSolved) {
     const changed = scenario.investigation.entries.filter(id => investigationEntryStatus(id, previousSolved) !== investigationEntryStatus(id, state.solved));
     for (const id of changed) {
-      animateEmphasis(document.querySelector(`[data-action="investigation-open"][data-id="${id}"] .investigation-status`), reducedMotion());
       if (state.solved.includes(id)) document.querySelector(`[data-action="investigation-open"][data-id="${id}"] .investigation-stamp`)?.classList.add('is-stamping');
     }
     const previousCount = answeredInvestigationCount(previousSolved);
@@ -909,10 +909,16 @@ function investigationEntryStatus(id, solved) {
   return !solved.includes(id) ? 0 : p.continueTo && !solved.includes(p.continueTo) ? 1 : 2;
 }
 
+function continuationPending() {
+  const p = current();
+  if (!p?.autoOpenContinuation || !state.solved.includes(p.id) || repeatAnswer) return false;
+  if (state.solved.includes(p.continueTo) && !p.reopenSolvedContinuation) return false;
+  return true;
+}
+
 function openAutomaticContinuation() {
   const p = current();
-  if (!p.autoOpenContinuation || !state.solved.includes(p.id) || repeatAnswer) return false;
-  if (state.solved.includes(p.continueTo) && !p.reopenSolvedContinuation) return false;
+  if (!continuationPending()) return false;
   composerExpanded = true;
   selectProblem(p.continueTo, { openOverScene: true, answering: true, investigationDetail: true });
   return true;
@@ -960,11 +966,10 @@ function conclusionMarkup(p, peeling) {
 function investigationMarkup(peelingConclusions = []) {
   const entries = scenario.investigation.entries.map(id => scenario.problems.find(p => p.id === id));
   const notes = entries.map(p => {
-    const answered = state.solved.includes(p.id);
-    const solved = investigationEntryStatus(p.id, state.solved) === 2;
-    const continuation = answered && !solved ? '<span class="investigation-status">続きの謎あり</span>' : '';
-    const stamp = solved ? '回答済み' : answered ? '' : '未回答';
-    return `<button class="investigation-question" data-solved="${solved}" data-answered="${solved}" data-action="investigation-open" data-id="${esc(p.id)}">${questionSymbolMarkup(p)}${stamp ? `<span class="investigation-stamp">${stamp}</span>` : ''}${continuation}<strong><span class="investigation-question-text">${esc(p.listPrompt)}</span></strong></button>`;
+    const status = investigationEntryStatus(p.id, state.solved);
+    const stamp = status === 2 ? '回答済み' : status === 1 ? '回答中' : '未回答';
+    const progress = status === 2 ? 'solved' : status === 1 ? 'answering' : 'open';
+    return `<button class="investigation-question" data-solved="${status === 2}" data-answered="${status === 2}" data-progress="${progress}" data-action="investigation-open" data-id="${esc(p.id)}">${questionSymbolMarkup(p)}<span class="investigation-stamp">${stamp}</span><strong><span class="investigation-question-text">${esc(p.listPrompt)}</span></strong></button>`;
   });
   const answeredCount = answeredInvestigationCount(state.solved);
   const progress = `<span class="investigation-progress" role="meter" aria-label="Q3の回答状況" aria-valuemin="0" aria-valuemax="${entries.length}" aria-valuenow="${answeredCount}" aria-valuetext="${entries.length}問中${answeredCount}問回答済み" style="--answered-angle: ${360 * answeredCount / entries.length}deg"></span>`;
@@ -1481,6 +1486,8 @@ function enterPlay(record) {
   conversationPlayer.stop();
   historyView = false;
   knownClueCount = null;
+  knownUnlockedIds = null;
+  multiSelectionOrder.clear();
   changingSession = true;
   state = restoreState(scenario, JSON.stringify(record.state));
   investigationSnapshot = [...state.solved];
@@ -1810,11 +1817,12 @@ function answerInputsMarkup(p) {
       : `<label class="answer-field"><span class="${p.answerParts || row ? 'sr-only' : 'answer-field-label'}">${esc(field.label)}</span><span class="text-composer"><input id="answer${index ? `-${index}` : ''}" name="answer" type="text" inputmode="${esc(field.inputMode ?? 'text')}" placeholder="${esc(field.placeholder)}" autocomplete="off"${field.optional ? '' : ' required'}></span></label>`);
     const submit = `<button type="submit" class="send-button" aria-label="答えを送信">${icon('send')}</button>`;
     if (p.answerFieldsLayout === 'pairs') {
+      const symbols = p.fields.some(field => field.symbol);
       const pairs = [];
       for (let index = 0; index < inputs.length; index += 2) {
-        pairs.push(`<div class="answer-field-pair">${inputs.slice(index, index + 2).join('')}${index + 2 >= inputs.length ? submit : ''}</div>`);
+        pairs.push(`<div class="answer-field-pair">${inputs.slice(index, index + 2).join('')}${symbols || index + 2 < inputs.length ? '' : submit}</div>`);
       }
-      return `<form id="answer-form" class="multi-field-answer" data-fields-layout="pairs"><div class="answer-fields" role="group" aria-label="${esc(label)}">${pairs.join('')}</div></form>`;
+      return `<form id="answer-form" class="multi-field-answer" data-fields-layout="pairs"${symbols ? ' data-symbol-fields="true"' : ''}><div class="answer-fields" role="group" aria-label="${esc(label)}">${pairs.join('')}</div>${symbols ? submit : ''}</form>`;
     }
     const fields = inlineParts ? p.answerParts.map((part, index) => `${esc(part)}${inputs[index] ?? ''}`).join('') : inputs.join('');
     const group = `<div class="answer-fields${inlineParts ? ' answer-fields-inline' : ''}" role="group" aria-label="${esc(label)}">${fields}</div>`;
@@ -2061,6 +2069,7 @@ const CLEAR_POST_URL = {
   yoi: 'https://x.gd/1KNjU',
   'god-returned': 'https://x.gd/MTZvo',
   'world-saved': 'https://x.gd/1zl4B',
+  'all-saved': 'https://x.gd/Rf4fSK',
 };
 
 function clearPostMarkup(url) {
@@ -2092,7 +2101,7 @@ function afterwordMarkup() {
 
 function yoiCompletionMarkup() {
   return `<section class="yoi-completion" aria-labelledby="yoi-completion-title">
-    <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="yoi-completion-title" tabindex="-1">宵</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 宵」はここで終了です。<br>遊んでいただきありがとうございました。</p>${clearPostMarkup(CLEAR_POST_URL.yoi)}<p>冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、<br>お好きな時間にプレイすることが可能です。</p></div>
+    <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="yoi-completion-title" tabindex="-1">宵</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 宵」はここで終了です。<br>遊んでいただきありがとうございました。</p>${clearPostMarkup(CLEAR_POST_URL.yoi)}<p class="yoi-completion-follow">冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、お好きな時間にプレイすることが可能です。</p></div>
     <div class="yoi-completion-actions" role="group" aria-label="続きの遊び方">
       ${meiPlayChoiceVisible ? `
       <button class="primary-button yoi-venue-button" data-action="continue-at-venue"><span>会場でプレイする</span></button>
@@ -2108,7 +2117,7 @@ function yoiCompletionMarkup() {
 
 function meiCompletionMarkup() {
   const clearPostUrl = CLEAR_POST_URL[meiEndRoute] ?? '';
-  const clearPostNote = clearPostUrl ? `<p>今後の参考にするためアンケートにご協力ください。（1分）</p><p>アンケート回答後はクリアポストを利用できません。先にご利用ください。</p>` : '';
+  const clearPostNote = clearPostUrl ? `<p class="yoi-completion-follow">今後の参考にするためアンケートにご協力ください。（1分）</p><p class="yoi-completion-follow">アンケート回答後はクリアポストを利用できません。先にご利用ください。</p>` : '';
   return `<section class="yoi-completion mei-completion" aria-labelledby="mei-completion-title" data-mei-ending="${esc(meiEndRoute)}">
     <div class="yoi-completion-copy"><p class="yoi-completion-label">11月の救祭</p><h1 id="mei-completion-title" tabindex="-1">冥</h1><p class="yoi-completion-end">終幕</p><p>「11月の救祭 冥」はここで終了です。<br>遊んでいただきありがとうございました。</p>${clearPostMarkup(clearPostUrl)}${clearPostNote}</div>
     <div class="yoi-completion-actions" role="group" aria-label="終了後の案内">
@@ -2199,7 +2208,7 @@ function historyScreenMarkup() {
   const visibleMessages = isPlaying ? [...state.messages.slice(0, sceneStart), ...displayedMessages] : state.messages;
   const entries = historyProblems().map(item =>
     `<details class="history-entry" data-history-problem="${esc(item.id)}" ${historyOpenProblems.has(item.id) ? 'open' : ''}><summary><span class="history-question">${esc(problemLabel(item))}</span><span class="history-title">${esc(problemTitle(item))}</span>${icon('chevron')}</summary><div class="history-messages">${historyDialogueMarkup(item, visibleMessages)}</div></details>`).join('');
-  return `<section class="history-screen" aria-labelledby="history-heading">${secondaryScreenHeader('history-back', { showHint: false, title: '会話履歴', headingId: 'history-heading' })}<div class="history-body"><p class="history-intro">問題を開くと、これまでの会話を読み返せます。</p>${entries || '<div class="empty-state history-empty"><p>まだ会話履歴はありません。</p><p>問題に正解すると、ここに会話が届きます。</p></div>'}</div></section>`;
+  return `<section class="history-screen" aria-labelledby="history-heading">${secondaryScreenHeader('history-back', { showHint: false, title: '会話履歴', headingId: 'history-heading' })}<div class="history-body">${entries || '<div class="empty-state history-empty"><p>まだ会話履歴はありません。</p><p>問題に正解すると、ここに会話が届きます。</p></div>'}</div></section>`;
 }
 
 function openHistoryScreen() {
@@ -2269,7 +2278,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const solved = state.solved.includes(p.id);
   const sceneProblem = composerExpanded && answerOrigin ? scenario.problems.find(item => item.id === answerOrigin.problemId) : p;
   const inInvestigation = !startView && !investigationView && isInvestigation(sceneProblem.id);
-  const investigationReturnVisible = inInvestigation && state.solved.includes(sceneProblem.id) && !isPlaying && !(answerOrigin?.repeatAnswer ?? repeatAnswer);
+  const investigationReturnVisible = inInvestigation && !composerExpanded && state.solved.includes(sceneProblem.id) && !isPlaying && !(answerOrigin?.repeatAnswer ?? repeatAnswer);
   const nextProblem = followingProblem(p);
   const resumedAnswer = !composerExpanded && answerOrigin?.problemId === p.id && scenario.problems.find(item => item.id === answerOrigin.answerId);
   const answerTarget = resumedAnswer || (!startView && !repeatAnswer && solved ? nextProblem ?? p : p);
@@ -2404,8 +2413,19 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   updateConversationNotice();
   if (scroll) scrollConversationToEnd();
   if (showClues) {
-    if (knownClueCount !== null && clueCount > knownClueCount && !panel.open) announceNewClue(clueCount - knownClueCount);
+    const unlocked = unlockedCards(scenario, state);
+    const ids = new Set(unlocked.map(card => card.id));
+    const previousIds = knownUnlockedIds;
+    knownUnlockedIds = ids;
     knownClueCount = clueCount;
+    if (previousIds && !panel.open) {
+      const gained = unlocked.filter(card => !previousIds.has(card.id));
+      const physical = gained.find(card => card.id === '404');
+      if (physical) {
+        const gallery = (scenario.clueGallery ?? []).find(card => card.requires?.card === '404');
+        presentCardReward(gallery ?? physical, false, '会場でプレイされている方はスタッフからカード現物を受け取ってください。');
+      } else if (gained.length) announceNewClue(gained.length);
+    }
   }
   syncNavigation();
   if (clueCount !== lastClueBadgeCount) {
@@ -2415,8 +2435,35 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   save();
 }
 let knownClueCount = null;
+let knownUnlockedIds = null;
+const multiSelectionOrder = new Map();
+
+// 上限を超えたら、いちばん先に選んだものを外して新しい選択を残す。
+function capSelectionOrder(order, value, adding, limit) {
+  const next = order.filter(item => item !== value);
+  if (!adding) return next;
+  next.push(value);
+  return next.length > limit ? next.slice(-limit) : next;
+}
+
+function capMultiSelection(input) {
+  const problem = current();
+  const limit = problem?.selectionCount;
+  if (problem?.type !== 'multiple' || !limit) return;
+  const form = input.closest?.('#answer-form');
+  if (!form?.querySelectorAll) return;
+  const boxes = [...form.querySelectorAll('input[type="checkbox"][name="answer"]')];
+  if (!boxes.length || boxes.some(box => typeof box.checked !== 'boolean')) return;
+  const checked = new Set(boxes.filter(box => box.checked).map(box => box.value));
+  const known = (multiSelectionOrder.get(problem.id) ?? []).filter(value => checked.has(value));
+  const restored = [...checked].filter(value => !known.includes(value) && value !== input.value);
+  const order = capSelectionOrder([...known, ...restored], input.value, Boolean(input.checked), limit);
+  for (const box of boxes) box.checked = order.includes(box.value);
+  multiSelectionOrder.set(problem.id, order);
+}
 
 function combineUnlocked() {
+  if (playSaves?.getStatus().mode === 'debug') return true;
   return state.solved.includes('Q1');
 }
 
@@ -2484,10 +2531,7 @@ function clearCombineSelecting() {
 const combineClickSuppressed = id => id === combineSuppressCard && performance.now() < combineSuppressUntil;
 
 function placeCombineCard(id) {
-  const index = combineSelection.indexOf(id);
-  if (index >= 0) combineSelection = combineSelection.filter(item => item !== id);
-  else if (combineSelection.length < 2) combineSelection = [...combineSelection, id];
-  else combineSelection = [combineSelection[0], id];
+  combineSelection = capSelectionOrder(combineSelection, id, !combineSelection.includes(id), 2);
 }
 
 function toggleCombineCard(id) {
@@ -2554,8 +2598,8 @@ function combinationRewardCard(result) {
   return (scenario.clueGallery ?? []).find(card => card.requires?.combination === result.id) ?? null;
 }
 
-function presentCardReward(card, already) {
-  pendingReward = { card, already };
+function presentCardReward(card, already, note = '') {
+  pendingReward = { card, already, note };
   openPanel('hex-reward');
 }
 
@@ -2663,6 +2707,7 @@ function applyCombineResult(ids, returnTab = clueTab) {
   const already = state.combinations.includes(result.id);
   if (!already) {
     state.combinations.push(result.id);
+    if (knownUnlockedIds) for (const card of unlockedCards(scenario, state)) knownUnlockedIds.add(card.id);
     if (knownClueCount !== null) knownClueCount = unlockedCards(scenario, state).length;
     save();
   }
@@ -2716,6 +2761,7 @@ function hexReplayMenuItem() {
 }
 
 function canReplayQ9() {
+  if (playSaves?.getStatus().mode === 'debug') return true;
   return state.solved.includes('Q9') && Boolean(state.branches?.Q9);
 }
 
@@ -2743,11 +2789,15 @@ function hexEntryButton() {
   return `<button type="button" class="clue-hex-entry" data-action="hex-open"${locked ? ' disabled' : ''} aria-label="${locked ? '控室のパズルは解答済み' : '控室のパズルを解く'}"></button>`;
 }
 
+function luminolEntryButton() {
+  return `<button type="button" class="clue-luminol-entry" data-action="luminol-open" aria-label="トンカチをルミノールで調べる"><span>検査する</span></button>`;
+}
+
 function cluePhotoCardMarkup(card, { current = false } = {}) {
   const selected = combineSelecting && combineSelection.includes(card.id);
   const order = combineOrderMark(card.id);
   const check = combineSelecting && !selected ? '<span class="select-check" aria-hidden="true"></span>' : '';
-  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}</article>`;
+  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}${card.puzzle === 'luminol' ? luminolEntryButton() : ''}</article>`;
 }
 
 function clueCardExpandedMarkup(gallery, index) {
@@ -2881,6 +2931,7 @@ function playHexRewardReveal() {
   requestAnimationFrame(() => requestAnimationFrame(start));
 }
 let resolvedMountHexCube = null;
+let resolvedMountLuminol = null;
 function ensureHexSuccessCss() {
   if (typeof document?.createElement !== 'function') return;
   if (document.querySelector('link[data-hex-success-css]')) return;
@@ -2919,6 +2970,12 @@ async function openHexCube(id='hex-cube', { replay = false } = {}) {
   if (gateVisible || playSaves.getStatus().phase === 'conflict') return;
   pendingReward = null;
   openPanel(panelKind);
+}
+async function openLuminol() {
+  if (gateVisible) return;
+  if (!resolvedMountLuminol) resolvedMountLuminol = (await import('./luminol.js')).mountLuminol;
+  if (gateVisible) return;
+  openPanel('luminol');
 }
 function hexRewardPanel() {
   if(playSaves.getStatus().phase==='conflict')return 'hex-pending';
@@ -3070,7 +3127,7 @@ function bindCombineCardGestures() {
   let press = null;
 
   const targetFromEvent = event => {
-    if (event.target?.closest?.('[data-action="clue-card-close"], .combine-select-bar, .clue-tabs, .icon-button')) return null;
+    if (event.target?.closest?.('[data-action="clue-card-close"], [data-action="luminol-open"], .combine-select-bar, .clue-tabs, .icon-button')) return null;
     const tile = event.target?.closest?.('[data-action="clue-card-open"][data-id]');
     if (tile) return { id: tile.dataset.id, kind: 'tile', el: tile };
     const card = event.target?.closest?.('.clue-gallery-card[data-combine-id]');
@@ -3295,7 +3352,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   panel.classList.remove('is-closing');
   panel.classList.toggle('image-viewer', isImagePanel);
   panel.classList.toggle('clue-gallery', kind === 'clues');
-  panel.classList.toggle('hex-cube-panel', kind === 'hex-cube');
+  panel.classList.toggle('hex-cube-panel', kind === 'hex-cube' || kind === 'luminol');
   panel.classList.toggle('hex-reward-panel', kind === 'hex-reward');
   panel.classList.toggle('hint-panel', kind === 'hints');
   panel.classList.toggle('answer-choice-dialog', ['answer-choices', 'symbol-choices'].includes(kind));
@@ -3332,9 +3389,13 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     const showReplay = !pendingReward && playSaves.getStatus().mode === 'debug';
     title = already ? '取得済みの手がかり' : '手がかりを手に入れた';
     const message = already ? 'この手がかりは取得済みです。' : `新しい手がかり「${esc(card.title)}」を手に入れた。`;
-    content = `<div class="hex-reward-stage"><div class="hex-reward-flash" aria-hidden="true"></div><div class="hex-reward-card"${already ? ' data-settled="true"' : ''}><div class="hex-reward-spin"><div class="hex-reward-face hex-reward-back" aria-hidden="true"></div><div class="hex-reward-face hex-reward-front"><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async"></div></div></div></div><p class="hex-reward-message" role="status">${message}</p><div class="hex-reward-actions"><button class="primary-button" data-action="hex-card">手がかりを見る</button>${showReplay ? '<button class="secondary-button" data-action="hex-open">もう一度解く</button>' : ''}</div>`;
+    const note = pendingReward?.note ? `<strong class="hex-reward-note">${esc(pendingReward.note)}</strong>` : '';
+    content = `<div class="hex-reward-stage"><div class="hex-reward-flash" aria-hidden="true"></div><div class="hex-reward-card"${already ? ' data-settled="true"' : ''}><div class="hex-reward-spin"><div class="hex-reward-face hex-reward-back" aria-hidden="true"></div><div class="hex-reward-face hex-reward-front"><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async"></div></div></div></div><p class="hex-reward-message" role="status">${message}${note}</p><div class="hex-reward-actions"><button class="primary-button" data-action="hex-card">手がかりを見る</button>${showReplay ? '<button class="secondary-button" data-action="hex-open">もう一度解く</button>' : ''}</div>`;
   } else if (kind === 'hex-pending') {
     title='システム';content='<p role="status">クリアしました。手がかりの保存を確認しています。通信が戻ったら、もう一度確認してください。</p><button class="primary-button full" data-action="hex-save-retry">保存を確認する</button>';
+  } else if (kind === 'luminol') {
+    title = 'ルミノール検査';
+    content = '<div id="luminol-host"></div>';
   } else if (kind === 'resume') {
     title = '続きから';
     content = `<form id="resume-form"><p id="resume-help">6桁の再開番号を入力してください。</p><fieldset class="resume-digits" aria-describedby="resume-help resume-error" ${gateBusy ? 'disabled' : ''}><legend class="sr-only">再開番号（数字6桁）</legend>${gateDigits.map((digit, index) => `<input id="resume-digit-${index}" data-resume-digit="${index}" name="digit" type="text" inputmode="numeric" pattern="[0-9０-９]" maxlength="1" required autocomplete="${index === 0 ? 'one-time-code' : 'off'}" aria-label="再開番号 ${index + 1}桁目" aria-invalid="${Boolean(gateError)}" value="${esc(digit)}">`).join('')}</fieldset><p id="resume-error" class="resume-error" role="alert">${esc(gateError)}</p><button class="primary-button full" type="submit" ${gateBusy ? 'disabled' : ''}>${gateBusy ? '確認中…' : '続きから'}</button></form>`;
@@ -3352,7 +3413,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     content = `<img class="puzzle-full-image" src="${esc(image.src)}" alt="${esc(image.alt)}" draggable="false">`;
   } else if (kind === 'trouble') {
     title = 'トラブル';
-    content = `<details class="trouble-photos"><summary>N5の現地資料が見られないとき</summary>${travelGuideMarkup(scenario.troubleGuide, 'trouble')}</details>`;
+    content = `<section class="trouble-guide"><header class="trouble-guide-heading"><h3>N5の現地資料が見られないとき</h3><p>会場の4箇所を、貼ってある位置のまま確認できます。写真をタップすると拡大します。</p></header><div class="trouble-photos">${travelGuideMarkup(scenario.troubleGuide, 'trouble')}</div></section>`;
   } else if (kind === 'travel-image') {
     const guide = travelId === 'trouble' ? scenario.troubleGuide
       : travelId === 'venue' ? scenario.venueGuide : scenario.problems.find(item => item.id === travelId)?.travelGuide;
@@ -3466,7 +3527,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     : kind === 'hex-reward'
     ? `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button hex-reward-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="panel-body hex-reward-body">${content}</div>`
     : `<div class="panel-header"><div><h2 id="panel-title"${saveInfo ? ' tabindex="-1"' : ''}>${title}</h2></div>${kind === 'hints' ? (p?.explanation ? `<button type="button" class="hint-answer-button" data-action="hint-answer" aria-expanded="false"${!p.hints.length || (state.hints[p.id] || 1) >= p.hints.length ? '' : ' hidden'}>解答を見る</button>` : '') : `<button class="icon-button" data-action="close" aria-label="閉じる">${icon('close')}</button>`}</div><div class="panel-body">${content}</div>`;
-  const draggableSheet = !isImagePanel && !pageTurnDialog && !tourThanksDialog && !afterwordDialog && !['start-answer', 'answer-choices', 'symbol-choices', 'clues', 'hex-cube', 'hex-reward'].includes(kind);
+  const draggableSheet = !isImagePanel && !pageTurnDialog && !tourThanksDialog && !afterwordDialog && !['start-answer', 'answer-choices', 'symbol-choices', 'clues', 'hex-cube', 'hex-reward', 'luminol'].includes(kind);
   panel.classList.toggle('draggable-sheet', draggableSheet);
   if (draggableSheet) {
     const header = panel.querySelector('.panel-header');
@@ -3495,6 +3556,10 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   if (kind === 'hex-cube') {
     if (!resolvedMountHexCube) throw new Error('六角形の装置を読み込めていません。');
     miniView=resolvedMountHexCube(panel.querySelector('#hex-cube-host'),{onComplete:finishHexCube,onFailure:recordHexFailure,canInteract:()=>!gateVisible&&!miniSaving&&playSaves.getStatus().phase!=='conflict'});
+  }
+  if (kind === 'luminol') {
+    if (!resolvedMountLuminol) throw new Error('ルミノール検査を読み込めていません。');
+    miniView = resolvedMountLuminol(panel.querySelector('#luminol-host'), { canInteract: () => !gateVisible, onDone() { closePanel(); } });
   }
   if (kind === 'hex-reward') playHexRewardReveal();
   if (kind === 'hints') bindHintReader(p);
@@ -3809,9 +3874,10 @@ document.addEventListener('click', event => {
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
-  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'yoi-page-turn', 'mei-end', 'mei-survey', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues', 'chat', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-replay', 'replay-q9', 'hex-card', 'hex-save-retry', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
+  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'yoi-page-turn', 'mei-end', 'mei-survey', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'clues', 'chat', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-replay', 'replay-q9', 'hex-card', 'hex-save-retry', 'luminol-open', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
   if (['close', 'close-menu', 'save-entry-back'].includes(action)) haptics.trigger('dismiss');
   if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
+  if (action === 'luminol-open') { void openLuminol(); return; }
   if (action === 'hex-replay') { openHexCube('hex-cube', { replay: true }); return; }
   if (action === 'replay-q9') { replayQ9(); return; }
   if (action === 'hex-save-retry') {if(!miniSaving){miniSaving=true;hexReturnToChat=false;void confirmHexReward().finally(()=>{miniSaving=false;});}return;}
@@ -4289,6 +4355,7 @@ document.addEventListener('keydown', event => {
 });
 for (const name of ['input', 'change']) {
   document.addEventListener(name, event => {
+    if (name === 'change' && event.target.matches?.('input[type="checkbox"]') && event.target.closest?.('#answer-form')) capMultiSelection(event.target);
     if (name === 'change' && event.target.matches?.('select, input[type="radio"], input[type="checkbox"]') && event.target.closest('#answer-form, #combine-form')) haptics.trigger();
     if (event.target.closest('#answer-form')) { setAnswerError(false); updateAnswerReadiness({ feedback: true }); rememberAnswerDraft(); save(); }
     if (name === 'input' && event.target.dataset?.resumeDigit !== undefined && !event.isComposing) setResumeDigits(Number(event.target.dataset.resumeDigit), event.target.value);
