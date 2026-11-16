@@ -22,7 +22,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     const messages = state.messages.filter(m => m.problemId === p.id && isConversationLine(m));
     return { startView: !state.solved.length && p.id === scenario.problems[0].id,
-      yoiEndView: false, meiEndRoute: null, meiEndView: false, showVenueDirections: false, investigationView: false,
+      yoiEndView: false, meiEndView: false, showVenueDirections: false, investigationView: false,
       repeatAnswer: false, composerExpanded: p.openAnswerOnEntry !== false && !state.solved.includes(p.id) && !(!state.solved.length && p.id === scenario.problems[0].id), sceneStart: state.messages.length,
       displayedMessages: messages, isPlaying: false, investigationScrollTop: 0, investigationReturnId: null,
       puzzleImageIndex: 0, chatScrollTop: 0, selectedPuzzleAnswer: '', selectedSymbols: [], answerDrafts: {} };
@@ -62,9 +62,9 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
     startView: Boolean(raw.startView) && p.id === scenario.problems[0].id,
     showVenueDirections: raw.showVenueDirections === true,
     yoiEndView: Boolean(raw.yoiEndView) && p.completionScreen === 'yoi' && state.solved.includes(p.id),
-    meiEndRoute: p.id === 'Q9' && state.solved.includes('Q9') && state.branches.Q9 === raw.meiEndRoute
+    ...(p.id === 'Q9' && state.solved.includes('Q9') && state.branches.Q9 === raw.meiEndRoute
       && scenario.problems.find(item => item.id === 'Q9')?.answerBranches?.some(branch => branch.id === raw.meiEndRoute)
-      ? raw.meiEndRoute : null,
+      ? { meiEndRoute: raw.meiEndRoute } : {}),
     meiEndView: Boolean(raw.meiEndView) && p.id === 'Q9' && state.solved.includes(p.id),
     ...(Array.isArray(raw.seenConclusions) ? {
       seenConclusions: scenario.investigation.entries.filter(id => raw.seenConclusions.includes(id) && state.solved.includes(id)),
