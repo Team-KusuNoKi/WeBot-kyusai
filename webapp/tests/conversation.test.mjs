@@ -2708,6 +2708,21 @@ test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む
   assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, false, false, true]);
   assert.equal(h.evaluate("answer(['203', '001', '', '302']).status"), 'incorrect');
   assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, true, false, false]);
+  // 片方だけの記入では、空欄側に色を付けない。記入した番号が違う欄だけを赤くする。
+  assert.equal(h.evaluate("answer(['999', '', '', '']).status"), 'incorrect');
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [true, false, false, false]);
+  assert.equal(h.evaluate("answer(['203', '', '', '']).status"), 'incorrect');
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, false, false, false]);
+  assert.equal(h.evaluate("answer(['', '', '', '302']).status"), 'incorrect');
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, false, false, false]);
+  assert.equal(h.evaluate("answer(['', '', '', '111']).status"), 'incorrect');
+  assert.equal(h.answerForm.classList.contains('is-incorrect'), false);
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, false, false, true]);
+  assert.equal(h.evaluate("answer(['', '5', '6', '']).status"), 'incorrect');
+  assert.deepEqual(h.fieldStubs.map(el => el.classList.contains('is-incorrect')).slice(0, 4), [false, true, true, false]);
   assert.equal(h.evaluate("answer(['２０３', '', '', '３０２']).status"), 'correct');
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   finishScene(h);
@@ -2747,6 +2762,34 @@ test('Q6.2とQ7の会話完了時のSTOPからQ7・Q8の回答パネルへ進む
   assert.ok(restored.workspace.innerHTML.includes('お好きな場所で続きをお楽しみください。(ただし、はさみとテープが必要になるのでご注意ください)'));
   restored.click('select', 'Q7');
   assert.equal(restored.evaluate("state.solved.includes('Q7')"), true);
+});
+
+test('Q7は未記入の欄を塗らず、片方だけの記入でも送信できる', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.click('select', 'Q7');
+  const result = JSON.parse(h.evaluate(`JSON.stringify((() => {
+    const classes = () => { const names = new Set(); return { add(name) { names.add(name); }, remove(name) { names.delete(name); }, contains(name) { return names.has(name); }, toggle(name, on) { if (on) names.add(name); else names.delete(name); } }; };
+    const inputs = [0, 1, 2, 3].map(index => ({ classList: classes(), value: '', required: index === 0 || index === 3, type: 'text', attributes: {}, setAttribute(name, value) { this.attributes[name] = value; }, removeAttribute(name) { delete this.attributes[name]; }, focus() {}, closest() { return this; } }));
+    const form = document.querySelector('#answer-form');
+    form.elements = inputs;
+    form.dataset = {};
+    form.querySelectorAll = selector => selector === '.needs-answer' ? inputs.filter(el => el.classList.contains('needs-answer')) : String(selector).startsWith('input') ? inputs : [];
+    form.querySelector = () => null;
+    globalThis.FormData = class { getAll() { return ['', '', '', '']; } };
+    const blocked = updateAnswerReadiness({ highlight: true }) === false;
+    const painted = inputs.map(el => el.classList.contains('needs-answer'));
+    const completion = form.classList.contains('needs-completion');
+    globalThis.FormData = class { getAll() { return ['999', '', '', '']; } };
+    inputs[0].value = '999';
+    const ready = updateAnswerReadiness({ highlight: true });
+    return { blocked, painted, completion, ready, paintedAfter: inputs.map(el => el.classList.contains('needs-answer')) };
+  })())`));
+  assert.equal(result.blocked, true);
+  assert.equal(result.completion, false);
+  assert.deepEqual(result.painted, [false, false, false, false]);
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.paintedAfter, [false, false, false, false]);
 });
 
 test('Q7の保存済みの会場案内にもはさみとテープの注意書きを表示する', t => {

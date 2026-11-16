@@ -123,7 +123,13 @@ export function submitAnswer(scenario, state, answer) {
   if (!problem || !canOpenProblem(problem, state)) return { state, status: 'locked' };
   if (problem.type === 'pending') return { state, status: 'unavailable' };
   if (state.solved.includes(problem.id)) return { state, status: 'already-solved' };
-  if (problem.type === 'fields' && (!Array.isArray(answer) || answer.length !== problem.fields.length || answer.some((value, index) => typeof value !== 'string' || (!normalizeAnswer(value) && !problem.fields[index].optional)))) return { state, status: 'empty' };
+  if (problem.type === 'fields') {
+    const shape = Array.isArray(answer) && answer.length === problem.fields.length && answer.every(value => typeof value === 'string');
+    const missingRequired = shape && answer.some((value, index) => !normalizeAnswer(value) && !problem.fields[index].optional);
+    // 未記入を色で示せない問題は、1欄でも記入があれば正誤を判定する。全欄空欄は未回答のまま。
+    const judgePartial = problem.concealBlankFields && shape && answer.some(value => normalizeAnswer(value));
+    if (!shape || (missingRequired && !judgePartial)) return { state, status: 'empty' };
+  }
   if (problem.answerSlots && (typeof answer !== 'string' || Array.from(normalizeAnswer(answer)).length !== problem.answerSlots)) return { state, status: 'empty' };
   const labels = problem.type === 'fields'
     ? problem.answerParts

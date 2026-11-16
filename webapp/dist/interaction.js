@@ -67,6 +67,8 @@ export function answerReadiness(problem, raw) {
       return { ready: false, message: `共通の言葉をひらがな${problem.fields[index].length}文字で入力してください。` };
     }
   }
+  // 未記入の欄を「まだ足りない」と数えると、記入すべき場所が分かってしまう。
+  if (problem.concealBlankFields) return { ready: values.length > 0, message: values.length ? '' : '答えを入力してください。' };
   const remaining = Math.max(0, required - values.length);
   if (problem.type === 'multiple' && problem.selectionCount && values.length > required) return { ready: false, message: `${required}つ選んでください。現在${values.length}つ選択しています。` };
   return { ready: remaining === 0, message: remaining === 0 ? '' : problem.type === 'fields' || problem.answerSlots ? `あと${remaining}つの空欄を入力・選択してください。` : problem.type === 'multiple' ? `あと${remaining}つ選んでください。` : problem.type === 'single' || problem.answerChoices || problem.answerControl === 'select' ? '答えを選択してください。' : '答えを入力してください。' };

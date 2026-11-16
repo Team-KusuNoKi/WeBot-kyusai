@@ -486,18 +486,21 @@ test('Q5は16:30とカード番号203が揃った場合だけ正解し、会話�
 test('Q7はA+203とD+302を埋めB・Cを空欄で送ると正解し、前問の記録と推理・会場案内を保存する', () => {
   const problem = scenario.problems.find(p => p.id === 'Q7');
   assert.equal(problem.prompt, '矛盾があるブロックを全て指摘せよ\n矛盾がないと考えるブロックの回答欄は空欄にせよ');
+  assert.equal(problem.concealBlankFields, true);
   assert.deepEqual(problem.fields.map(field => [field.symbol, field.optional ?? false]), [['A', false], ['B', true], ['C', true], ['D', false]]);
   const start = restoreState(scenario, JSON.stringify({ ...initialState(scenario), selected: 'Q6.2', solved: scenario.problems.slice(0, scenario.problems.indexOf(problem)).map(p => p.id) }));
   const state = { ...start, selected: 'Q7' };
   for (const answer of [
     ['203', '001', '', '302'], ['203', '', '001', '302'], ['302', '', '', '203'],
     ['999', '', '', '302'], ['203', '', '', '003'],
+    ['203', '', '', ''], ['', '', '', '302'], ['999', '', '', ''], ['', '', '', '111'],
+    ['203', '001', '', ''], ['', '001', '', ''], ['', '', '9', ''],
   ]) {
     const result = submitAnswer(scenario, state, answer);
     assert.equal(result.status, 'incorrect');
     assert.equal(result.state, state);
   }
-  for (const answer of [['', '', '', ''], ['203', '', '', ''], ['', '', '', '302'], ['203', '001', '', ''], ['203', '', '', '302', '余分'], ['203', '', '302'], '203&302']) {
+  for (const answer of [['', '', '', ''], ['   ', '', '', ''], ['203', '', '', '302', '余分'], ['203', '', '302'], '203&302']) {
     const result = submitAnswer(scenario, state, answer);
     assert.equal(result.status, 'empty');
     assert.equal(result.state, state);

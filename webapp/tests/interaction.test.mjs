@@ -142,6 +142,11 @@ test('未入力・入力途中・複数選択の過不足を、正解データ�
   assert.equal(answerReadiness(multiple, ['a', 'b']).ready, true);
   assert.equal(answerReadiness(multiple, ['a', 'b', 'c']).ready, false);
   assert.equal(answerReadiness({ type: 'fields', fields: [{}, {}] }, ['００３', 'ハナ']).ready, true);
+  const conceal = { type: 'fields', concealBlankFields: true, fields: [{}, { optional: true }, { optional: true }, {}] };
+  assert.equal(answerReadiness(conceal, ['203', '', '', '']).ready, true);
+  assert.equal(answerReadiness(conceal, ['', '1', '', '']).ready, true);
+  assert.equal(answerReadiness(conceal, ['', '', '', '']).ready, false);
+  assert.equal(answerReadiness(conceal, ['', '', '', '']).message, '答えを入力してください。');
 });
 test('日本語変換中・変換確定直後のEnterを送信として扱わない', () => {
   assert.equal(isComposingSubmit({}, true, null), true);

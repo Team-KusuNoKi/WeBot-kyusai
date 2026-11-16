@@ -633,6 +633,8 @@ export const scenario = {
     {
       id: 'Q7', title: 'Q7', chapter: '第二章', type: 'fields',
       answerFieldsLayout: 'pairs',
+      // 未記入の欄に色を付けると、記入すべきブロックが分かってしまう。1欄でも記入があれば判定する。
+      concealBlankFields: true,
       prompt: '矛盾があるブロックを全て指摘せよ\n矛盾がないと考えるブロックの回答欄は空欄にせよ',
       // 記号は行ごとに固定。矛盾するブロックの手がかり番号だけを埋め、矛盾しない行は空欄のまま送る。
       fields: [
@@ -781,7 +783,7 @@ export const scenario = {
     { id: 'clue-14', number: '202', title: '「幽煙の間」について', image: '../assets/clue-cards/clue-14.webp', requires: { solved: ['Q1.1'] } },
     { id: 'clue-15', number: '203', title: '鈴の音', image: '../assets/clue-cards/clue-15.webp', requires: { solved: ['Q1.1'] } },
     { id: 'clue-16', number: '204', title: 'お化け屋敷の設計者', image: '../assets/clue-cards/clue-16.webp', requires: { solved: ['Q1.1'] } },
-    { id: 'clue-17', number: '205', title: '深紅の間：トンカチ', image: '../assets/clue-cards/clue-17.webp', puzzle: 'luminol', requires: { solved: ['Q1.1'] } },
+    { id: 'clue-17', number: '205', title: '深紅の間：トンカチ', image: '../assets/clue-cards/clue-17.webp', requires: { solved: ['Q1.1'] } },
     { id: 'clue-18', number: '206', title: 'サダヲとアツヤ', image: '../assets/clue-cards/clue-18.webp', requires: { solved: ['Q1.1'] } },
     { id: 'clue-19', number: '300', title: '「蝋人形の間」について', image: '../assets/clue-cards/clue-19.webp', requires: { solved: ['Q2.2'] } },
     { id: 'clue-20', number: '301', title: '幽煙の間：北壁', image: '../assets/clue-cards/clue-20.webp', requires: { solved: ['Q2.2'] } },

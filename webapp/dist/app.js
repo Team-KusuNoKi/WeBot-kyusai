@@ -1256,9 +1256,9 @@ function updateAnswerReadiness({ highlight = false, feedback: showFeedback = fal
   }
   const hint = document.querySelector('#answer-readiness');
   if (hint) hint.textContent = multiPart && result.ready ? '入力・選択がそろいました。送信できます。' : result.message;
-  form.classList.toggle('needs-completion', highlight && !result.ready);
+  form.classList.toggle('needs-completion', highlight && !result.ready && !problem.concealBlankFields);
   form.querySelectorAll('.needs-answer').forEach(field => field.classList.remove('needs-answer'));
-  if (highlight && !result.ready) {
+  if (highlight && !result.ready && !problem.concealBlankFields) {
     const empty = [...form.querySelectorAll('input:not([type="hidden"]), select')].filter(field => field.type === 'radio' || field.type === 'checkbox' ? !form.querySelector('input:checked') : !field.value.trim() && field.required);
     for (const field of empty) {
       (field.closest('.answer-field, .answer-options, .text-composer') ?? field).classList.add('needs-answer');
@@ -3711,10 +3711,12 @@ function setAnswerError(incorrect, value = null) {
   const form = document.querySelector('#answer-form');
   if (!form) return;
   const targets = incorrect ? incorrectAnswerTargets(current(), value) : [];
-  form.classList.toggle('is-incorrect', incorrect && !targets.length);
+  // 未記入が不正解でも、欄を塗ると記入すべき場所が分かる。記入した誤りの欄が無いときは全体にも色を付けない。
+  const concealUnfilled = incorrect && current().concealBlankFields && !targets.length;
+  form.classList.toggle('is-incorrect', incorrect && !targets.length && !concealUnfilled);
   form.querySelectorAll('.is-incorrect').forEach(element => element.classList.remove('is-incorrect'));
   form.querySelectorAll('input:not([type="hidden"]), select, .answer-choice-trigger, .symbol-slot-fields, .symbol-slot-button, .answer-options').forEach(field => {
-    if (incorrect && !targets.length) field.setAttribute('aria-invalid', 'true');
+    if (incorrect && !targets.length && !concealUnfilled) field.setAttribute('aria-invalid', 'true');
     else field.removeAttribute('aria-invalid');
   });
   for (const target of targets) {
@@ -3733,7 +3735,9 @@ function setAnswerError(incorrect, value = null) {
   );
   const animated = targets.length
     ? targets.map(shake)
-    : [shake(form.querySelector('.answer-fields, .text-composer, .answer-choice-trigger, .symbol-slot-fields, .answer-options'))];
+    : concealUnfilled
+      ? []
+      : [shake(form.querySelector('.answer-fields, .text-composer, .answer-choice-trigger, .symbol-slot-fields, .answer-options'))];
   answerErrorAnimations = animated.filter(Boolean);
 }
 
