@@ -29,13 +29,16 @@ const n4Visuals = {
   images: [
     { src: '../assets/n4-poster.svg', alt: 'N4の資料1。末席同好会の部員募集ポスター。色付きの文字、縦書きの案内と椅子。' },
     { src: '../assets/n4-diagram.svg', alt: 'N4の資料2。上から見た図への変換例と方位記号、数字と黒い線を配置した格子の図。' },
-    { src: '../assets/n4-map.jpg', alt: 'N4の資料3。吉田南構内の地図。建物番号84〜97と、赤い①〜⑤の位置を表示。' },
+    { src: '../assets/n4-map.jpg', alt: 'N4の資料3。正門・北門・東門・西門・西南門・東南門と、お祭り広場・お化け屋敷・占いの館を示した地図。番号1〜5の位置を表示。' },
   ],
 };
 function routePhoto(id, title, directions) {
   // 一覧は軽量 preview、拡大は同系統の WebP（JPEG 原寸は配信しない）。
   const base = `../assets/travel/${id}`;
   return { title, directions, image: `${base}.webp`, preview: `${base}.preview.webp`, imageAlt: directions };
+}
+function endingNarration(text, scene) {
+  return { speaker: '', text, epilogue: true, scene };
 }
 
 function destinationMove({ destination, placeName, approach = '向かおう', findLabel, findPhrase = `${findLabel}と書かれた問題` }, steps) {
@@ -113,20 +116,18 @@ export const scenario = {
   troubleGuide: {
     destination: 'N5の現地資料',
     steps: [
-      routePhoto('24', '左上', '案内板の写真。'),
-      routePhoto('25', '右上', '石碑に貼られた紙の写真。'),
-      routePhoto('26', '右下', '建物前の外灯の写真。'),
+      routePhoto('24', '左上', '石に貼られた「問題文」の紙の写真。'),
+      routePhoto('25', '右上', '柱に貼られた「北」の紙の写真。'),
+      routePhoto('26', '右下', '案内板の写真。'),
       routePhoto('27', '左下', '石碑に刻まれた文章の写真。'),
     ],
   },
   venueGuide: {
     destination: '推理会場',
-    placeholder: true,
     steps: [
-      { title: '会場へ向かう', directions: 'ここに会場までの道順が入ります。' },
-      { title: '目印を確認する', directions: 'ここに途中の目印と会場入口の案内が入ります。' },
-      { title: '会場に着いたら', directions: '会場で印刷した資料を受け取ったら、下の「推理パートの進め方」をお読みください。' },
-    ].map(step => ({ ...step, image: '../assets/travel-placeholder.webp', preview: '../assets/travel-placeholder.webp', imageAlt: '仮写真：京都大学の時計台。' })),
+      routePhoto('venue-1', '地下への階段', '正面奥は、N4が貼ってある掲示板です。その手前で、写真の赤丸の階段を下りてください。'),
+      routePhoto('venue-2', '建物の右側へ', '地下へ降りて建物に入り、右側へ進んでください。'),
+    ],
   },
   investigation: {
     id: 'Q3', entries: ['Q3.2', 'Q3', 'Q3.3'],
@@ -161,7 +162,7 @@ export const scenario = {
       prompt: '冊子の問題1の答えを、①〜⑩からひとつ選んでください。',
       imageAlt: 'N1の問題原本。仏像はどこにいる？ 答えの数字をA1の？に入れよ。A1. 総合研究？号館へ行け。',
       diagram: '../assets/n1-diagram.svg',
-      diagramAlt: '赤・白・青の3つの円に①〜⑩、太陽、E、稲穂を配置した図。',
+      diagramAlt: '赤・白・青の3つの円に①〜⑩、太陽、ご飯、Helloの人影を配置した図。',
       cardHeading: 'はどこにいる？',
       cardQuestionIcon: '../assets/n1-buddha.svg',
       cardQuestionIconAlt: '仏像',
@@ -195,7 +196,7 @@ export const scenario = {
         { speaker: '', text: '〈N2が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
       ],
       instruction: '',
-      unlock: ['A1'],
+      unlock: [],
     },
     {
       id: 'N2', title: '問題2', chapter: '第一章', type: 'text',
@@ -228,7 +229,7 @@ export const scenario = {
         { speaker: '', text: '〈ここに、法経済学部北館までの行き方を写真付きで分かりやすく解説する〉', travelGuidePart: 'photo' },
         { speaker: '', text: '〈N3が貼ってある場所の写真をここに挿入〉', travelGuidePart: 'confirmation' },
       ],
-      instruction: '', unlock: ['B1'],
+      instruction: '', unlock: [],
     },
     {
       id: 'N3', title: '問題3', chapter: '第一章', type: 'text',
@@ -304,7 +305,7 @@ export const scenario = {
       answerLayout: 'compact',
       answerChoices: destinationChoices,
       prompt: 'チラシが指し示す最期の場所はどこ？',
-      imageAlt: 'N5の問題原本。最期の場所へ行け。4つの地図断片、石碑の裏の文章、縦書きの詩と丸・矢印の図。',
+      imageAlt: 'N5の問題原本。最期の場所へ向かえ。4つの地図断片、石碑の裏の文章、縦書きの詩と丸・矢印の図。',
       diagram: '../assets/n5-diagram.svg',
       diagramAlt: 'N5の図。4つの地図断片と、空欄を含む文章、丸と矢印。',
       cardHeading: 'チラシが指し示す最期の場所はどこ？',
@@ -722,7 +723,18 @@ export const scenario = {
           { speaker: '', text: '雲の裏に夕日が隠れ、辺りが一瞬暗く沈む。その時、足元が揺らいだ気がした。' },
           { speaker: '', text: 'ただ、それでも俺は前を向く。' },
         ] },
-        { id: 'world-saved', answer: 'セカイハスクワレタ', dialogue: [{ speaker: '', text: '世界は救われた。' }] },
+        { id: 'world-saved', answer: 'セカイハスクワレタ', dialogue: [
+          endingNarration('俺はハナの儀式を続行した。神を降ろす…ハナのその言葉にミサメが蘇るという淡い期待を持ったからだった。儀式の完遂をハナが高らかに宣言したあと、ミサメは息を吹き返した。', 'hallway'),
+          endingNarration('俺は人知を超越した奇跡を目の当たりにした。アサヒを目を合わせる。アサヒは涙を浮かべ喜んでいた。急いでミサメのもとに駆け寄る。', 'hallway'),
+          endingNarration('だがその目は虚ろで何も発しない。抜け殻が動いているような不気味さを感じた。ハナの言う厄災を取り除くことができたのかはわからない。ただ、しばらくしてミサメは倒れ込み糸がほどけるように二度目の死を迎えた。', 'hallway'),
+          endingNarration('事件後、図書館の資料を漁り、一つわかったことがあった。京都を襲う厄災は存在しうるということだった。ハナの言葉は全くのデタラメではなかったということだった。', 'library'),
+          endingNarration('毎日起床すると濁った目で透き通る空を窓越しに覗く。変わらぬ空。でも変わってしまった日常がそこにはあった。自然と図書館に向かい、日が沈むまで民俗学や宗教学の資料を漁り京都大地震に関する伝承について追いかけている。俺は残酷な旅の道すがらにいた。', 'library'),
+          endingNarration('旅の果てはあっけないものだった。事件から1年が経とうとした頃だ。\n古書店で埃を被っていた書物からわかったことは、NFで行った儀式は手順を間違えた不完全なものだったということ。あのとき、ミサメを救える可能性があったという取り返しのつかない事実だった。', 'bookstore'),
+          endingNarration('真実を知って俺は自分を責めた。拳を握り声を上げ、顔を歪めた。そしてミサメの死を泣くことのできたということー旅の終わりーに安堵さえしていた。', 'bookstore'),
+          endingNarration('最後にたどり着く真実は多分今以上に俺を苦しめる。そういう予感は確かにあった。それでも進み続けたのは意味と実感が欲しかったからだ。自分の選んだ結末の意味、たとえそれが後悔をもたらしたとしても、選択の果てにあるこの現実を生きていて生きなくてはいけないという感覚である。', 'void'),
+          endingNarration('そこにたどり着けたとき俺はミサメの死を心から泣くことができると信じていた。', 'void'),
+          endingNarration('踏みしだかれたイチョウの葉が今年も続くNFの盛況ぶりを物語っている。俺の腕に腕章はもうない。これは俺が選んだ結末で、俺が守った場所だ。そう自分に言い聞かせて俺は日の昇りきらぬNFを後にした。', 'ginkgo'),
+        ] },
         { id: 'all-saved', answer: 'スベテガスクワレタ', dialogue: [{ speaker: '', text: '全てが救われた。' }] },
       ],
       hints: [], explanation: '',
@@ -732,7 +744,7 @@ export const scenario = {
     },
   ],
   minigames: [{
-    id: 'hex-cube', title: '控室の問題', body: '六角形の模様が描かれた小さな装置。面を操作すると、中に隠されたものが取り出せそうだ。', rewardCard: 'hex-cube-note',
+    id: 'hex-cube', title: '控室の問題', body: '六角形の模様が描かれた小さな装置。面を操作すると、中に隠されたものが取り出せそうだ。', rewardCard: 'clue-23',
     hints: [
       'イラストの下に書かれている「2D → 3D → 2D……」に注目してみよう。これはいったい何の指示なのだろうか。',
       'おそらく指示の内容は、2D → 3D → 2D……のようにイラストの見方を順に変えていけということだろう。その指示に従って、もう一度問題を解いてみよう。',
@@ -742,10 +754,7 @@ export const scenario = {
     ],
   }],
   cards: [
-    { id: 'hex-cube-note', title: '装置から出てきたメモ（仮）', text: '装置を開くと、小さなメモが入っていた。「次の手がかりは、この先にある。」', mark: '仮' },
     { id: '404', title: '追加カード404', text: '手元の追加カード404を確認してください。', mark: '404' },
-    { id: 'A1', title: '11月のしるし', text: 'タイトルに刻まれた、11という数字。', mark: '11' },
-    { id: 'B1', title: '次の月', text: '11の次に続く数字は、12。', mark: '12' },
   ],
   // 手がかり画面のカード一覧（人物カードは公開情報タブ側）。image は app/ からの相対パス。
   clueGallery: [
@@ -785,7 +794,6 @@ export const scenario = {
     { id: 'clue-32', number: '003', title: 'サダヲ', image: '../assets/clue-cards/clue-32.webp' },
   ],
   combinations: [
-    { cards: ['A1', 'B1'], title: '月をつなぐ', text: '11月から12月へ。このように2枚のカードを組み合わせると、新しい情報を表示できます。', id: 'months' },
     { id: 'combine-401', cards: ['clue-5', 'clue-16'], title: '鏡の間：違和感', text: '手がかりカード401「鏡の間：違和感」を手に入れた。カード一覧で確認できる。' },
     { id: 'combine-402', cards: ['clue-1', 'clue-12'], title: '布について', text: '手がかりカード402「布について」を手に入れた。カード一覧で確認できる。' },
     { id: 'combine-403', cards: ['clue-19', 'clue-16'], title: '蝋人形の間：違和感', text: '手がかりカード403「蝋人形の間：違和感」を手に入れた。カード一覧で確認できる。' },

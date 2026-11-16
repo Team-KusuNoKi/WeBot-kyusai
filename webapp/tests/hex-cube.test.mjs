@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { scenario } from '../dist/scenario.js';
-import { initialState, restoreState, completeMinigame, unlockedCards } from '../dist/engine.js';
+import { initialState, restoreState, completeMinigame, unlockedCards, unlockedGalleryCards } from '../dist/engine.js';
 import { initialPuzzle, applyPuzzleMove, squareFor, verifyPuzzleSolution, readMinigameEntry } from '../dist/hex-cube-model.js';
 import { createLocalD1 } from '../scripts/local-d1.mjs';
 import { handlePlaySave } from '../server/play-saves.js';
@@ -35,17 +35,20 @@ test('3手で全面を塗っても失敗になり、報酬を付与しない',()
   assert.equal(result.status,'incorrect');
   assert.equal(result.state,start);
 });
-test('クリア後は会話を追加せずシステムメッセージと仮カードを一度だけ取得する',()=>{
+test('クリア後は会話を追加せず手がかり400を一度だけ取得する',()=>{
   const start=initialState(scenario),result=completeMinigame(scenario,start,'hex-cube',solution);
   assert.equal(result.status,'correct');assert.equal(result.state.selected,start.selected);assert.deepEqual(result.state.solved,start.solved);
-  const added=result.state.messages.slice(start.messages.length);assert.equal(added.length,1);assert.equal(added[0].speaker,'システム');assert.equal(added[0].kind,'success');
-  assert.equal(unlockedCards(scenario,result.state).filter(card=>card.id==='hex-cube-note').length,1);
+  assert.equal(result.state.messages.length,start.messages.length);
+  assert.equal(result.state.messages.some(message=>message.minigameId==='hex-cube'||message.text?.includes('装置から出てきたメモ')),false);
+  assert.equal(scenario.cards.some(card=>card.id==='hex-cube-note'),false);
+  assert.equal(unlockedCards(scenario,result.state).filter(card=>card.id==='clue-23').length,1);
+  assert.equal(unlockedGalleryCards(scenario,result.state).some(card=>card.id==='clue-23'),true);
   const again=completeMinigame(scenario,result.state,'hex-cube',solution);assert.equal(again.status,'already-solved');assert.equal(again.state,result.state);
   assert.equal(completeMinigame(scenario,start,'hex-cube',[[0]]).status,'incorrect');assert.equal(completeMinigame(scenario,start,'unknown',solution).status,'unavailable');
 });
 test('保存を再開してもクリアと取得カードを保持し、旧記録はそのまま読み込める',()=>{
   const start=initialState(scenario),cleared=completeMinigame(scenario,start,'hex-cube',solution).state;
-  const restored=restoreState(scenario,JSON.stringify(cleared));assert.deepEqual(restored.minigames,['hex-cube']);assert.equal(unlockedCards(scenario,restored).filter(card=>card.id==='hex-cube-note').length,1);
+  const restored=restoreState(scenario,JSON.stringify(cleared));assert.deepEqual(restored.minigames,['hex-cube']);assert.equal(unlockedCards(scenario,restored).filter(card=>card.id==='clue-23').length,1);
   const legacy={...start};delete legacy.minigames;assert.deepEqual(restoreState(scenario,JSON.stringify(legacy)).minigames,[]);
   assert.deepEqual(restoreState(scenario,JSON.stringify({...start,minigames:['unknown','hex-cube','hex-cube']})).minigames,['hex-cube']);
 });
@@ -73,5 +76,5 @@ test('11月の救祭の既存保存APIでカード取得を保存し6桁番号�
   const cleared=completeMinigame(scenario,start,'hex-cube',solution).state;
   const saved=await request({action:'save',code:created.code,revision:created.revision,state:cleared,view});
   const loaded=await request({action:'load',code:created.code});assert.equal(loaded.revision,saved.revision);
-  const state=restoreState(scenario,JSON.stringify(loaded.state));assert.deepEqual(state.minigames,['hex-cube']);assert.equal(unlockedCards(scenario,state).filter(card=>card.id==='hex-cube-note').length,1);
+  const state=restoreState(scenario,JSON.stringify(loaded.state));assert.deepEqual(state.minigames,['hex-cube']);assert.equal(unlockedCards(scenario,state).filter(card=>card.id==='clue-23').length,1);
 });

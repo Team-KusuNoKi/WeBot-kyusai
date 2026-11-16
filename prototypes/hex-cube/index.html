@@ -170,7 +170,7 @@ async function commitMove(index, selectedFace, feedbackFinished) {
   if(moveCount===REQUIRED_MOVES){
    $('feedback').textContent='クリア！ すべてのエリアに色がつきました。';
    showHexSuccess(document.body).finished.then(() => {
-    $('reward-message').textContent = rewardReceived ? 'この手がかりは取得済みです。' : '新しい手がかり「装置から出てきたメモ（仮）」を手に入れた。';
+    $('reward-message').textContent = rewardReceived ? 'この手がかりは取得済みです。' : '新しい手がかり「控室について」を手に入れた。';
     rewardReceived = true;
     $('reward').showModal();
    });

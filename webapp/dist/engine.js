@@ -184,9 +184,23 @@ function unlockedCardIds(scenario, state) {
   return ids;
 }
 
+export function minigameReward(scenario, id) {
+  const game = (scenario.minigames ?? []).find(item => item.id === id);
+  if (!game) return null;
+  return scenario.cards.find(card => card.id === game.rewardCard)
+    ?? scenario.clueGallery?.find(card => card.id === game.rewardCard)
+    ?? null;
+}
+
 export function unlockedCards(scenario, state) {
   const ids = unlockedCardIds(scenario, state);
-  return scenario.cards.filter(c => ids.has(c.id));
+  const cards = scenario.cards.filter(c => ids.has(c.id));
+  for (const game of scenario.minigames ?? []) {
+    if (!ids.has(game.rewardCard) || cards.some(card => card.id === game.rewardCard)) continue;
+    const reward = scenario.clueGallery?.find(card => card.id === game.rewardCard);
+    if (reward) cards.push(reward);
+  }
+  return cards;
 }
 
 function galleryCardUnlocked(scenario, card, state, cardIds) {
@@ -210,6 +224,5 @@ export function completeMinigame(scenario, state, id, moves) {
   if(!game)return {state,status:'unavailable'};
   if(!verifyPuzzleSolution(moves))return {state,status:'incorrect'};
   if(state.minigames?.includes(id))return {state,status:'already-solved'};
-  const card=scenario.cards.find(card=>card.id===game.rewardCard);
-  return {status:'correct',state:{...state,minigames:[...(state.minigames??[]),id],messages:[...state.messages,{speaker:'システム',kind:'success',minigameId:id,text:`新しい手がかり「${card.title}」を手に入れた。`}]}};
+  return {status:'correct',state:{...state,minigames:[...(state.minigames??[]),id]}};
 }

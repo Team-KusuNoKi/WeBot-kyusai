@@ -74,7 +74,7 @@ test('不正解で進行・カードを解除せず、再回答で正解でき�
   const right = submitAnswer(scenario, wrong.state, ['10']);
   assert.equal(right.status, 'correct');
   assert.deepEqual(right.state.solved, ['N1']);
-  assert.deepEqual(unlockedCards(scenario, right.state).map(c => c.id), ['A1']);
+  assert.deepEqual(unlockedCards(scenario, right.state).map(c => c.id), []);
 });
 test('空回答で会話を追加しない', () => {
   const state = initialState(scenario);
@@ -99,15 +99,17 @@ test('会話分岐は正解後に一度だけ選べる', () => {
   assert.equal(chooseBranch(scenario, branch, 'N1', 'continue'), branch);
 });
 test('カードの組み合わせは順序を問わず、同じカードや余計なカードは認めない', () => {
-  assert.equal(findCombination(scenario, ['B1', 'A1']).id, 'months');
-  for (const ids of [[], ['A1'], ['A1', 'A1'], ['A1', 'C1'], ['A1', 'B1', 'C1']]) assert.equal(findCombination(scenario, ids), null);
+  assert.equal(findCombination(scenario, ['clue-16', 'clue-5']).id, 'combine-401');
+  for (const ids of [[], ['clue-5'], ['clue-5', 'clue-5'], ['clue-5', 'clue-1'], ['clue-5', 'clue-16', 'clue-1']]) assert.equal(findCombination(scenario, ids), null);
+  assert.equal(scenario.cards.some(card => ['A1', 'B1'].includes(card.id)), false);
+  assert.equal(scenario.combinations.some(item => item.id === 'months'), false);
 });
 test('進行・分岐・ヒント・考察・会話を保存状態から復元する', () => {
   const scenario = branchingScenario;
   let state = submitAnswer(scenario, initialState(scenario), ['10']).state;
   state = chooseBranch(scenario, state, 'N1', 'how');
   state.hints['N1'] = 1;
-  state.combinations = ['months'];
+  state.combinations = ['combine-401'];
   assert.deepEqual(restoreState(scenario, JSON.stringify(state)), state);
 });
 test('破損した保存データや旧形式から安全に開始する', () => {
@@ -590,7 +592,14 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
   assert.equal(ending[1].epilogue, true);
   assert.equal(ending.at(-1).text, 'ただ、それでも俺は前を向く。');
   assert.equal(ending.find(line => line.text.includes('約束ですよ')).speaker, 'ミサメ');
-  assert.equal(problem.answerBranches.find(branch => branch.id === 'world-saved').dialogue.length, 1);
+  const broken = problem.answerBranches.find(branch => branch.id === 'world-saved').dialogue;
+  assert.deepEqual(broken.map(line => line.scene), ['hallway', 'hallway', 'hallway', 'library', 'library', 'bookstore', 'bookstore', 'void', 'void', 'ginkgo']);
+  assert.ok(broken.every(line => line.epilogue === true && line.speaker === ''));
+  assert.equal(broken[2].text.endsWith('二度目の死を迎えた。'), true);
+  assert.equal(broken[4].text.endsWith('俺は残酷な旅の道すがらにいた。'), true);
+  assert.equal(broken[6].text.endsWith('安堵さえしていた。'), true);
+  assert.equal(broken[8].text.endsWith('信じていた。'), true);
+  assert.equal(broken.at(-1).text.endsWith('日の昇りきらぬNFを後にした。'), true);
   assert.equal(problem.answerBranches.find(branch => branch.id === 'all-saved').dialogue.length, 1);
 });
 

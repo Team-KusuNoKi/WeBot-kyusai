@@ -204,7 +204,14 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
 function finishScene(h) {
   if (h.timer.pending.size) h.timer.drain();
   const limit = h.evaluate('state.messages.length + 1');
-  for (let i = 0; i < limit && h.evaluate('isPlaying'); i++) h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+  for (let i = 0; i < limit && h.evaluate('isPlaying'); i++) {
+    if (h.evaluate('epiloguePhase') === 'blackout') {
+      if (!h.gestureTimer.pending.size) break;
+      h.gestureTimer.drain();
+      continue;
+    }
+    h.click(h.evaluate('epiloguePhase') ? 'epilogue-next' : 'novel-next');
+  }
   assert.equal(h.evaluate('isPlaying'), false);
 }
 
@@ -226,9 +233,13 @@ test('N1正解で手がかりを取得しても会話・指示の後にノート
   t.after(() => h.dispose());
   h.evaluate("answer(['10'])");
   finishScene(h);
-  assert.deepEqual(Array.from(h.evaluate('unlockedCards(scenario, state).map(c => c.id)')), ['A1']);
+  assert.deepEqual(Array.from(h.evaluate('unlockedCards(scenario, state).map(c => c.id)')), []);
   assert.ok(h.app.innerHTML.includes('class="travel-guide-gallery"'));
   assert.doesNotMatch(h.renders.join(''), /class="clue-notice"|新しい手がかりをノートに|data-action="notebook"/);
+  h.evaluate("state.solved.push('N2'); state.selected = 'Q1'; render()");
+  assert.equal(h.evaluate('unlockedCards(scenario, state).length'), 0);
+  assert.ok(h.app.innerHTML.includes('>手がかり</span>'));
+  assert.ok(!h.app.innerHTML.includes('class="nav-badge"'));
 });
 
 test('Q3の円は付箋の新規正解でだけ前の角度から広がり、動きを減らす設定では即座に反映する', t => {
@@ -1152,6 +1163,9 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   assert.equal(h.composer.hidden, true);
   assert.ok(h.app.innerHTML.includes('data-action="play-mei"><span>11月の救祭 冥 をプレイする</span></button>'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/1KNjU" target="_blank" rel="noopener noreferrer">クリアポスト'));
+  assert.ok(h.app.innerHTML.indexOf('data-action="play-mei"') < h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1KNjU"') < h.app.innerHTML.indexOf('data-action="tour-thanks"'));
   assert.ok(h.app.innerHTML.includes('data-action="tour-thanks"><span>周遊版をご購入の方はこちら</span></button>'));
   assert.ok(h.app.innerHTML.includes('遊んでいただきありがとうございました。'));
   assert.ok(h.app.innerHTML.includes('冊子後半、「11月の救祭 冥」は会場でもご自宅でもお好きな場所、<br>お好きな時間にプレイすることが可能です。'));
@@ -1181,6 +1195,13 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.equal(h.composer.hidden, true);
   assert.ok(h.app.innerHTML.includes('id="venue-guide-heading"'));
   assert.ok(h.app.innerHTML.indexOf('id="venue-guide-heading"') < h.app.innerHTML.indexOf('id="deduction-guide-heading"'));
+  assert.ok(h.app.innerHTML.includes('src="../assets/travel/venue-1.preview.webp"'));
+  assert.ok(h.app.innerHTML.includes('src="../assets/travel/venue-2.preview.webp"'));
+  assert.ok(h.app.innerHTML.includes('写真の赤丸の階段を下りてください。'));
+  assert.ok(h.app.innerHTML.includes('地下へ降りて建物に入り、右側へ進んでください。'));
+  assert.ok(h.app.innerHTML.includes('会場で印刷した資料を受け取ったら、下の「推理パートの進め方」をお読みください。'));
+  assert.ok(!h.app.innerHTML.includes('仮の写真'));
+  assert.ok(!h.app.innerHTML.includes('ここに会場までの道順が入ります。'));
   assert.equal(h.evaluate('displayedMessages.length'), 0);
   assert.ok(!h.app.innerHTML.includes('ミサメが危ない！！！！！！！'));
   h.click('open-composer');
@@ -1970,24 +1991,36 @@ test('ヒントがない問題は解説を直接開け、解説のない問題�
   assert.doesNotMatch(noAnswer, /解答を見る/);
 });
 
-test('手がかりの合成タブで組み合わせ結果だけを表示演出し、スクロール位置と発見記録を維持する', t => {
+test('合成に成功すると成功のポップアップのあとカード取得演出を出す', t => {
   const h = appHarness();
   t.after(() => h.dispose());
   h.click('select', 'Q1');
   h.click('clues');
-  h.documentEvent('click', { target: { closest: selector => selector === '[data-action]' ? { dataset: { action: 'clue-tab', tab: 'combine' } } : null } });
-  h.panel.scrollTop = 142;
-  const motions = [];
-  const finding = { animate(frames) { motions.push(frames); return { finished: Promise.resolve(), cancel() {} }; } };
-  h.panel.querySelector = selector => selector === '[data-finding-id="months"]' ? finding : null;
-  h.evaluate(`globalThis.FormData = class { getAll() { return ['A1', 'B1']; } };`);
+  h.evaluate(`globalThis.FormData = class { getAll() { return ['clue-16', 'clue-5']; } };`);
   const event = { target: { id: 'combine-form' }, preventDefault() {} };
   h.documentEvent('submit', event);
-  assert.equal(h.panel.scrollTop, 142);
-  assert.equal(motions.length, 1);
-  assert.ok(h.panel.innerHTML.includes('data-finding-id="months"'));
+  assert.equal(h.panel.classList.contains('hex-reward-panel'), false);
+  assert.ok(h.panel.innerHTML.includes('id="hex-success-title"'));
+  assert.ok(h.panel.innerHTML.includes('>成功</h2>'));
+  assert.ok(h.panel.innerHTML.includes('data-action="combine-outcome-next"'));
+  assert.ok(!h.panel.innerHTML.includes('data-finding-id='));
+  assert.deepEqual(JSON.parse(h.snapshot()).combinations, ['combine-401']);
+  h.click('combine-outcome-next');
+  assert.equal(h.panel.classList.contains('hex-reward-panel'), true);
+  assert.ok(h.panel.innerHTML.includes('class="hex-reward-card"'));
+  assert.ok(h.panel.innerHTML.includes('clue-24.webp'));
+  assert.ok(h.panel.innerHTML.includes('新しい手がかり「鏡の間：違和感」を手に入れた。'));
+  assert.ok(h.panel.innerHTML.includes('data-action="hex-card"'));
   h.documentEvent('submit', event);
-  assert.deepEqual(JSON.parse(h.snapshot()).combinations, ['months']);
+  assert.ok(h.panel.innerHTML.includes('>成功</h2>'));
+  assert.deepEqual(JSON.parse(h.snapshot()).combinations, ['combine-401']);
+  h.click('combine-outcome-next');
+  assert.ok(h.panel.innerHTML.includes('この手がかりは取得済みです。'));
+  assert.ok(h.panel.innerHTML.includes('data-settled="true"'));
+  h.click('hex-card');
+  assert.equal(h.evaluate('expandedClueId'), 'clue-24');
+  assert.ok(h.panel.innerHTML.includes('class="clue-card-expanded"'));
+  assert.ok(h.panel.innerHTML.includes('clue-24.webp'));
 });
 
 test('謎一覧に戻る演出は元の閲覧位置を保ち、動きを減らす設定では省略する', t => {
@@ -2272,7 +2305,7 @@ test('N1・N2の図は修正版の原稿画像を直接使い、記号の位置�
     const embedded = svg.match(/href="data:image\/jpeg;base64,([^"]+)"/);
     assert.ok(embedded, `${id}に原稿画像が埋め込まれている`);
     assert.ok(Buffer.from(embedded[1], 'base64').equals(readFileSync(new URL(`../../Kyusai_materials/${filename}`, import.meta.url))), `${id}の表示画像が${filename}と一致する`);
-    assert.ok(svg.includes('width="559" height="793"'));
+    assert.ok(svg.includes('width="559" height="794"'));
   }
 });
 
@@ -3277,6 +3310,7 @@ test('新規開始時だけ「ゲームを開始」を表示し、プレイ中�
   const nav = h.app.innerHTML.match(/<nav id="navigation-menu"[^>]*>([\s\S]*?)<\/nav>/)[1];
   assert.ok(nav.includes('>再開番号</span>'));
   assert.ok(nav.includes('>タイトルに戻る</span>'));
+  assert.ok(!nav.includes('data-action="hex-replay"'));
   assert.doesNotMatch(nav, /使い方|進行を保存/);
   h.documentEvent('click', { target: menuButton(h, 'save-info') });
   assert.ok(h.panel.innerHTML.includes('>再開番号</h2>'));
@@ -3463,7 +3497,7 @@ test('カード長押しで合成選択になり2枚で合成できる', async t
   assert.equal(h.evaluate('combineSelecting'), true);
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1']);
   assert.ok(h.panel.innerHTML.includes('合成 1/2'));
-  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">①'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">1'));
   assert.ok(h.panel.innerHTML.includes('data-action="combine-select-run"'));
   assert.match(h.panel.innerHTML, /data-action="combine-select-run"[^>]*\sdisabled/);
   h.evaluate('switchClueTab("characters")');
@@ -3471,23 +3505,43 @@ test('カード長押しで合成選択になり2枚で合成できる', async t
   assert.equal((h.panel.innerHTML.match(/class="clue-card-tile"/g) ?? []).length, scenario.characterCards.length);
   h.evaluate('toggleCombineCard("clue-29")');
   h.evaluate('openPanel("clues", { keepFocus: true })');
-  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">②'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">2'));
   h.evaluate('toggleCombineCard("clue-29")');
   h.evaluate('switchClueTab("cards")');
   h.evaluate('toggleCombineCard("clue-2")');
   h.evaluate('openPanel("clues", { keepFocus: true })');
   assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
+  h.evaluate('toggleCombineCard("clue-3")');
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-3']);
+  h.evaluate('toggleCombineCard("clue-1")');
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-3']);
+  h.evaluate('toggleCombineCard("clue-2")');
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-3', 'clue-2']);
+  h.evaluate('combineSelection = ["clue-1", "clue-2"]');
+  h.evaluate('openPanel("clues", { keepFocus: true })');
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
   assert.ok(h.panel.innerHTML.includes('合成 2/2'));
-  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">②'));
+  assert.ok(h.panel.innerHTML.includes('class="combine-order" aria-hidden="true">2'));
   assert.doesNotMatch(h.panel.innerHTML, /data-action="combine-select-run"[^>]*\sdisabled/);
   h.click('combine-select-run');
-  assert.equal(h.evaluate('clueTab'), 'combine');
+  assert.equal(h.evaluate('clueTab'), 'cards');
   assert.equal(h.evaluate('combineSelecting'), false);
-  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), ['clue-1', 'clue-2']);
-  assert.ok(h.panel.innerHTML.includes('class="answer-fab combine-tab-fab"'));
+  assert.deepEqual(JSON.parse(h.evaluate('JSON.stringify(combineSelection)')), []);
+  assert.ok(h.panel.innerHTML.includes('class="clue-card-grid"'));
+  assert.ok(h.panel.innerHTML.includes('id="combine-failure-title"'));
+  assert.ok(h.panel.innerHTML.includes('新しい手がかりは出てきません'));
+  h.click('combine-outcome-next');
+  assert.equal(h.evaluate('clueTab'), 'cards');
+  assert.ok(!h.panel.innerHTML.includes('id="combine-failure-title"'));
+  h.evaluate('switchClueTab("combine")');
+  h.evaluate('combinePicker = true; combineSelection = ["clue-1", "clue-2"]');
+  h.click('combine-confirm');
+  assert.equal(h.evaluate('clueTab'), 'combine');
+  assert.ok(h.panel.innerHTML.includes('id="combine-failure-title"'));
+  h.click('combine-outcome-next');
+  assert.equal(h.evaluate('clueTab'), 'combine');
   assert.ok(h.panel.innerHTML.includes('data-action="combine-pick"'));
-  assert.ok(!h.panel.innerHTML.includes('class="combine-stage"'));
-  assert.ok(h.panel.innerHTML.includes('id="combine-feedback"'));
+  assert.ok(!h.panel.innerHTML.includes('id="combine-failure-title"'));
 });
 
 test('手がかり画面のカード・キャラ情報・合成タブを切り替えられる', async t => {
@@ -3503,6 +3557,8 @@ test('手がかり画面のカード・キャラ情報・合成タブを切り�
   assert.ok(h.panel.innerHTML.includes('id="clue-tab-cards"'));
   h.evaluate('switchClueTab("characters")');
   assert.equal((h.panel.innerHTML.match(/clue-gallery-card/g) ?? []).length, scenario.characterCards.length);
+  assert.equal((h.panel.innerHTML.match(/data-action="character-dot"/g) ?? []).length, scenario.characterCards.length);
+  assert.ok(h.panel.innerHTML.includes('aria-selected="true" aria-label="マヤ"'));
   assert.ok(h.panel.innerHTML.includes('aria-labelledby="clue-tab-characters"'));
   assert.ok(h.panel.innerHTML.includes('マヤ'));
   h.evaluate('switchClueTab("combine")');
@@ -3576,6 +3632,93 @@ test('デバッグモードでは未クリアでも問題番号トグルに「�
   assert.ok(h.app.innerHTML.includes('id="yoi-completion-title"'));
 });
 
+test('デバッグの問題番号は冥の終幕を3画面出し、通常は到達した1画面だけを出す', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  assert.equal(h.evaluate('playSaves.getStatus().mode'), 'debug');
+  for (const label of ['冥 終幕 A', '冥 終幕 B', '冥 終幕 C']) assert.ok(h.navigation.innerHTML.includes(`<span>${label}</span>`));
+  h.click('mei-end', 'world-saved');
+  assert.equal(h.evaluate('meiEndRoute'), 'world-saved');
+  assert.ok(h.app.innerHTML.includes('id="mei-completion-title"'));
+  assert.ok(h.app.innerHTML.includes('>冥</h1>'));
+  assert.ok(h.app.innerHTML.includes('data-action="mei-survey"><span>アンケートに答える</span>'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/1zl4B"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
+  assert.ok(h.app.innerHTML.indexOf('data-action="mei-survey"') < h.app.innerHTML.indexOf('href="https://x.gd/1zl4B"'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
+  h.click('mei-end', 'god-returned');
+  assert.equal(h.evaluate('meiEndRoute'), 'god-returned');
+  assert.ok(h.app.innerHTML.includes('data-mei-ending="god-returned"'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/MTZvo"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/1zl4B'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はあのとき、見返りがほしかっただけなんじゃないかって思う。'));
+  assert.ok(!h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
+  h.click('mei-survey');
+  assert.equal(h.panel.dataset.kind, 'survey');
+  assert.ok(h.panel.innerHTML.includes('value="Aエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
+  h.evaluate("openPanel('clear-post')");
+  assert.ok(h.panel.innerHTML.includes('「神ハカエッタ」の結末を迎えました。'));
+  h.click('mei-end', 'all-saved');
+  assert.ok(!h.app.innerHTML.includes('クリアポスト'));
+  h.evaluate("openPanel('clear-post')");
+  assert.ok(h.panel.innerHTML.includes('「スベテガスクワレタ」の結末を迎えました。'));
+  h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' }); meiEndRoute = null; render()");
+  assert.ok(!h.navigation.innerHTML.includes('冥 終幕'));
+  h.evaluate("state.solved.push('Q9'); state.branches.Q9 = 'world-saved'; render()");
+  assert.ok(h.navigation.innerHTML.includes('<span>冥 終幕</span>'));
+  assert.ok(!h.navigation.innerHTML.includes('冥 終幕 A'));
+  assert.ok(!h.navigation.innerHTML.includes('冥 終幕 B'));
+  assert.ok(!h.navigation.innerHTML.includes('冥 終幕 C'));
+  h.click('mei-end', 'god-returned');
+  assert.equal(h.evaluate('meiEndRoute'), null);
+  h.click('mei-end', 'world-saved');
+  assert.equal(h.evaluate('meiEndRoute'), 'world-saved');
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
+});
+
+test('宵の終幕だけではQ9の再解答を出さない', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' }); state.solved.push('N5.5'); selectProblem('N5.5'); yoiEndView = true; render()");
+  assert.ok(h.app.innerHTML.includes('id="yoi-completion-title"'));
+  assert.ok(h.navigation.innerHTML.includes('宵 終幕'));
+  assert.ok(!h.navigation.innerHTML.includes('冥 終幕'));
+  assert.ok(!h.app.innerHTML.includes('Q9をもう一度解く'));
+  assert.ok(!h.app.innerHTML.includes('data-action="replay-q9"'));
+});
+
+test('終幕まで行くとメニューからQ9をもう一度解け、別ルートのクリアポストまで届く', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  const menu = () => h.app.innerHTML.match(/<nav id="navigation-menu"[^>]*>([\s\S]*?)<\/nav>/)[1];
+  h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' }); render()");
+  assert.ok(!menu().includes('Q9をもう一度解く'));
+  h.evaluate("selectProblem('Q9')");
+  assert.equal(h.evaluate("answer('神ハカエッタ').status"), 'correct');
+  finishScene(h);
+  assert.equal(h.evaluate('meiEndRoute'), 'god-returned');
+  assert.ok(menu().includes('data-action="replay-q9"'));
+  assert.ok(menu().includes('>Q9をもう一度解く</span>'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/MTZvo"'));
+  h.click('replay-q9');
+  assert.equal(h.evaluate('meiEndRoute'), null);
+  assert.equal(h.evaluate('repeatAnswer'), true);
+  assert.equal(h.evaluate('composerExpanded'), true);
+  assert.equal(h.evaluate('state.branches.Q9'), 'god-returned');
+  assert.ok(h.app.innerHTML.includes('言葉を入力…'));
+  assert.ok(!h.app.innerHTML.includes('id="mei-completion-title"'));
+  assert.equal(h.evaluate("answer('セカイハスクワレタ').status"), 'correct');
+  h.evaluate('window.setTimeout = setTimeout');
+  finishScene(h);
+  if (!h.evaluate('meiEndRoute') && h.evaluate('epiloguePhase')) h.click('epilogue-next');
+  assert.equal(h.evaluate('meiEndRoute'), 'world-saved');
+  assert.equal(h.evaluate('state.branches.Q9'), 'world-saved');
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/1zl4B"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
+  assert.ok(menu().includes('>Q9をもう一度解く</span>'));
+});
+
 test('通常モードではN5.5をクリアするまで「宵 終幕」を表示しない', async t => {
   const h = appHarness();
   t.after(() => h.dispose());
@@ -3616,8 +3759,9 @@ test('カードの合成で番号付きの手がかりカードを入手でき�
   h.evaluate("state.solved.push('Q1', 'Q1.1'); state.combinations.push('combine-401'); openPanel('clues', { keepFocus: true })");
   assert.ok(h.panel.innerHTML.includes('data-action="clue-card-open" data-id="clue-24"'));
   h.evaluate('switchClueTab("combine")');
-  assert.ok(h.panel.innerHTML.includes('DISCOVERY · 104 + 204'));
-  assert.ok(h.panel.innerHTML.includes('手がかりカード401'));
+  assert.ok(!h.panel.innerHTML.includes('DISCOVERY'));
+  assert.ok(!h.panel.innerHTML.includes('手がかりカード401'));
+  assert.ok(h.panel.innerHTML.includes('data-action="combine-pick"'));
 });
 
 test('キャラ情報は横スクロールで切り替えられる', async t => {
@@ -3667,16 +3811,29 @@ test('控室カードのカプセルから六角形を開き、デバッグで�
   assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
   h.evaluate('state=completeMinigame(scenario,state,"hex-cube",[[4],[3,4]]).state');
   h.click('clues');
-  assert.equal((h.panel.innerHTML.match(/data-minigame-reward/g) ?? []).length, 1);
-  assert.ok(h.panel.innerHTML.includes('装置から出てきたメモ（仮）'));
+  assert.equal((h.panel.innerHTML.match(/data-minigame-reward/g) ?? []).length, 0);
+  assert.ok(!h.panel.innerHTML.includes('装置から出てきたメモ'));
+  assert.ok(h.panel.innerHTML.includes('data-id="clue-23"'));
   h.click('clue-card-open', 'clue-9');
   assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
 });
-test('装置クリア後は物語の会話ではなくシステムメッセージで仮カードを取得する',async t=>{
+test('装置クリア後は会話を増やさず手がかり400を取得する',async t=>{
   const h=appHarness();t.after(()=>h.dispose());const before=JSON.parse(h.snapshot());
-  await h.evaluate('finishHexCube([[4],[3,4]])');assert.ok(h.panel.innerHTML.includes('新しい手がかり'));assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
-  const after=JSON.parse(h.snapshot());assert.equal(after.messages.length,before.messages.length+1);assert.equal(after.messages.at(-1).speaker,'システム');assert.deepEqual(after.solved,before.solved);
-  await h.evaluate('finishHexCube([[4],[3,4]])');assert.equal(JSON.parse(h.snapshot()).messages.length,after.messages.length);
+  assert.ok(h.app.innerHTML.includes('data-action="hex-replay"'));
+  assert.ok(h.app.innerHTML.includes('>控室の問題</span>'));
+  assert.ok(!h.app.innerHTML.includes('控室の問題を再度解く'));
+  await h.evaluate('finishHexCube([[4],[3,4]])');
+  assert.ok(h.panel.innerHTML.includes('新しい手がかり「控室について」'));
+  assert.ok(h.panel.innerHTML.includes('clue-23.webp'));
+  assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
+  assert.ok(!h.panel.innerHTML.includes('装置から出てきたメモ'));
+  assert.ok(h.app.innerHTML.includes('data-action="hex-replay"'));
+  assert.ok(h.app.innerHTML.includes('控室の問題を再度解く'));
+  const after=JSON.parse(h.snapshot());assert.equal(after.messages.length,before.messages.length);assert.equal(after.messages.some(message=>message.speaker==='システム'&&message.minigameId==='hex-cube'),false);assert.deepEqual(after.solved,before.solved);
+  await h.evaluate('finishHexCube([[4],[3,4]])');
+  assert.equal(JSON.parse(h.snapshot()).messages.length,after.messages.length);
+  assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="clue-23").length'),1);
+  assert.equal(h.panel.open,false);
 });
 test('000000ではクリア画面と手がかりから六角形を何度でも解ける', async t => {
   let onComplete;
@@ -3693,25 +3850,65 @@ test('000000ではクリア画面と手がかりから六角形を何度でも�
   t.after(() => h.dispose());
   await h.evaluate('startup');
   await h.evaluate('beginPlay("code", "000000")');
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    assert.equal(mounts, attempt);
-    assert.equal(h.panel.classList.contains('hex-cube-panel'), true);
-    await assert.rejects(onComplete([[0]]), /クリアを確認できません/);
-    await onComplete([[4], [3, 4]]);
-    assert.ok(h.panel.innerHTML.includes('もう一度解く'));
-    if (attempt === 2) {
-      h.click('hex-card');
-      h.click('clue-card-open', 'clue-9');
-      assert.match(h.panel.innerHTML, /class="clue-hex-entry"/);
-      assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
-    }
-    if (attempt < 3) await h.evaluate('openHexCube()');
-  }
+  assert.equal(mounts, 1);
+  assert.equal(h.panel.classList.contains('hex-cube-panel'), true);
+  await assert.rejects(onComplete([[0]]), /クリアを確認できません/);
+  await onComplete([[4], [3, 4]]);
+  assert.ok(h.panel.innerHTML.includes('もう一度解く'));
+  assert.ok(h.panel.innerHTML.includes('新しい手がかり「控室について」'));
+  assert.ok(h.app.innerHTML.includes('控室の問題を再度解く'));
+  h.click('hex-card');
+  h.click('clue-card-open', 'clue-9');
+  assert.match(h.panel.innerHTML, /class="clue-hex-entry"/);
+  assert.doesNotMatch(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
+  await h.evaluate('openHexCube()');
+  assert.equal(mounts, 2);
+  assert.equal(h.panel.classList.contains('hex-cube-panel'), true);
+  await onComplete([[4], [3, 4]]);
+  assert.equal(h.panel.open, false, '2度目の次へはチャットへ戻る');
+  assert.equal(JSON.parse(h.snapshot()).messages.filter(message => message.minigameId === 'hex-cube').length, 0);
+  await h.evaluate('openHexCube("hex-cube", { replay: true })');
+  assert.equal(mounts, 3);
+  assert.equal(h.panel.classList.contains('hex-cube-panel'), true);
+  await onComplete([[4], [3, 4]]);
+  assert.equal(h.panel.open, false);
   const state = JSON.parse(h.snapshot());
   assert.deepEqual(state.minigames, ['hex-cube']);
-  assert.equal(state.messages.filter(message => message.minigameId === 'hex-cube').length, 1);
+  assert.equal(state.messages.filter(message => message.minigameId === 'hex-cube').length, 0);
+  assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="clue-23").length'), 1);
   assert.equal(h.networkCalls.length, 0);
   assert.equal(h.storageCalls.filter(([action]) => action !== 'get').length, 0);
+});
+test('正解後のメニューから控室の問題を開き直しても手がかりは増えない', async t => {
+  let mounts = 0;
+  let onComplete;
+  const seed = engine.completeMinigame(scenario, engine.initialState(scenario), 'hex-cube', [[4], [3, 4]]).state;
+  const view = restorePlayView(scenario, seed, null);
+  const h = appHarness(null, false, {
+    entryOnly: true,
+    records: { [`play-save:${scenario.id}`]: storedPlay(seed, view) },
+    entryUrl: 'https://example.test/11月の救祭/app/?minigame=hex-cube',
+    minigameMount(_host, options) {
+      mounts++;
+      onComplete = options.onComplete;
+      return { destroy() {}, refresh() {} };
+    },
+    fetchImpl: async () => new Response(JSON.stringify({ code: '001234', revision: 1, state: seed, view }), { status: 200 }),
+  });
+  t.after(() => h.dispose());
+  await h.evaluate('startup');
+  assert.equal(h.panel.classList.contains('hex-reward-panel'), true);
+  assert.ok(h.panel.innerHTML.includes('この手がかりは取得済みです。'));
+  assert.ok(!h.panel.innerHTML.includes('もう一度解く'));
+  assert.ok(h.app.innerHTML.includes('data-action="hex-replay"'));
+  assert.equal(mounts, 0);
+  await h.evaluate('openHexCube("hex-cube", { replay: true })');
+  assert.equal(mounts, 1);
+  assert.equal(h.panel.classList.contains('hex-cube-panel'), true);
+  await onComplete([[4], [3, 4]]);
+  assert.equal(h.panel.open, false);
+  assert.equal(JSON.parse(h.snapshot()).messages.filter(message => message.minigameId === 'hex-cube').length, 0);
+  assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="clue-23").length'), 1);
 });
 test('QR入口で記録がなければ6桁入力を表示し復元後に同じ装置を開く',async t=>{
   let mounts=0;const seed=engine.initialState(scenario),view=restorePlayView(scenario,seed,null);
@@ -3723,7 +3920,8 @@ test('装置の保存待ち中に別画面へ移動したらシステム通知�
   const h=appHarness();t.after(()=>h.dispose());await h.evaluate('openHexCube()');
   const pending=h.evaluate('finishHexCube([[4],[3,4]])');h.click('clues');await pending;
   assert.equal(h.panel.classList.contains('clue-gallery'),true);
-  assert.ok(h.panel.innerHTML.includes('装置から出てきたメモ（仮）'));
+  assert.ok(h.panel.innerHTML.includes('data-id="clue-23"'));
+  assert.ok(!h.panel.innerHTML.includes('装置から出てきたメモ'));
 });
 test('QR入口で端末に記録があれば入力を要求せず装置を開く',async t=>{
   let mounts=0;const seed=engine.initialState(scenario),view=restorePlayView(scenario,seed,null);
@@ -3758,7 +3956,8 @@ test('旧保存から番号を発行する途中で装置をクリアしても�
   assert.equal(h.evaluate('playSaves.getRecord().code'),null);online=true;
   await h.evaluate('finishHexCube([[4],[3,4]])');
   assert.equal(h.evaluate('playSaves.getRecord().code'),'005678');assert.equal(h.evaluate('playSaves.getRecord().pending'),false);
-  assert.ok(h.panel.innerHTML.includes('新しい手がかり「装置から出てきたメモ（仮）」'));
+  assert.ok(h.panel.innerHTML.includes('新しい手がかり「控室について」'));
+  assert.ok(h.panel.innerHTML.includes('clue-23.webp'));
 });
 
 test('通信失敗後に装置を開き直しても保存済みとして扱わず、再送で一度だけ取得する',async t=>{
@@ -3776,7 +3975,7 @@ test('通信失敗後に装置を開き直しても保存済みとして扱わ�
   assert.ok(h.panel.innerHTML.includes('保存を確認する'));
   online=true;h.click('hex-save-retry');await new Promise(resolve=>setImmediate(resolve));
   assert.equal(h.evaluate('playSaves.getRecord().pending'),false);assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
-  assert.equal(JSON.parse(h.snapshot()).messages.filter(m=>m.minigameId==='hex-cube').length,1);
+  assert.equal(JSON.parse(h.snapshot()).messages.filter(m=>m.minigameId==='hex-cube').length,0);
 });
 
 test('QRで未送信のクリア記録を再開し、通信復帰後に重複せず保存する',async t=>{
@@ -3793,7 +3992,7 @@ test('QRで未送信のクリア記録を再開し、通信復帰後に重複せ
   assert.ok(h.panel.innerHTML.includes('保存を確認する'));
   online=true;h.click('hex-save-retry');await new Promise(resolve=>setImmediate(resolve));
   assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
-  assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="hex-cube-note").length'),1);
+  assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="clue-23").length'),1);
   h.click('hex-card');
   h.click('clue-card-open', 'clue-9');
   assert.match(h.panel.innerHTML, /class="clue-hex-entry"[^>]*\sdisabled/);
@@ -3815,7 +4014,7 @@ test('装置の保存が競合した場合は報酬通知を出さず、選択�
   assert.ok(!h.panel.innerHTML.includes('data-action="save-use-remote"'));
   assert.ok(!h.panel.innerHTML.includes('data-action="save-use-local"'));
   assert.ok(!h.panel.innerHTML.includes('data-action="hex-card"'));
-  assert.equal(h.evaluate('state.minigames.length'),0);assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="hex-cube-note").length'),0);
+  assert.equal(h.evaluate('state.minigames.length'),0);assert.equal(h.evaluate('unlockedCards(scenario,state).filter(card=>card.id==="clue-23").length'),0);
 });
 
 test('旧保存の番号発行リクエスト中にクリアした更新も発行後に続けて保存する',async t=>{
@@ -3830,6 +4029,29 @@ test('旧保存の番号発行リクエスト中にクリアした更新も発�
   assert.deepEqual(h.networkCalls.map(call=>call.action),['create','save']);
   assert.ok(h.networkCalls[1].state.minigames.includes('hex-cube'));assert.equal(h.evaluate('playSaves.getRecord().pending'),false);
   assert.ok(h.panel.innerHTML.includes('新しい手がかり'));
+});
+
+test('Q9の別ルートは読み終えても本文を白いカードに並べない', () => {
+  const endings = [
+    ['スベテガスクワレタ', '全てが救われた。'],
+    ['神ハカエッタ', 'ただ、それでも俺は前を向く。'],
+  ];
+  for (const [answer, line] of endings) {
+    const h = appHarness();
+    try {
+      h.evaluate("selectProblem('Q9')");
+      assert.equal(h.evaluate(`answer(${JSON.stringify(answer)}).status`), 'correct');
+      finishScene(h);
+      assert.equal(h.evaluate('isPlaying'), false);
+      h.evaluate("selectProblem('Q9')");
+      assert.equal(h.evaluate('meiEndRoute'), null);
+      assert.ok(h.app.innerHTML.includes(line), answer);
+      assert.ok(h.app.innerHTML.includes('class="novel-line"'), answer);
+      assert.ok(!h.app.innerHTML.includes('class="narration"'), answer);
+    } finally {
+      h.dispose();
+    }
+  }
 });
 
 
