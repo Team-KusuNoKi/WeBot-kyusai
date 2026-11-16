@@ -1533,20 +1533,7 @@ dialog.hex-reward-panel::backdrop { background: #d5e0e8; }
   .hex-cube-panel .hex-shape { height: clamp(240px, 38dvh, 360px); }
 }
 
-.clue-luminol-entry {
-  position: absolute; z-index: 1; left: 14%; right: 14%; top: 16.5%; height: 34%;
-  padding: 0; border-radius: 12px; background: transparent; color: transparent;
-}
-.clue-gallery-card .clue-luminol-entry:hover,
-.clue-gallery-card .clue-luminol-entry:focus-visible,
-.clue-gallery-card .clue-luminol-entry:active { background: transparent; color: transparent; scale: 1; }
-.clue-luminol-entry span {
-  position: absolute; left: 50%; bottom: 6px; translate: -50% 0;
-  padding: 4px 14px; border-radius: var(--radius-pill); background: var(--accent);
-  color: var(--ink); font-size: 12px; letter-spacing: .08em; white-space: nowrap;
-}
-.clue-luminol-entry:focus-visible span,
-.clue-luminol-entry:hover span { background: var(--accent-hover); }
+.hex-cube-panel .luminol-game .hex-layout { grid-template-columns: 240px minmax(0, 1fr); }
 .luminol-stage {
   position: relative; height: clamp(240px, 45dvh, 400px); margin-top: 4px;
   border-radius: 12px; background: var(--white); overflow: hidden;
@@ -1593,6 +1580,7 @@ dialog.hex-reward-panel::backdrop { background: #d5e0e8; }
 .luminol-hammer-wrap { position: relative; width: min(52%, 210px); }
 .luminol-hammer { display: block; width: 100%; height: auto; }
 .luminol-line { fill: #fff; stroke: var(--ink); }
+.luminol-outline { fill: none; stroke: var(--ink); }
 .luminol-hammer circle { fill: none; stroke: var(--ink); }
 .luminol-stain { fill: #e23d36; }
 .luminol-stain.is-wet { fill: #c42828; }
@@ -1629,8 +1617,9 @@ dialog.hex-reward-panel::backdrop { background: #d5e0e8; }
 }
 .luminol-switch.is-off .luminol-switch-lever { transform: translateY(8px); background: var(--muted); }
 .luminol-stage.is-dark { background: #141416; }
-.luminol-stage.is-dark .luminol-line,
-.luminol-stage.is-dark .luminol-hammer circle { fill: #141416; stroke: #d5d0c8; }
+.luminol-stage.is-dark .luminol-line { fill: #141416; stroke: #d5d0c8; }
+.luminol-stage.is-dark .luminol-outline,
+.luminol-stage.is-dark .luminol-hammer circle { fill: none; stroke: #d5d0c8; }
 .luminol-stage.is-dark .luminol-stain,
 .luminol-stage.is-dark .luminol-stain.is-wet { fill: #5e2826; }
 .luminol-result {
@@ -1644,6 +1633,7 @@ dialog.hex-reward-panel::backdrop { background: #d5e0e8; }
 .luminol-result p:nth-child(2) { font-size: 13px; line-height: 1.7; }
 .luminol-result .primary-button { margin: 14px auto 0; min-width: 132px; }
 @media (max-width: 760px) {
+  .hex-cube-panel .luminol-game .hex-layout { grid-template-columns: 1fr; }
   .hex-cube-panel .luminol-stage { height: clamp(240px, 38dvh, 360px); }
   .luminol-mix { gap: 22px; }
 }

@@ -2789,15 +2789,11 @@ function hexEntryButton() {
   return `<button type="button" class="clue-hex-entry" data-action="hex-open"${locked ? ' disabled' : ''} aria-label="${locked ? '控室のパズルは解答済み' : '控室のパズルを解く'}"></button>`;
 }
 
-function luminolEntryButton() {
-  return `<button type="button" class="clue-luminol-entry" data-action="luminol-open" aria-label="トンカチをルミノールで調べる"><span>検査する</span></button>`;
-}
-
 function cluePhotoCardMarkup(card, { current = false } = {}) {
   const selected = combineSelecting && combineSelection.includes(card.id);
   const order = combineOrderMark(card.id);
   const check = combineSelecting && !selected ? '<span class="select-check" aria-hidden="true"></span>' : '';
-  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}${card.puzzle === 'luminol' ? luminolEntryButton() : ''}</article>`;
+  return `<article class="clue-gallery-card clue-photo-card" data-combine-id="${esc(card.id)}"${current ? ' aria-current="true"' : ''}${combineSelecting ? ` aria-pressed="${selected}"` : ''} aria-label="${esc(card.title)}（手がかり番号 ${esc(card.number)}）${order ? `、${order}` : ''}">${combineOrderBadge(card.id)}${check}<span class="press-ring" aria-hidden="true"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" pathLength="100"/></svg></span><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async">${card.puzzle === 'hex-cube' ? hexEntryButton() : ''}</article>`;
 }
 
 function clueCardExpandedMarkup(gallery, index) {
@@ -3127,7 +3123,7 @@ function bindCombineCardGestures() {
   let press = null;
 
   const targetFromEvent = event => {
-    if (event.target?.closest?.('[data-action="clue-card-close"], [data-action="luminol-open"], .combine-select-bar, .clue-tabs, .icon-button')) return null;
+    if (event.target?.closest?.('[data-action="clue-card-close"], .combine-select-bar, .clue-tabs, .icon-button')) return null;
     const tile = event.target?.closest?.('[data-action="clue-card-open"][data-id]');
     if (tile) return { id: tile.dataset.id, kind: 'tile', el: tile };
     const card = event.target?.closest?.('.clue-gallery-card[data-combine-id]');
