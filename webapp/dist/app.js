@@ -224,11 +224,26 @@ function meiEndingReady() {
   return shown.length >= branch.dialogue.length && shown.at(-1)?.text === branch.dialogue.at(-1).text;
 }
 
+let transientReactionStart = null;
+
+function dropTransientReaction() {
+  if (transientReactionStart == null) return;
+  const start = transientReactionStart;
+  transientReactionStart = null;
+  if (state.messages.length > start) state = { ...state, messages: state.messages.slice(0, start) };
+}
+
 function finishConversation({ scroll = true } = {}) {
   isPlaying = false;
   epiloguePhase = null;
   cancelEpilogueMotion();
   if (meiEndingReady()) meiEndView = true;
+  const showedReaction = transientReactionStart != null;
+  dropTransientReaction();
+  if (showedReaction) {
+    sceneStart = latestSceneStart(state.messages, state.selected);
+    displayedMessages = conversationMessages(state.messages.slice(sceneStart).filter(m => m.problemId === state.selected));
+  }
   save();
   render({ scroll });
   const pageTurnOpened = openFinishedPageTurn();
@@ -788,6 +803,7 @@ function investigationClosingMarkup() {
 }
 
 function showInvestigation() {
+  dropTransientReaction();
   investigationClosing = false;
   answerOrigin = null;
   const previousSolved = investigationSnapshot;
@@ -1353,7 +1369,27 @@ function capturePlayView() {
 
 function save() {
   if (!playSaves || gateVisible || changingSession) return;
-  playSaves.update(state, capturePlayView());
+  if (transientReactionStart == null) {
+    playSaves.update(state, capturePlayView());
+    return;
+  }
+  // 再回答の誤答反応は再生中だけ画面に出し、保存データには残さない。
+  const messages = state.messages;
+  const playing = isPlaying;
+  const shown = displayedMessages;
+  const start = sceneStart;
+  try {
+    state = { ...state, messages: messages.slice(0, transientReactionStart) };
+    isPlaying = false;
+    sceneStart = latestSceneStart(state.messages, state.selected);
+    displayedMessages = conversationMessages(state.messages.slice(sceneStart).filter(m => m.problemId === state.selected));
+    playSaves.update(state, capturePlayView());
+  } finally {
+    state = { ...state, messages };
+    isPlaying = playing;
+    displayedMessages = shown;
+    sceneStart = start;
+  }
 }
 
 function updateSaveStatus(status) {
@@ -1415,6 +1451,7 @@ function setResumeDigits(index, raw) {
 }
 
 function enterPlay(record) {
+  transientReactionStart = null;
   playSessionRevision++;
   conversationPlayer.stop();
   historyView = false;
@@ -3102,6 +3139,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
 }
 
 function selectProblem(id, { start = false, openOverScene = false, preserveConversation = openOverScene, answering = false, investigationDetail = false } = {}) {
+  dropTransientReaction();
   const nextProblem = scenario.problems.find(p => p.id === id);
   if (!nextProblem) return;
   const slideIn = !openOverScene || (current().autoOpenContinuation && current().continueTo === id);
@@ -3248,6 +3286,7 @@ function answer(value) {
   const wasSolved = state.solved.includes(problem.id);
   const investigationWasComplete = investigationComplete(scenario, state);
   rememberAnswerDraft();
+  dropTransientReaction();
   const start = state.messages.length;
   // スタートからは、進行を消さずにN1を再回答できる。
   const submissionState = startView || repeatAnswer ? { ...state, solved: state.solved.filter(id => id !== problem.id) } : state;
@@ -3267,6 +3306,9 @@ function answer(value) {
       const kept = state.messages.filter(message => message.problemId !== problem.id);
       messages = [...kept, ...added];
       replayStart = kept.length;
+    } else if (result.status === 'incorrect' && result.response && messages.length > start) {
+      // 反応は再生し、終わったら dropTransientReaction で履歴から外す。
+      transientReactionStart = start;
     }
     result.state = { ...result.state, solved: [...new Set([...state.solved, ...result.state.solved])], messages };
   }
@@ -3673,8 +3715,6 @@ document.addEventListener('click', event => {
     clearCombineSelecting();
     haptics.trigger();
     openPanel('clues', { keepFocus: true });
-    popCombineBadge(id);
-    if (combineSelection.length === 2) animateEmphasis(panel.querySelector('[data-action="combine-confirm"]'), reducedMotion());
   }
   else if (action === 'combine-confirm' && combinePicker && combineSelection.length === 2) {
     combinePicker = false;
