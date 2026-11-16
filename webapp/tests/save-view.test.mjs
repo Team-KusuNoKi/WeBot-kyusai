@@ -111,6 +111,9 @@ test('宵終了画面とQ8専用回答画面の復元条件を保持する', () 
   const q8 = { ...state, selected: 'Q8', solved: ['Q7'] };
   assert.equal(restorePlayView(scenario, q8, { composerExpanded: true }).composerExpanded, true);
   assert.equal(restorePlayView(scenario, q8, { yoiEndView: true }).yoiEndView, false);
+  const q9 = { ...initialState(scenario), selected: 'Q9', solved: ['Q9'] };
+  assert.equal(restorePlayView(scenario, q9, { meiEndView: true }).meiEndView, true);
+  assert.equal(restorePlayView(scenario, q8, { meiEndView: true }).meiEndView, false);
 });
 
 test('Q1の古い保存を再開してもN5.5の会話を背景に戻さず、冥の会話自体は保持する', () => {
