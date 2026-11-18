@@ -4198,10 +4198,10 @@ test('旧保存の番号発行リクエスト中にクリアした更新も発�
 
 test('Q9の別ルートは読み終えても本文を白いカードに並べない', () => {
   const endings = [
-    ['スベテガスクワレタ', '全てが救われた。'],
-    ['神ハカエッタ', 'ただ、それでも俺は前を向く。'],
+    ['スベテガスクワレタ', '次なる旅路を予感させた。', 'novel-line'],
+    ['神ハカエッタ', 'ただ、それでも俺は前を向く。', 'novel-line'],
   ];
-  for (const [answer, line] of endings) {
+  for (const [answer, line, presentation] of endings) {
     const h = appHarness();
     try {
       h.evaluate("selectProblem('Q9')");
@@ -4217,7 +4217,7 @@ test('Q9の別ルートは読み終えても本文を白いカードに並べな
       h.evaluate("selectProblem('Q9')");
       assert.equal(h.evaluate('meiEndRoute'), null);
       assert.ok(h.app.innerHTML.includes(line), answer);
-      assert.ok(h.app.innerHTML.includes('class="novel-line"'), answer);
+      assert.ok(h.app.innerHTML.includes(`class="${presentation}"`), answer);
       assert.ok(!h.app.innerHTML.includes('class="narration"'), answer);
     } finally {
       h.dispose();
@@ -4273,6 +4273,144 @@ test('Q9神ハカエッタはエピローグの次の吹き出しから先へ進
 });
 
 
+test('Q9スベテガスクワレタはエピローグの題字から始まり、通路の場面で冥の終幕を開く', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("selectProblem('Q9')");
+  assert.equal(h.evaluate("answer('スベテガスクワレタ').status"), 'correct');
+  assert.equal(h.evaluate('epiloguePhase'), 'title');
+  assert.match(h.app.innerHTML, /class="epilogue-screen is-title"/);
+  assert.match(h.app.innerHTML, /class="epilogue-script"[^>]*>Epilogue</);
+  assert.doesNotMatch(h.app.innerHTML, /class="epilogue-line"/);
+
+  h.click('epilogue-next');
+  assert.match(h.app.innerHTML, /class="novel-line">俺は前を向いてハナに対峙する。/);
+  assert.doesNotMatch(h.app.innerHTML, /class="epilogue-line"/);
+  assert.match(h.app.innerHTML, /b-hallway\.webp/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).scene'), 'hallway');
+  assert.doesNotMatch(h.app.innerHTML, /何かを手放せば/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-speaker">タツ</);
+  assert.match(h.app.innerHTML, /class="novel-line">「何かを手放せば何かを手に入れられる。そんな安易な選択にすがるのは甘えだ。厄災を止めるためにミサメの命を犠牲にする。そんな結末を俺は認めない。」/);
+  assert.doesNotMatch(h.app.innerHTML, /全部救ってみせる/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /全部救ってみせる/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /それが俺の目指す-救祭-だ。/);
+  assert.doesNotMatch(h.app.innerHTML, /ハナを拒絶し/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-line">ハナを拒絶し、俺は儀式を続行した。/);
+  assert.doesNotMatch(h.app.innerHTML, /class="novel-speaker"/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).scene'), 'hallway');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+
+  h.click('novel-next');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), true);
+  assert.match(h.app.innerHTML, /それでも俺は迷わない。/);
+  assert.doesNotMatch(h.app.innerHTML, /1ヶ月後/);
+  h.gestureTimer.drain();
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  assert.match(h.app.innerHTML, /class="novel-line">1ヶ月後/);
+  assert.doesNotMatch(h.app.innerHTML, /class="epilogue-line"|class="novel-speaker"/);
+  assert.match(h.app.innerHTML, /c-riverside\.webp/);
+  assert.equal(h.evaluate('displayedMessages.at(-1).scene'), 'riverside');
+  assert.doesNotMatch(h.app.innerHTML, /並んで歩いていた/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-line">俺はアサヒと並んで歩いていた。/);
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-speaker">アサヒ</);
+  assert.match(h.app.innerHTML, /もう1ヶ月ですね。あのNFから。/);
+
+  while (!h.app.innerHTML.includes('「あっ!」')) {
+    h.click('novel-next');
+    h.gestureTimer.drain();
+  }
+  assert.match(h.app.innerHTML, /class="novel-speaker">アサヒ</);
+  assert.match(h.app.innerHTML, /class="novel-line">「あっ!」/);
+  assert.doesNotMatch(h.app.innerHTML, /端的に言うと/);
+  assert.doesNotMatch(h.app.innerHTML, /class="workspace[^"]*\brecall\b/);
+  h.click('novel-next');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), true);
+  assert.match(h.app.innerHTML, /「あっ!」/);
+  assert.doesNotMatch(h.app.innerHTML, /端的に言うと/);
+  h.gestureTimer.drain();
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  assert.match(h.app.innerHTML, /class="workspace[^"]*\brecall\b/);
+  assert.match(h.app.innerHTML, /class="novel-speaker">ミサメ</);
+  assert.match(h.app.innerHTML, /class="novel-line">「端的に言うと、このNFを誰かにとって一生忘れられない思い出の場所にしたいなって思ったんです。」/);
+  assert.doesNotMatch(h.app.innerHTML, /scene-art|c-riverside\.webp|class="epilogue-line"/);
+  h.click('novel-next');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), true);
+  assert.match(h.app.innerHTML, /端的に言うと/);
+  assert.doesNotMatch(h.app.innerHTML, /見たいNFじゃない/);
+  h.gestureTimer.drain();
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  assert.doesNotMatch(h.app.innerHTML, /class="workspace[^"]*\brecall\b/);
+  assert.match(h.app.innerHTML, /c-riverside\.webp/);
+  assert.match(h.app.innerHTML, /class="novel-speaker">タツ</);
+  assert.match(h.app.innerHTML, /class="novel-line">「ミサメのいないNFは俺の見たいNFじゃないなって思ったんだ。」/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-line">「そう思うと冷静になれて、どこかで聞いた伝承をふと思い出した。」/);
+  assert.match(h.app.innerHTML, /c-riverside\.webp/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-speaker">アサヒ</);
+  assert.match(h.app.innerHTML, /ミサメ先輩にもタツ先輩の勇姿を伝えましょう。/);
+  h.click('novel-next');
+  assert.match(h.app.innerHTML, /class="novel-line">「着きました。ここがミサメ先輩の病室です。」/);
+  assert.doesNotMatch(h.app.innerHTML, /体調はかなり回復/);
+  h.click('novel-next');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), true);
+  assert.match(h.app.innerHTML, /ミサメ先輩の病室です。/);
+  h.gestureTimer.drain();
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  assert.match(h.app.innerHTML, /c-hospital\.webp/);
+  assert.doesNotMatch(h.app.innerHTML, /class="novel-speaker"|c-riverside\.webp/);
+  assert.match(h.app.innerHTML, /class="novel-line">ミサメは入院しているものの体調はかなり回復しているようだった。/);
+  h.click('novel-next');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  assert.doesNotMatch(h.app.innerHTML, /class="novel-speaker"/);
+  assert.match(h.app.innerHTML, /class="novel-line">その後は談笑した。/);
+  assert.match(h.app.innerHTML, /c-hospital\.webp/);
+
+  for (let i = 0; i < 40 && !h.app.innerHTML.includes('次なる旅路を予感させた。'); i++) {
+    h.click('novel-next');
+    h.gestureTimer.drain();
+  }
+  assert.match(h.app.innerHTML, /class="novel-line">落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。/);
+  assert.match(h.app.innerHTML, /c-dusk\.webp/);
+  assert.equal(h.evaluate('epilogueBlackoutActive'), false);
+  assert.equal(h.evaluate('meiEndView'), false);
+  h.click('novel-next');
+  assert.equal(h.evaluate('epilogueBlackoutActive'), true);
+  assert.match(h.app.innerHTML, /次なる旅路を予感させた。/);
+  assert.equal(h.evaluate('meiEndView'), false);
+  assert.doesNotMatch(h.app.innerHTML, /class="yoi-completion mei-completion"/);
+  h.gestureTimer.drain();
+  assert.equal(h.evaluate('isPlaying'), false);
+  assert.equal(h.evaluate('meiEndView'), true);
+  assert.equal(h.evaluate('meiEndRoute'), 'all-saved');
+  assert.match(h.app.innerHTML, /class="yoi-completion mei-completion"/);
+  assert.match(h.app.innerHTML, /class="clear-post-line" href="https:\/\/x\.gd\/Rf4fSK"/);
+  assert.match(h.app.innerHTML, /data-action="mei-survey"/);
+  assert.doesNotMatch(h.app.innerHTML, /class="epilogue-screen/);
+  h.click('mei-survey');
+  assert.equal(h.panel.dataset.kind, 'survey');
+  assert.equal(h.evaluate('surveyEndingAnswer()'), 'スベテガスクワレタ');
+  assert.ok(h.panel.innerHTML.includes('value="Cエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('id="survey-mei"'));
+  assert.doesNotMatch(h.panel.innerHTML, /id="survey-mei" hidden/);
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('タツ「何かを手放せば何かを手に入れられる。'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('アサヒ「あっ!」'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('ミサメ「端的に言うと、このNFを誰かにとって一生忘れられない思い出の場所にしたいなって思ったんです。」'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('タツ「ミサメのいないNFは俺の見たいNFじゃないなって思ったんだ。」'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('アサヒ「着きました。ここがミサメ先輩の病室です。」'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('余計なことをしやがってと心の中で悪態をつく。顔を上げるとミサメと目があった。'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('ミサメ「これを新しい約束にしませんか?」'));
+  assert.ok(h.evaluate('historyScreenMarkup()').includes('落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。'));
+});
+
 test('Q9セカイハスクワレタはエピローグの題字から始まり、場面の暗転を経て冥の終幕を開く', t => {
   const h = appHarness();
   t.after(() => h.dispose());
@@ -4321,6 +4459,11 @@ test('Q9セカイハスクワレタはエピローグの題字から始まり、
   assert.match(h.app.innerHTML, /「11月の救祭 冥」はここで終了です。/);
   assert.doesNotMatch(h.app.innerHTML, /class="epilogue-screen/);
   assert.doesNotMatch(h.app.innerHTML, /踏みしだかれたイチョウ/);
+  h.click('mei-survey');
+  assert.equal(h.evaluate('surveyEndingAnswer()'), 'セカイハスクワレタ');
+  assert.ok(h.panel.innerHTML.includes('value="Bエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
+  h.click('close');
 
   h.click('select', 'Q8');
   assert.equal(h.evaluate('meiEndView'), false);
@@ -4384,9 +4527,12 @@ test('アンケート送信後はあとがきの画面を開く', async t => {
   assert.equal(h.panel.dataset.kind, 'afterword');
   assert.equal(h.panel.classList.contains('afterword-dialog'), true);
   assert.equal(h.panel.classList.contains('draggable-sheet'), false);
-  assert.match(h.panel.innerHTML, /class="afterword-kicker">11月の救祭</);
-  assert.match(h.panel.innerHTML, /id="panel-title"[^>]*>あとがき</);
-  assert.match(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  assert.match(h.panel.innerHTML, /id="panel-title"[^>]*class="afterword-kicker"[^>]*>11月の救祭</);
+  assert.match(h.panel.innerHTML, /宵をクリアされた方へ/);
+  assert.match(h.panel.innerHTML, /NFの1週間前に大胆な易化を施しました。/);
+  assert.match(h.panel.innerHTML, /全体の編集後記をご用意しております！！/);
+  assert.doesNotMatch(h.panel.innerHTML, />あとがき</);
+  assert.doesNotMatch(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
   assert.match(h.panel.innerHTML, /data-action="close">終幕に戻る</);
   assert.doesNotMatch(h.panel.innerHTML, /クリアをポスト|すべての謎を解き明かしました|会場でプレイする/);
   h.click('tour-survey');
@@ -4396,7 +4542,11 @@ test('アンケート送信後はあとがきの画面を開く', async t => {
   h.gestureTimer.drain();
   assert.equal(h.panel.dataset.kind, 'afterword');
   assert.equal(h.panel.classList.contains('afterword-dialog'), true);
-  assert.match(h.panel.innerHTML, />あとがき</);
+  assert.match(h.panel.innerHTML, /宵をクリアされた方へ/);
+  h.evaluate('meiEndView = true');
+  h.evaluate("openPanel('afterword')");
+  assert.match(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  assert.doesNotMatch(h.panel.innerHTML, /宵をクリアされた方へ/);
 });
 
 

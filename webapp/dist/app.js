@@ -101,6 +101,9 @@ const epilogueSceneArt = {
   library: '../assets/endings/b-library.webp',
   bookstore: '../assets/endings/b-bookstore.webp',
   ginkgo: '../assets/endings/b-ginkgo.webp',
+  riverside: '../assets/endings/c-riverside.webp',
+  ward: '../assets/endings/c-hospital.webp',
+  dusk: '../assets/endings/c-dusk.webp',
 };
 let followChat = true;
 let unreadConversationCount = 0;
@@ -353,9 +356,12 @@ function lockPlayContent(locked) {
   }
 }
 
-function epilogueLineMarkup(text) {
-  // 句点だけを改行にし、文の途中は行の端まで続ける。「変わらぬ空。」のあとは続けて書く。
-  return esc(text ?? '').replace(/。(?!$)/g, (mark, index, source) => source.endsWith('変わらぬ空。', index + 1) ? '。' : '。<br>');
+function epilogueLineMarkup(line) {
+  const text = typeof line === 'string' ? line : line?.text;
+  // 句点だけを改行にし、文の途中は行の端まで続ける。「変わらぬ空。」のあとと、末尾の閉じ括弧の前では改行しない。
+  const body = esc(text ?? '').replace(/。(?!(?:[」』])?$)/g, (mark, index, source) => source.endsWith('変わらぬ空。', index + 1) ? '。' : '。<br>');
+  const speaker = typeof line === 'string' || !line?.speaker ? '' : `<span class="epilogue-speaker">${esc(line.speaker)}</span>`;
+  return speaker + body;
 }
 
 function epilogueMarkup() {
@@ -370,7 +376,7 @@ function epilogueMarkup() {
   const veil = epilogueEnteredFromBlack && background ? '<span class="epilogue-veil" aria-hidden="true"></span>' : '';
   const portrait = scenario.portraits?.[line?.appear];
   const figure = portrait ? `<span class="epilogue-appear" aria-hidden="true"><img src="${esc(portrait)}" alt=""></span>` : '';
-  return `<button type="button" class="epilogue-screen is-line${scene}${appear}" data-action="epilogue-next"${image}>${figure}<span class="epilogue-line">${epilogueLineMarkup(line?.text)}</span><span class="epilogue-cue" aria-hidden="true">▷</span>${veil}<span class="sr-only">読み進める</span></button>`;
+  return `<button type="button" class="epilogue-screen is-line${scene}${appear}" data-action="epilogue-next"${image}>${figure}<span class="epilogue-line">${epilogueLineMarkup(line)}</span><span class="epilogue-cue" aria-hidden="true">▷</span>${veil}<span class="sr-only">読み進める</span></button>`;
 }
 
 function fitEpilogueTitle(script) {
@@ -553,7 +559,7 @@ function playConversation(start, { fromCorrectAnswer = false } = {}) {
   preloadSceneImages(scene);
   novelPlayback = usesNovelBubbles(scene);
   cancelEpilogueMotion();
-  if (scene[0]?.epilogue) {
+  if (scene[0]?.epilogue || scene[0]?.scene) {
     novelPlayback = true;
     epiloguePhase = 'title';
     render();
@@ -666,24 +672,25 @@ function advanceNovel(remaining = pendingConversation(state, { isPlaying, sceneS
     cancelEpilogueMotion();
     displayedMessages.push(line);
     render();
-    if (openedFromBlackout) releaseSceneBlackout();
-    revealNovelContent(document.querySelector('.novel-line'));
+    settleNovelArrival(openedFromBlackout);
     if (line.tremor) tremorScene();
     document.querySelector('.chat-area').scrollTop = 0;
     if (!panel.open) document.querySelector('[data-action="novel-next"]')?.focus({ preventScroll: true });
     return;
   }
   displayedMessages.push(line);
-  const bubble = previous && document.querySelector('[data-action="novel-next"]');
+  const artworkChanged = Boolean(line?.scene && previous?.scene && previous.scene !== line.scene) || Boolean(line?.recall) !== Boolean(previous?.recall);
+  const bubble = previous && !artworkChanged && !openedFromBlackout && document.querySelector('[data-action="novel-next"]');
   if (bubble) {
     updateNovelBubble(bubble, line);
     save();
   } else {
     render();
-    revealNovelContent(document.querySelector('.novel-line'));
+    if (!openedFromBlackout) revealNovelContent(document.querySelector('.novel-line'));
     if (historyView) document.querySelector('#history-heading')?.focus({ preventScroll: true });
     else if (!panel.open) document.querySelector('[data-action="novel-next"]')?.focus({ preventScroll: true });
   }
+  if (openedFromBlackout) settleNovelArrival(true);
   if (line.tremor) tremorScene();
   document.querySelector('.chat-area').scrollTop = 0;
 }
@@ -723,6 +730,16 @@ function revealNovelContent(element) {
   if (!element || reducedMotion()) return;
   element.animate?.([{ opacity: .78, translate: '0 3px' }, { opacity: 1, translate: '0 0' }], {
     duration: MOTION.state, easing: MOTION.ease,
+  });
+}
+
+// 暗転で開く台詞は、黒が落ちてから吹き出しの文字と立ち絵を通常の会話と同じ時間で出す。
+function settleNovelArrival(fromBlackout) {
+  if (fromBlackout) releaseSceneBlackout();
+  revealNovelContent(document.querySelector('.novel-line'));
+  if (!fromBlackout || reducedMotion()) return;
+  document.querySelectorAll('.novel-portrait:not(.portrait-leaving)').forEach(portrait => {
+    portrait.animate?.([{ opacity: .78 }, { opacity: 1 }], { duration: MOTION.state, easing: MOTION.ease });
   });
 }
 
@@ -2077,19 +2094,32 @@ function clearPostMarkup(url) {
   return `<div class="clear-post"><a class="clear-post-line" href="${esc(url)}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>クリアをポスト</span><span class="sr-only">。新しいタブで開きます</span></a></div>`;
 }
 
-// 終幕のアンケートのあとに開くあとがき。本文ができたら、この配列へ段落を足す。
-const AFTERWORD_PARAGRAPHS = [];
+// 宵の終幕アンケートのあとに開く編集後記。冥をクリアしたあとの全体あとがきは別途。
+const AFTERWORD_PARAGRAPHS = [
+  '宵をクリアされた方へ',
+  'こちらのメッセージをご覧の皆さま。宵のクリアに加え、アンケートにもご回答いただき、誠にありがとうございます。皆さまからのお言葉を真摯に受け止め、作品の質の向上に必ずつなげていきたいと思います。',
+  'アンケートのお礼としまして、ささやかではございますが、「編集後記」と題して、宵の裏事情を少しお話ししようと思います。分かりやすいように、問題ごとに書いていきたいと思います。',
+  'N1： 実は、N1は一番最初にできた問題でもあり、一番改良を重ねた問題でもあります。当初は「赤、青、白」の表記が「R、G、W」だったり、Helloを話す人ではなく「E」という文字だけだったり、ロシアを表す「露」のイラストを入れたりと、いろいろ迷走していました。しかし、テストプレイをしてくださった方がかなりここでつまずいたため、NFの1週間前に大胆な易化を施しました。',
+  'N2： N2は、筆者が作った際に手応えを感じた問題であります。2回つなげるという発想は面白かったのではないかと自負しております。しかし、「百、正、西、北」の文字群から、百万遍門と正門に馴染みのある京大生のテストプレイヤーは、すぐに解いていました……。皆さんには苦戦してもらえていたら嬉しいのですが……。',
+  'N3： N3は、実は吉田南へと移動してもらうためのクッション謎であります。少し簡単だったかなと思っております。',
+  'N4： N4は、これまた筆者イチ押しの問題であります。これまでは問題用紙の前で謎を解いてから次の問題へ移動する、というステップだったため、「問題を解きながら移動する」という発想が出てくるかどうかが肝だったでしょうか。',
+  'N5： N5は、筆者の友人が「コナンの『ホームズの黙示録』の話みたいな謎を作りたい」と言ったところからスタートしました。余裕がある方は、コナンのその話を読んでみてください。ちなみに筆者は読んでいません。',
+  'さて、雑記はここら辺にしましょうか。本当は『冥』に向けた伏線がそこかしこに張られていて、それについて触れたいのですが……。まだ詳しくは言えません（笑）と、『冥』の宣伝をさらっとしておきました。',
+  '仕切り直して真面目に書きますと、『冥』はこの「11月の救祭」の後編であり、タツたちの物語の完結編であります。プレイしていただいて、絶対に後悔しないようなクオリティを保証いたします。京都大学以外のお好きな場所でも、いつでもプレイできますので、まだご購入されていない方は、ぜひともプレイをおすすめいたします。',
+  'それでは、ここまで読んでいただき、ありがとうございました。編集後記でした。',
+  '『冥』も最後までクリアしていただき、アンケートにご回答いただくと、全体の編集後記をご用意しております！！',
+];
 
 function afterwordMarkup() {
-  const paragraphs = AFTERWORD_PARAGRAPHS.filter(text => typeof text === 'string' && text.trim());
+  const yoiAfterword = !meiEndView && !meiEndRoute;
+  const paragraphs = (yoiAfterword ? AFTERWORD_PARAGRAPHS : []).filter(text => typeof text === 'string' && text.trim());
   const body = paragraphs.length
     ? paragraphs.map(text => `<p>${esc(text)}</p>`).join('')
     : '<p class="afterword-placeholder">あとがきの本文は、ここに表示されます。</p>';
   return `<section class="afterword" aria-labelledby="panel-title">
     <button class="icon-button afterword-close" data-action="close" aria-label="閉じる">${icon('close')}</button>
     <header class="afterword-heading">
-      <p class="afterword-kicker">11月の救祭</p>
-      <h1 id="panel-title" tabindex="-1">あとがき</h1>
+      <h1 id="panel-title" class="afterword-kicker" tabindex="-1">11月の救祭</h1>
       <div class="afterword-rule" aria-hidden="true"></div>
     </header>
     <div class="afterword-scroll" tabindex="0">${body}</div>
@@ -2128,10 +2158,7 @@ function meiCompletionMarkup() {
 }
 
 function surveyEndingAnswer() {
-  if (!meiEndView && !meiEndRoute) return '';
-  const problem = scenario.problems.find(item => item.id === 'Q9');
-  const branch = problem?.answerBranches?.find(item => item.id === state.branches?.Q9);
-  return branch?.answer === '神ハカエッタ' ? '神ハカエッタ' : '';
+  return activeMeiEnding()?.answer ?? '';
 }
 
 function surveyFormMarkup() {
@@ -2190,7 +2217,7 @@ function historyDialogueMarkup(item, visibleMessages) {
   if (item.id === 'Q9' && meiEndRoute) {
     const ending = activeMeiEnding();
     if (ending) return ending.dialogue.map(line => line.scene
-      ? `<p class="narration">${esc(line.text)}</p>`
+      ? `<p class="narration">${line.speaker ? esc(line.speaker) : ''}${esc(line.text)}</p>`
       : messageMarkup({ ...line, kind: 'dialogue', problemId: 'Q9' })).join('');
   }
   return visibleMessages.filter(message => message.problemId === item.id && isConversationLine(message)).map(messageMarkup).join('');
@@ -2260,7 +2287,7 @@ function restoreSceneNarration() {
   }
   if (gateVisible || historyView || startView || isPlaying || investigationView || epiloguePhase === 'blackout') return;
   const last = displayedMessages.at(-1);
-  if (last?.scene && last.problemId === current().id) {
+  if (last?.epilogue && last.scene && last.problemId === current().id) {
     epiloguePhase = 'line';
     return;
   }
@@ -2296,7 +2323,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const sceneDimLate = sceneDim && peelingConclusions.length > 0;
   const answerPageVisible = p.answerPresentation === 'page' && composerVisible;
   const showStartGuide = startView || (p.id === 'N1' && !isPlaying && (!solved || repeatAnswer) && !displayedMessages.length);
-  const inFinalEpilogue = Boolean(epiloguePhase) || displayedMessages.some(message => message.epilogue);
+  const inFinalEpilogue = Boolean(epiloguePhase) || displayedMessages.some(message => message.epilogue || message.scene);
   const showClues = p.chapter === '第二章' && !startView && !yoiEndView && !meiEndRoute && !meiEndView && !inFinalEpilogue;
   const clueCount = showClues ? unlockedCards(scenario, state).length : 0;
   const showDeductionGuide = ['Q1', 'Q1.1'].includes(sceneProblem.id) && !isPlaying && !displayedMessages.length;
@@ -2316,7 +2343,9 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   const novelLine = completionPending
     ? displayedMessages.findLast(m => m.problemId === p.id && m.speaker) ?? p.dialogue.findLast(m => m.speaker)
     : lastStoryLine || lastMessage;
-  const sceneArt = meiEndView || yoiEndView ? '' : displayedMessages.findLast(message => message.background)?.background;
+  const recalling = Boolean(lastMessage?.recall);
+  const sceneSource = recalling ? null : displayedMessages.findLast(message => message.background || epilogueSceneArt[message.scene]);
+  const sceneArt = meiEndView || yoiEndView ? '' : sceneSource?.background || epilogueSceneArt[sceneSource?.scene] || '';
   const showPetals = Boolean(displayedMessages.at(-1)?.flashback);
   const appearPortrait = !epiloguePhase && scenario.portraits?.[displayedMessages.at(-1)?.appear];
   const appearMarkup = appearPortrait ? `<span class="scene-appear" aria-hidden="true"><img src="${esc(appearPortrait)}" alt=""></span>` : '';
@@ -2326,8 +2355,11 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
     app.innerHTML = '<div class="shell"><main id="main" class="workspace"></main></div>';
     workspace = document.querySelector('.workspace');
   }
-  workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${historyView ? ' history-is-open' : ''}${sceneDim ? ' scene-dim' : ''}${sceneDimLate ? ' scene-dim-late' : ''}${sceneArt ? ' has-scene-art' : ''}`;
+  workspace.className = `workspace${novel ? ' novel-workspace' : ''}${p.chapter === '第二章' ? ' chapter-mei' : ''}${recalling ? ' recall' : ''}${historyView ? ' history-is-open' : ''}${sceneDim ? ' scene-dim' : ''}${sceneDimLate ? ' scene-dim-late' : ''}${sceneArt ? ' has-scene-art' : ''}`;
   workspace.inert = false;
+  // 暗転中の再描画で黒を外すと、次の場面が一瞬見える。カバーは描き直した画面の上へ戻す。
+  const heldBlackout = workspace.querySelector?.('.scene-blackout') ?? null;
+  heldBlackout?.remove?.();
   workspace.innerHTML = `
       ${sceneArt ? `<div class="scene-art" style="background-image:url('${esc(sceneArt)}')">${showPetals ? sakuraFallMarkup() : ''}${appearMarkup}</div>` : ''}
       <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}${q9ReplayMenuItem()}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button>${hexReplayMenuItem()}</nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
@@ -2389,6 +2421,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
         ${p.answerPresentation === 'page' && !composerVisible ? '' : composerContentMarkup(p)}
       </section>
       ${historyView ? historyScreenMarkup() : ''}`;
+  if (heldBlackout) workspace.append?.(heldBlackout);
   lockPlayContent(investigationClosing || Boolean(epiloguePhase));
   syncPlayChrome();
   const previousClosing = document.querySelector('.investigation-closing:not(.is-leaving)');

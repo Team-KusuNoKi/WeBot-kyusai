@@ -40,6 +40,12 @@ function routePhoto(id, title, directions) {
 function endingNarration(text, scene) {
   return { speaker: '', text, epilogue: true, scene };
 }
+function endingSpeech(speaker, text, scene) {
+  return { speaker, text, epilogue: true, scene };
+}
+function endingBubble(text, scene, speaker = '', extra = {}) {
+  return { speaker, text, scene, ...extra };
+}
 
 function destinationMove({ destination, placeName, approach = '向かおう', findLabel, findPhrase = `${findLabel}と書かれた問題` }, steps) {
   const pageTurnText = `以下の写真を参考にしてください。現地で${findPhrase}を見つけたら上部の「次へ」ボタンを押しましょう。`;
@@ -744,7 +750,44 @@ export const scenario = {
           endingNarration('俺の腕に腕章はもうない。これは俺が選んだ結末で、俺が守った場所だ。', 'ginkgo'),
           endingNarration('そう自分に言い聞かせて俺は日の昇りきらぬNFを後にした。', 'ginkgo'),
         ] },
-        { id: 'all-saved', answer: 'スベテガスクワレタ', dialogue: [{ speaker: '', text: '全てが救われた。' }] },
+        { id: 'all-saved', answer: 'スベテガスクワレタ', dialogue: [
+          endingBubble('俺は前を向いてハナに対峙する。', 'hallway'),
+          endingBubble('「何かを手放せば何かを手に入れられる。そんな安易な選択にすがるのは甘えだ。厄災を止めるためにミサメの命を犠牲にする。そんな結末を俺は認めない。」', 'hallway', 'タツ'),
+          endingBubble('「起こりうる大地震もミサメもこのNFも全部救ってみせる。NFを誰かの涙や悲しみで染めてはいけないんだ。NFを皆が一生忘れられないような場所にする。」', 'hallway', 'タツ'),
+          endingBubble('「それが俺の目指す-救祭-だ。」', 'hallway', 'タツ'),
+          endingBubble('ハナを拒絶し、俺は儀式を続行した。かつて失われた伝承に基づく正しい方法で。うまくいく確信はなかった。それでも俺は迷わない。', 'hallway'),
+          endingBubble('1ヶ月後', 'riverside', '', { blackout: true }),
+          endingBubble('俺はアサヒと並んで歩いていた。', 'riverside'),
+          endingBubble('「もう1ヶ月ですね。あのNFから。」', 'riverside', 'アサヒ'),
+          endingBubble('「ああ。事情聴取やら学校への事件の説明とかで大忙しでそんな実感ないが。」', 'riverside', 'タツ'),
+          endingBubble('「一番忙しそうだったのは委員長でしたけどね。日に日にやつれていく委員長が心配でした。」', 'riverside', 'アサヒ'),
+          endingBubble('「頭があがらないな」', 'riverside', 'タツ'),
+          endingBubble('「あの…1つ聞いていいですか?」', 'riverside', 'アサヒ'),
+          endingBubble('「あのとき、儀式をやったとき、どうして巻物の正しい解釈に気がつけたんですか?」', 'riverside', 'アサヒ'),
+          endingBubble('「あれは偶然閃いただけさ。でも突然与えられた2択の選択肢に迷っていたとき、ふとあの日のミサメとの会話を思い出したんだ。ミサメがNFに熱心だった理由さ。あのとき聞いてただろう?」', 'riverside', 'タツ'),
+          endingBubble('「あっ!」', 'riverside', 'アサヒ'),
+          endingBubble('「端的に言うと、このNFを誰かにとって一生忘れられない思い出の場所にしたいなって思ったんです。」', 'riverside', 'ミサメ', { blackout: true, recall: true }),
+          endingBubble('「ミサメのいないNFは俺の見たいNFじゃないなって思ったんだ。」', 'riverside', 'タツ', { blackout: true }),
+          endingBubble('「そう思うと冷静になれて、どこかで聞いた伝承をふと思い出した。」', 'riverside', 'タツ'),
+          endingBubble('「やっぱり先輩ってすごいっす。ミサメ先輩にもタツ先輩の勇姿を伝えましょう。」', 'riverside', 'アサヒ'),
+          endingBubble('「着きました。ここがミサメ先輩の病室です。」', 'riverside', 'アサヒ'),
+          endingBubble('ミサメは入院しているものの体調はかなり回復しているようだった。俺達は伝えた。お化け屋敷前で別れたあとのこと、ミサメの身に起こったこと、そして誘拐事件の真相と結末を。', 'ward', '', { blackout: true }),
+          endingBubble('その後は談笑した。あの日以前と同じように。俺が軽口をたたき、アサヒが盛り上げ、ミサメが呆れたように笑う。', 'ward'),
+          endingBubble('当たり障りのない日常が戻ってきたことがただ嬉しかった。', 'ward'),
+          endingBubble('しばらくするとアサヒが病室から出ていった。もしかすると俺達に気を遣っているのかもしれない。', 'ward'),
+          endingBubble('余計なことをしやがってと心の中で悪態をつく。顔を上げるとミサメと目があった。', 'ward'),
+          endingBubble('「NFのことを委員長から聞きました。来年のNF中止は撤回されたって。ありがとうございます。」', 'ward', 'ミサメ'),
+          endingBubble('「俺だけの功績じゃない。皆で掴み取った勝利みたいなもんだ。でも…」', 'ward', 'タツ'),
+          endingBubble('「約束してたからな。」', 'ward', 'タツ'),
+          endingBubble('桜舞う哲学の道で3人で交わしたNFを救うという約束。ミサメの熱意に絆されるように結んだ約束を俺は儀式の直前まで忘れかけていた。でも偶然思い出したその約束がきっと俺をこの結末に導いてくれた。今はそう信じている。', 'ward'),
+          endingBubble('「提案があります。私、今年こんな目にあっちゃって、フィナーレ見れていないんです。11月祭のラストを飾るキャンプファイヤーです。」', 'ward', 'ミサメ'),
+          endingBubble('「ああ、確かに。」', 'ward', 'タツ'),
+          endingBubble('「私たちのNFは来年も続きます。私たち皆で守った場所です。だから…」', 'ward', 'ミサメ'),
+          endingBubble('「来年こそ3人でフィナーレを見ましょう。私とタツ先輩とアサヒ君で。」', 'ward', 'ミサメ'),
+          endingBubble('「これを新しい約束にしませんか?」', 'ward', 'ミサメ'),
+          endingBubble('窓の外はあの日のような宵の空。', 'dusk', '', { blackout: true }),
+          endingBubble('落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。', 'dusk'),
+        ] },
       ],
       hints: [], explanation: '',
       completionScreen: 'booklet',

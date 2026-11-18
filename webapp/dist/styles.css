@@ -168,6 +168,17 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .workspace.novel-workspace:not(.chapter-mei)::before { filter: none; }
 .scene-art { position: absolute; z-index: 0; inset: 0; background: #1d211e center / cover no-repeat; pointer-events: none; }
 .workspace.novel-workspace.has-scene-art::before { opacity: 0; }
+.workspace.recall { background: #f3eee6; }
+.workspace.recall::before,
+.workspace.chapter-mei.recall::before {
+  background-image: url("./chat-background-clocktower-soft.webp");
+  background-position: 68% center;
+  background-size: cover;
+  opacity: 1;
+  filter: blur(8px) brightness(1.42) saturate(.28);
+}
+.workspace.recall .chat-area::before { content: ""; position: absolute; z-index: 0; inset: 0; background: rgb(255 252 246 / 46%); pointer-events: none; }
+.workspace.recall .novel-stage { position: relative; z-index: 1; }
 .sakura-fall {
   position: absolute;
   inset: 0;
@@ -645,8 +656,7 @@ dialog.afterword-dialog { inset: 0; width: min(440px, calc(100vw - 24px)); heigh
 .afterword { display: flex; flex-direction: column; height: 100%; min-height: 0; text-align: center; }
 .afterword-close { position: absolute; z-index: 1; top: 4px; right: 4px; color: #1c140f; }
 .afterword-heading { flex: none; padding: 36px 28px 0; }
-.afterword-kicker { margin: 0; font: 15px var(--serif); letter-spacing: .18em; }
-.afterword-heading h1 { margin: 8px 0 0; font: 32px/1.2 var(--serif); font-weight: 400; letter-spacing: .22em; }
+.afterword-heading h1.afterword-kicker { margin: 0; font: 15px var(--serif); font-weight: 400; letter-spacing: .18em; }
 .afterword-rule { width: 36px; height: 1px; margin: 18px auto 0; background: #1c140f33; }
 .afterword-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 28px 8px; text-align: left; }
 .afterword-scroll:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -6px; }
@@ -1843,6 +1853,13 @@ dialog.hex-reward-panel::backdrop { background: #d5e0e8; }
   text-shadow: 0 1px 2px #00000073, 0 12px 28px #00000066;
 }
 .epilogue-screen.has-scene .epilogue-line { text-shadow: 0 1px 2px #050505, 0 0 16px #050505d0; }
+.epilogue-speaker {
+  display: block;
+  margin-bottom: .4em;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .16em;
+}
 .epilogue-screen.has-appear {
   align-content: end;
   justify-items: end;
