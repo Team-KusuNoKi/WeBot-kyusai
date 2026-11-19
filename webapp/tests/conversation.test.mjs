@@ -1183,6 +1183,7 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.equal(h.panel.open, true);
   assert.equal(h.panel.dataset.kind, 'tour-thanks');
   assert.ok(h.panel.innerHTML.includes('周遊版をプレイしてくださり、ありがとうございました。'));
+  assert.ok(h.panel.innerHTML.includes('class="tour-thanks-book-title">11月の救祭 冥</p>'));
   assert.ok(h.panel.innerHTML.includes('book-mei.webp'));
   assert.ok(h.panel.innerHTML.includes('付属図書館前で販売中'));
   assert.ok(h.panel.innerHTML.includes('アンケートはこちら'));
@@ -4546,6 +4547,28 @@ test('アンケート送信後はあとがきの画面を開く', async t => {
   h.evaluate('meiEndView = true');
   h.evaluate("openPanel('afterword')");
   assert.match(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  assert.doesNotMatch(h.panel.innerHTML, /宵をクリアされた方へ/);
+});
+
+test('冥のAエンドとBエンドのあとがきはノーマルエンドの編集後記を出す', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  for (const route of ['god-returned', 'world-saved']) {
+    h.evaluate(`meiEndView = true; meiEndRoute = '${route}'`);
+    h.evaluate("openPanel('afterword')");
+    assert.match(h.panel.innerHTML, /冥をクリア\(エンドA,Bに到達\)された方へ/);
+    assert.match(h.panel.innerHTML, /太陽のイラストの赤色が変ですよね/);
+    assert.match(h.panel.innerHTML, /最『期』の場所へ向かえ/);
+    assert.match(h.panel.innerHTML, /実は「ノーマルエンド」です/);
+    assert.match(h.panel.innerHTML, /宵から冊子を隅々まで読み直すと、今なら気づく伏線があるかも/);
+    assert.match(h.panel.innerHTML, /data-action="close">終幕に戻る/);
+    assert.doesNotMatch(h.panel.innerHTML, /宵をクリアされた方へ/);
+    assert.doesNotMatch(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  }
+  h.evaluate("meiEndView = true; meiEndRoute = 'all-saved'");
+  h.evaluate("openPanel('afterword')");
+  assert.match(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  assert.doesNotMatch(h.panel.innerHTML, /冥をクリア\(エンドA,Bに到達\)された方へ/);
   assert.doesNotMatch(h.panel.innerHTML, /宵をクリアされた方へ/);
 });
 

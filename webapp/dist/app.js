@@ -2094,7 +2094,7 @@ function clearPostMarkup(url) {
   return `<div class="clear-post"><a class="clear-post-line" href="${esc(url)}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg><span>クリアをポスト</span><span class="sr-only">。新しいタブで開きます</span></a></div>`;
 }
 
-// 宵の終幕アンケートのあとに開く編集後記。冥をクリアしたあとの全体あとがきは別途。
+// 宵の終幕アンケートのあとに開く編集後記。冥のA・Bエンドはノーマルエンドの編集後記。トゥルーエンドは別途。
 const AFTERWORD_PARAGRAPHS = [
   '宵をクリアされた方へ',
   'こちらのメッセージをご覧の皆さま。宵のクリアに加え、アンケートにもご回答いただき、誠にありがとうございます。皆さまからのお言葉を真摯に受け止め、作品の質の向上に必ずつなげていきたいと思います。',
@@ -2110,9 +2110,29 @@ const AFTERWORD_PARAGRAPHS = [
   '『冥』も最後までクリアしていただき、アンケートにご回答いただくと、全体の編集後記をご用意しております！！',
 ];
 
+// 冥のAエンド・Bエンド（ノーマルエンド）をクリアし、アンケートを送ったあとに開く編集後記。
+const MEI_AB_AFTERWORD_PARAGRAPHS = [
+  '冥をクリア(エンドA,Bに到達)された方へ',
+  'こちらのメッセージをご覧の皆さま。冥のクリアに加え、アンケートにもご回答いただき、誠にありがとうございます。皆さまからのお言葉を真摯に受け止め、作品の質の向上に必ずつなげていきたいと思います。',
+  'アンケートのお礼としまして、ささやかではございますが、「編集後記」と題して、作品の裏事情を少しお話ししようと思います。',
+  'さて、ここまでプレイしてくださった方々は、宵と冥に貼られてきた数々の伏線を回収してくれたとは思いますが、皆様が見逃しそうかつ作中で回収するには小ネタすぎる伏線をいくつか消化していきたいと思います。',
+  '①　N1の色が変：実は最初の謎からハナの色覚異常についての伏線は貼られていました。N1をもう一度確認してみると、太陽のイラストの赤色が変ですよね...。',
+  '②　末席同好会の貼り紙の色が変：こちらは、覚えている方は少ないと思いますが、末席同好会のチラシに使われている色も少し変でした。ハナは堂々と赤色と思って使った色が...ということです。',
+  '③　N5の問題文が「最『期』の場所へ向かえ」になっている。正しい漢字は「最『後』」ですよね。ここもハナのお茶目心で、「あんた次の行ったところで死にまっせ」みたいな意味合いだったんですね。誤植だと思われたみなさん、違います！！！(大声)。タツたちは、「最期」の漢字を普通に「最後」と捉えて会話を進めていましたね...。気づいたところで、まさか行ったら殺されるなんて気づかず、誤植だと思うだけですが...。',
+  '④　実は、N5のタイトル「Navigate to Fear」は、恐怖への誘い、もっとストレートに言うと、「お化け屋敷への誘い」だったんですよね。ほとんどの皆様が、タイトルが「NF縛り」なのは気づかれたと思うんですけど、N5のタイトルから、勘の良い人は問題を解かずとも最期の場所はお化け屋敷と気づきそうです(気づきましたか？)。これを書いていて思い出しましたが、N3のタイトル「Notice of Fortune　幸運のお告げ」はおみくじのことを暗喩しています。',
+  '⑤　サダヲは本当にお腹が弱いだけ。サダヲは、犯人候補の4人のうち、唯一、何も後ろめたいことがない人です。なのに、一番疑われて...不憫なキャラです（笑）。',
+  '⑥　マヤの持ち物「紙切れ」には、実は金庫の開け方が書いてあるという設定がありました。わざわざ作中で回収する程でもなく、ミスリーディング要員で置いておきました。同様にアツヤのライトに名前の刻印があるのも特に意味はありません。攪乱要員です。',
+  '⑦　ハナが冥の冒頭、ミサメの死体を急に見たときに「血ってこんなスミレ色なの！？」って言ってたのは演技＆色覚異常の伏線です。隠し部屋が発見された時の、ハナの「信じられない！ありえない！」みたいな会話も彼女の演技でした。名演ですよね。作中で、タツに「演技上手かったぜ」みたいなのを最後に言わせたかったのですが、思ったより最後の展開がシリアスになってしまい、そんな余裕はありませんでした（笑）。',
+  'と思い出せる主要な小ネタはこれくらいです。他にも色々散りばめた気がするので(思い出せない)、もう1度読み返してみると、色んな伏線に気づいて面白いと思いますよ！！',
+  'さて、ここまでダラダラと小ネタについて書いてきましたが、もっと核心的な話を最後に書こうと思います。実は、本作は皆さん薄っすらとお気づきの通り、マルチエンドとなっております。これを読んでいる皆さんが到達されたのは「ＡエンドかＢエンド」です。はい。実は「ノーマルエンド」です。ということは...トゥルーエンドが...??　これから言うのは独り言なので聞き流してください。',
+  '「宵から冊子を隅々まで読み直すと、今なら気づく伏線があるかも...。」',
+  'という意味深な言葉を残して、〆にしたいと思います。ここまで読んでくださりありがとうございます！長時間のプレイありがとうございました！！',
+];
+
 function afterwordMarkup() {
-  const yoiAfterword = !meiEndView && !meiEndRoute;
-  const paragraphs = (yoiAfterword ? AFTERWORD_PARAGRAPHS : []).filter(text => typeof text === 'string' && text.trim());
+  const paragraphs = (meiEndRoute === 'god-returned' || meiEndRoute === 'world-saved'
+    ? MEI_AB_AFTERWORD_PARAGRAPHS
+    : !meiEndView && !meiEndRoute ? AFTERWORD_PARAGRAPHS : []).filter(text => typeof text === 'string' && text.trim());
   const body = paragraphs.length
     ? paragraphs.map(text => `<p>${esc(text)}</p>`).join('')
     : '<p class="afterword-placeholder">あとがきの本文は、ここに表示されます。</p>';
@@ -3528,7 +3548,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     content = pageTurnCardMarkup(p.pageTurnText, { action: 'yoi-next', buttonLabel: '宵の最後まで読んだら次へ' });
   } else if (kind === 'tour-thanks') {
     title = '周遊版のアンケート';
-    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要1分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救済 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
+    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要1分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救祭 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
   } else if (kind === 'survey') {
     title = 'アンケート';
     surveyStatus = 'idle';
