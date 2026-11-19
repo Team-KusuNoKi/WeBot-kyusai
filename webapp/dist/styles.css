@@ -143,6 +143,7 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 .play-header { position: relative; z-index: 6; flex: none; }
 .play-toolbar { position: relative; z-index: 4; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px clamp(10px, 4vw, 18px); }
 .play-actions { display: flex; align-items: center; justify-content: flex-end; flex: none; gap: 6px; white-space: nowrap; }
+.play-nav-group { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .problem-navigation { position: relative; flex: none; }
 .problem-toggle { display: flex; align-items: center; gap: 4px; width: auto; min-height: 28px; padding: 2px 10px; border-radius: 999px; background: var(--white); text-align: left; font-size: 11px; font-weight: 400; color: var(--ink); box-shadow: 0 3px 10px #20202030; }
 .problem-toggle strong { margin-left: 8px; color: var(--accent-ink); font-size: 12px; font-weight: 400; }
@@ -176,9 +177,9 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
   background-position: 68% center;
   background-size: cover;
   opacity: 1;
-  filter: blur(8px) brightness(1.42) saturate(.28);
+  filter: blur(3px) brightness(1.15) saturate(.5) sepia(.12);
 }
-.workspace.recall .chat-area::before { content: ""; position: absolute; z-index: 0; inset: 0; background: rgb(255 252 246 / 46%); pointer-events: none; }
+.workspace.recall .chat-area::before { content: ""; position: absolute; z-index: 0; inset: 0; background: rgb(255 252 246 / 26%); pointer-events: none; }
 .workspace.recall .novel-stage { position: relative; z-index: 1; }
 .sakura-fall {
   position: absolute;
@@ -390,7 +391,7 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
 }
 .chat-area.investigation-hub > * { flex-shrink: 0; }
 /* Keep the title bar in flow and float only the problem controls over the scene. */
-.workspace:has(> .chat-area:not([hidden])):not(:has(> .investigation-back, > .save-warning)) {
+.workspace:has(> .chat-area:not([hidden])):not(:has(> .save-warning)) {
   --toolbar-height: 40px;
   &:has(.play-actions .clue-button) { --toolbar-height: 52px; }
   &:has(.play-actions .answer-fab) { --toolbar-height: 58px; }
@@ -410,7 +411,7 @@ button:focus-visible, a:focus-visible { background-color: var(--surface-hover); 
   .investigation-hub .conclusion-row :is(dt, dd) { padding-block: 3px; }
 }
 html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
-.investigation-back { position: relative; z-index: 6; flex: none; align-self: flex-start; margin: 0 18px; min-height: 44px; padding: 8px 14px; border-radius: 14px; background: var(--white); font-size: 12px; box-shadow: 0 2px 8px #20202033; }
+.investigation-back { flex: none; min-height: var(--control-height); padding: 4px 12px; border-radius: var(--radius-pill); background: var(--white); font-size: 12px; line-height: 1.35; white-space: nowrap; box-shadow: 0 2px 8px #20202024; }
 .investigation-detail { padding-top: 12px; }
 .investigation-return { position: absolute; z-index: 2; left: 18px; bottom: max(22px, env(safe-area-inset-bottom)); min-height: 44px; max-width: 45%; padding: 10px 14px; border-radius: 14px; background: var(--white); font-size: 12px; }
 .workspace:has(.investigation-return) .investigation-detail { padding-bottom: calc(78px + env(safe-area-inset-bottom)); }
@@ -822,6 +823,7 @@ dialog.answer-choice-dialog { inset: 0; width: min(360px, calc(100vw - 16px)); h
   padding: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   background: transparent;
   color: var(--ema-ink, #3a2414);
   font: 18px/1.65 var(--serif);
@@ -867,13 +869,14 @@ dialog.hint-panel { min-height: 0; height: fit-content; }
 .hint-answer-button { position: absolute; top: 18px; right: 16px; bottom: 7px; z-index: 1; display: flex; align-items: center; min-height: 0; height: auto; padding: 0 4px 0 12px; background: transparent; color: var(--accent-ink); font: 400 15px/1.2 var(--serif); }
 .hint-answer-button:focus-visible { background: transparent; color: var(--accent-ink); }@media (hover: hover) { .hint-answer-button:hover { background: transparent; color: var(--accent-ink); } }
 .hint-confirm { position: absolute; z-index: 6; inset: 0; display: grid; place-items: center; padding: 16px; background: #14141466; }
-.hint-confirm-card { width: min(420px, 100%); border-radius: var(--radius-xl); background: var(--white); box-shadow: 0 12px 32px #20202026; overflow: hidden; }
+.hint-confirm-card { position: relative; width: min(360px, 100%); border-radius: var(--radius-xl); background: var(--white); box-shadow: 0 12px 32px #20202026; overflow: hidden; }
+.hint-confirm-card .hint-confirm-close { position: absolute; z-index: 1; top: 4px; right: 4px; color: var(--ink); }
 .hint-confirm-card .panel-header { padding: 18px 24px 0; background: var(--white); border-radius: 0; }
 .hint-confirm-card .panel-header > div { width: 100%; min-width: 0; }
 .hint-confirm-card .panel-header h2 { margin: 0; padding-bottom: 10px; border-bottom: 1px solid #c8c8c8; color: var(--ink); font: 21px/1.5 var(--serif); letter-spacing: .09em; }
 .hint-panel .hint-confirm-card .panel-body { padding: 12px 24px 22px; overflow: visible; background: var(--white); }
 .hint-confirm-card .panel-intro { margin: 0 0 20px; color: var(--ink); font-size: 15px; line-height: 1.85; }
-.hint-confirm-card .reset-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.hint-confirm-card .reset-actions { display: flex; justify-content: center; gap: 10px; }
 .hint-confirm-card .reset-actions button { min-height: var(--control-height-lg); padding-inline: 22px; border-radius: var(--radius-pill); font-size: 15px; }
 .hint-confirm-card .icon-button { color: var(--ink); }
 .hint-confirm-card .icon-button:focus-visible { background: var(--surface-hover); }@media (hover: hover) { .hint-confirm-card .icon-button:hover { background: var(--surface-hover); } }
@@ -1823,19 +1826,30 @@ dialog.hex-cube-panel:has(.luminol-talk) { overflow: visible; }
 .epilogue-screen.is-title { opacity: 0; }
 .epilogue-screen.is-title.is-entering { animation: epilogue-darken 520ms ease-out forwards; }
 @keyframes epilogue-darken { from { opacity: 0; } to { opacity: 1; } }
+.epilogue-title-card { display: grid; justify-items: center; gap: 4px; }
 .epilogue-script {
   opacity: 0;
+  padding-inline: .25em;
   font-family: var(--script);
-  font-size: 96px;
+  font-size: 56px;
   line-height: 1.8;
   white-space: nowrap;
   color: #f6f1e6;
 }
+.epilogue-heading {
+  opacity: 0;
+  font: 500 17px/1.9 var(--serif);
+  letter-spacing: .22em;
+  white-space: nowrap;
+  color: #f6f1e6;
+  transition: opacity 680ms ease;
+}
+.epilogue-heading.is-shown { opacity: 1; }
 .epilogue-script.is-shown { opacity: 1; }
 .epilogue-script.is-writing {
   opacity: 1;
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 42%, transparent 68%);
-  mask-image: linear-gradient(90deg, #000 0%, #000 42%, transparent 68%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 45%, transparent 70%);
+  mask-image: linear-gradient(90deg, #000 0%, #000 45%, transparent 70%);
   -webkit-mask-size: 230% 100%;
   mask-size: 230% 100%;
   -webkit-mask-repeat: no-repeat;
@@ -1950,6 +1964,7 @@ button.epilogue-screen:focus-visible, button.epilogue-screen:active { background
 @media (prefers-reduced-motion: reduce) {
   .epilogue-screen.is-title { opacity: 1; animation: none; }
   .epilogue-script.is-writing { animation: none; -webkit-mask-image: none; mask-image: none; opacity: 1; }
+  .epilogue-heading { transition: none; }
   .epilogue-screen.is-line.is-entering .epilogue-bg,
   .epilogue-screen.is-line.is-entering .epilogue-veil { animation: none; }
 }
@@ -2107,9 +2122,50 @@ dialog.survey-sheet #survey-form .primary-button { min-height: var(--control-hei
 .survey-scale.is-missing .survey-scale-rail { box-shadow: 0 0 0 2px var(--danger); }
 .survey-scale.is-disabled { opacity: var(--disabled-opacity-soft); }
 .survey-scale-rail, .survey-scale-thumb, .survey-scale-hint { pointer-events: none; }
+.contact-field { margin: 0 0 16px; }
+.contact-field > label { display: flex; align-items: baseline; margin-bottom: 6px; font-size: 13px; font-weight: 600; line-height: 1.6; }
+.contact-field input, .contact-field textarea { width: 100%; padding: 10px; border: 0; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: 400 var(--answer-field-font-size)/1.7 var(--sans); }
+.contact-field input:focus-visible, .contact-field textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+.contact-hp { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#contact-form button[type="submit"] { margin-top: 4px; }
+#contact-form button[type="submit"]:disabled { opacity: var(--disabled-opacity-soft); }
 .survey-textarea { width: 100%; min-height: 96px; padding: 10px; border: 0; border-radius: var(--radius-md); background: var(--surface); color: var(--ink); font: 400 var(--answer-field-font-size)/1.7 var(--sans); resize: vertical; }
 .survey-textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
 .survey-error { margin: 0 0 10px; color: var(--danger); font-size: 12px; }
 .survey-thanks { display: grid; place-content: center; gap: 6px; min-height: 140px; text-align: center; }
 #survey-form button[type="submit"] { margin-top: 4px; }
 #survey-form button[type="submit"]:disabled { opacity: var(--disabled-opacity-soft); }
+
+
+/* PCの広い画面では、回答パネルを右側に固定してチャットと並べる。 */
+@media (min-width: 1024px) {
+  .shell { max-width: min(1200px, calc(100vw - 40px)); box-shadow: 0 18px 50px #2020201f; }
+  .workspace {
+    --pc-panel-width: clamp(340px, 30vw, 460px);
+    --pc-panel-offset: 0px;
+    display: grid;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .workspace:has(> .composer-area:not([hidden]):not(.answer-page)) { --pc-panel-offset: calc(var(--pc-panel-width) + 28px); }
+  .play-header { grid-column: 1 / -1; grid-row: 1; }
+  .save-status-strip { grid-column: 1 / -1; grid-row: 2; }
+  .chat-area { grid-column: 1; grid-row: 4; scrollbar-width: thin; }
+  .chat-area::-webkit-scrollbar { display: block; width: 8px; }
+  .chat-area::-webkit-scrollbar-thumb { border-radius: 999px; background: #2020202e; }
+  .chat-area > * { max-width: 660px; margin-inline: auto; }
+  .yoi-completion, .q4-pending { grid-column: 1 / -1; grid-row: 4; }
+  .composer-area:not(.answer-page) {
+    position: relative;
+    inset: auto;
+    grid-column: 2;
+    grid-row: 4;
+    width: var(--pc-panel-width);
+    min-height: 0;
+    max-height: none;
+    margin: 0 14px 14px;
+  }
+  .composer-area.answer-page { grid-column: 1 / -1; grid-row: 4; }
+  .conversation-notice { left: 0; right: var(--pc-panel-offset); width: fit-content; max-width: calc(100% - var(--pc-panel-offset) - 36px); transform: none; margin-inline: auto; }
+  .workspace:not(.scene-dim):has(> .composer-area:not(.answer-page):not([hidden]):not([inert]))::after { opacity: 0; }
+}

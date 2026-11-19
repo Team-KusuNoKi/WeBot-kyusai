@@ -105,9 +105,17 @@ test('保存された不正な表示位置や廃止された問題を採用し�
 });
 test('宵終了画面とQ8専用回答画面の復元条件を保持する', () => {
   const state = { ...initialState(scenario), selected: 'N5.5', solved: ['N5.5'] };
-  assert.equal(restorePlayView(scenario, state, null).yoiEndView, false);
-  assert.equal(restorePlayView(scenario, state, { yoiEndView: false, isPlaying: false }).yoiEndView, false);
+  // 宵クリア済みで冥未着手の記録は、再開すると宵の終幕へ戻る。
+  assert.equal(restorePlayView(scenario, state, null).yoiEndView, true);
+  assert.equal(restorePlayView(scenario, state, { yoiEndView: false, isPlaying: false }).yoiEndView, true);
   assert.equal(restorePlayView(scenario, state, { yoiEndView: true }).yoiEndView, true);
+  // 冥へ進んでいる記録は、その途中の状態で再開する。
+  assert.equal(restorePlayView(scenario, { ...state, selected: 'Q1' }, null).yoiEndView, false);
+  assert.equal(restorePlayView(scenario, { ...state, solved: ['N5.5', 'Q1'] }, {}).yoiEndView, false);
+  // 会話の途中なら終幕へ飛ばさず再生を優先する。
+  const playing = { ...state, messages: [{ problemId: 'N5.5', kind: 'dialogue', speaker: '', text: '…' }] };
+  assert.equal(restorePlayView(scenario, playing, { isPlaying: true }).isPlaying, true);
+  assert.equal(restorePlayView(scenario, playing, { isPlaying: true }).yoiEndView, false);
   const q8 = { ...state, selected: 'Q8', solved: ['Q7'] };
   assert.equal(restorePlayView(scenario, q8, { composerExpanded: true }).composerExpanded, true);
   assert.equal(restorePlayView(scenario, q8, { yoiEndView: true }).yoiEndView, false);

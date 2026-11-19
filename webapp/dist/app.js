@@ -11,6 +11,7 @@ import { animateEmphasis, toggleDisclosure, copyWithFeedback } from './feedback.
 const app = document.querySelector('#app');
 const panel = document.querySelector('#panel');
 const SURVEY_ENDPOINT = 'https://docs.google.com/forms/d/e/1FAIpQLSc15TibCS9BSs688NeI48xmV5tAC8PyO-plPsvPZod5IKey9w/formResponse';
+const CONTACT_ENDPOINT = '/api/contact';
 const SURVEY_ENTRIES = { code: 'entry.1334614969', progress: 'entry.1146454153', affiliation: 'entry.20256359', yoiVolume: 'entry.663390734', yoiDifficulty: 'entry.2109384794', meiVolume: 'entry.2071052292', meiDifficulty: 'entry.1089849868', ending: 'entry.629875828', feedback: 'entry.1851684099' };
 const haptics = createHaptics({ win: window, doc: document });
 const storageKey = `webbot:${scenario.id}`;
@@ -30,6 +31,7 @@ let changingSession = false;
 let saveMutationBusy = false;
 let feedback = '';
 let surveyStatus = 'idle';
+let contactStatus = 'idle';
 let surveyScaleDrag = null;
 let answerErrorAnimations = [];
 let imageViewer = null;
@@ -53,6 +55,14 @@ let combineOutcomeDialog = null;
 let combineOutcomeClosing = false;
 let playSessionRevision=0;
 let requestedMinigame=readMinigameEntry(window.location?.href);
+// 入場用のクエリは一度だけ使い、読み込み直しでミニゲームが勝手に開かないように履歴から除く。
+if (requestedMinigame) {
+  try {
+    const entryUrl = new URL(window.location.href);
+    entryUrl.searchParams.delete('minigame');
+    window.history?.replaceState?.(null, '', entryUrl);
+  } catch { /* URLを書き換えられない環境ではそのまま使う。 */ }
+}
 let expandedCharacter = null;
 let expandedClueId = null;
 let seenClueIds = new Set();
@@ -370,7 +380,13 @@ function epilogueLineMarkup(line) {
 
 function epilogueMarkup() {
   if (epiloguePhase === 'title') {
-    return `<button type="button" class="epilogue-screen is-title" data-action="epilogue-next" aria-label="Epilogue"><span class="epilogue-script" aria-hidden="true">Epilogue</span></button>`;
+    const routeId = state.branches?.[state.selected];
+    const mark = MEI_ENDING_MARKS[routeId];
+    const caption = MEI_ENDING_TITLES[routeId];
+    const script = `Epilogue${mark ? ` : ${mark}` : ''}`;
+    const label = caption ? `${script}「${caption}」` : script;
+    const heading = caption ? `<span class="epilogue-heading" aria-hidden="true">${esc(`「${caption}」`)}</span>` : '';
+    return `<button type="button" class="epilogue-screen is-title" data-action="epilogue-next" aria-label="${esc(label)}"><span class="epilogue-title-card"><span class="epilogue-script" aria-hidden="true">${esc(script)}</span>${heading}</span></button>`;
   }
   const line = displayedMessages.findLast(message => message.epilogue);
   const background = line?.background || epilogueSceneArt[line?.scene] || '';
@@ -385,9 +401,9 @@ function epilogueMarkup() {
 
 function fitEpilogueTitle(script) {
   const max = Math.min(window.innerWidth, 480) - 64;
-  let size = 104;
+  let size = 56;
   script.style.fontSize = `${size}px`;
-  while (size > 54 && script.scrollWidth > max) {
+  while (size > 32 && script.scrollWidth > max) {
     size -= 2;
     script.style.fontSize = `${size}px`;
   }
@@ -397,7 +413,7 @@ function fadeEpilogueTitle(token) {
   if (epilogueFading || token !== epilogueToken || epiloguePhase !== 'title') return;
   epilogueFading = true;
   clearTimeout(epilogueTimer);
-  const script = document.querySelector('.epilogue-script');
+  const card = document.querySelector('.epilogue-title-card') ?? document.querySelector('.epilogue-script');
   const showLine = () => {
     if (token !== epilogueToken || epiloguePhase !== 'title') return;
     epilogueTimer = window.setTimeout(() => {
@@ -406,19 +422,24 @@ function fadeEpilogueTitle(token) {
       advanceNovel();
     }, reducedMotion() ? 0 : 180);
   };
-  if (!script || reducedMotion()) { showLine(); return; }
-  script.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 640, easing: 'ease', fill: 'forwards' })
+  if (!card || reducedMotion()) { showLine(); return; }
+  card.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 640, easing: 'ease', fill: 'forwards' })
     .finished.then(showLine, showLine);
 }
 
 function beginEpilogueTitle() {
   const screen = document.querySelector('.epilogue-screen');
   const script = screen?.querySelector('.epilogue-script');
-  if (!screen || !script || screen.dataset.started === 'true') return;
-  screen.dataset.started = 'true';
+  if (screen?.dataset.started === 'true') return;
   const token = ++epilogueToken;
   epilogueFading = false;
   clearTimeout(epilogueTimer);
+  if (!screen || !script) {
+    // 描画を待てない環境でも、題字を読む間だけは置いてから先へ進める。
+    epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), reducedMotion() ? 0 : 1600);
+    return;
+  }
+  screen.dataset.started = 'true';
   if (reducedMotion()) screen.style.opacity = '1';
   else screen.classList.add('is-entering');
   const start = () => {
@@ -426,17 +447,21 @@ function beginEpilogueTitle() {
     fitEpilogueTitle(script);
     if (reducedMotion()) {
       script.classList.add('is-shown');
-      epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 1000);
+      screen.querySelector('.epilogue-heading')?.classList.add('is-shown');
+      epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 1600);
       return;
     }
     script.classList.add('is-writing');
     const hold = () => {
       if (token !== epilogueToken || epiloguePhase !== 'title') return;
       clearTimeout(epilogueTimer);
-      epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 720);
+      epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 1400);
     };
     script.addEventListener('animationend', event => {
       if (event.animationName !== 'epilogue-write') return;
+      script.classList.remove('is-writing');
+      script.classList.add('is-shown');
+      screen.querySelector('.epilogue-heading')?.classList.add('is-shown');
       hold();
     }, { once: true });
     epilogueTimer = window.setTimeout(() => fadeEpilogueTitle(token), 5600);
@@ -450,10 +475,11 @@ function revealEpilogueLine() {
   const line = document.querySelector('.epilogue-line');
   const veil = document.querySelector('.epilogue-veil');
   if (reducedMotion()) {
-    if (veil) veil.style.opacity = '0';
+    veil?.remove();
     return;
   }
-  veil?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 720, easing: 'ease', fill: 'forwards' });
+  veil?.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 720, easing: 'ease', fill: 'forwards' })
+    .finished.then(() => veil.remove(), () => veil.remove());
   if (!line) return;
   line.animate([
     { opacity: 0, transform: 'translateY(10px)' },
@@ -470,6 +496,10 @@ function tremorScene() {
     { transform: 'translate3d(3px, 1px, 0) rotate(.1deg)', offset: .5 },
     { transform: 'translate3d(0, 0, 0) rotate(0deg)' },
   ], { id: 'scene-tremor', duration: 760, easing: 'ease-in-out' });
+}
+
+function epilogueBlackoutVisible() {
+  return Boolean(document.querySelector('.scene-blackout, .epilogue-veil'));
 }
 
 function releaseSceneBlackout() {
@@ -799,7 +829,8 @@ function awaitingYoiPageTurn() {
 
 function novelSceneMarkup(line) {
   const action = isPlaying ? 'novel-next' : canReadInvestigationClosing() ? 'investigation-closing' : awaitingYoiPageTurn() ? 'yoi-page-turn'
-    : (current().completionScreen === 'booklet' || current().deferPageTurn) && showsGuideStop(current()) ? 'travel-next' : '';
+    : (current().completionScreen === 'booklet' || current().deferPageTurn) && showsGuideStop(current()) ? 'travel-next'
+    : !state.solved.includes(current().id) || repeatAnswer ? 'open-composer' : '';
   const tag = action ? 'button' : 'article';
   return `<div class="novel-stage${line.speaker === 'タツ' ? ' novel-right' : ''}">
     ${line.appear ? '' : novelPortraitMarkup(line.speaker)}
@@ -824,6 +855,7 @@ const icons = {
   reset: '<path d="M3 11a9 9 0 1 1 2 7M3 3v8h8"/>',
   numberTicket: '<path d="M3 6h18v4a2 2 0 0 0 0 4v4H3v-4a2 2 0 0 0 0-4V6Z"/><path d="m10 8-1 8m6-8-1 8m-6-5h9m-9 3h9"/>',
   warning: '<path d="m12 3 10 17H2L12 3Z"/><path d="M12 9v5m0 3h.01"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
   home: '<path d="m3 11 9-8 9 8M5 10v11h5v-7h4v7h5V10"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
@@ -1438,6 +1470,7 @@ function closePanel() {
     if (!outsideFocus && returnSlot !== null) document.querySelector(`#symbol-slot-${returnSlot}`)?.focus({ preventScroll: true });
     if (resumeSheet && gateVisible) document.querySelector('[data-action="save-continue"]')?.focus({ preventScroll: true });
     syncNavigation();
+    maybeShowQ9Guide();
   });
 }
 
@@ -1897,16 +1930,18 @@ function answerInputsMarkup(p) {
 }
 
 const MEI_ENDING_MARKS = { 'god-returned': 'A', 'world-saved': 'B', 'all-saved': 'C' };
+const MEI_ENDING_TITLES = { 'god-returned': 'それでも、前を向いて', 'world-saved': '残酷な旅の果てに', 'all-saved': '余燼' };
 
 function meiEndings() {
   const problem = scenario.problems.find(item => item.id === 'Q9');
   const debug = playSaves?.getStatus().mode === 'debug';
   return (problem?.answerBranches ?? []).map(branch => {
     const mark = MEI_ENDING_MARKS[branch.id] ?? '';
+    const caption = MEI_ENDING_TITLES[branch.id];
     return {
       id: branch.id,
       answer: branch.answer,
-      survey: mark ? `${mark}エンド` : '',
+      survey: mark ? `${mark}エンド${caption ? `「${caption}」` : ''}` : '',
       menuLabel: debug && mark ? `冥 終幕 ${mark}` : '冥 終幕',
       dialogue: branch.dialogue ?? [],
     };
@@ -2035,7 +2070,7 @@ function ritualGuideImages(problem = current()) {
 
 function ritualGuideButton(problem) {
   if (problem.id !== 'Q9' || !problem.guideImages?.length) return '';
-  return `<button type="button" class="composer-hint" data-action="ritual-guide" aria-haspopup="dialog" aria-controls="panel" aria-label="手順">${icon('book')}<span>手順</span></button>`;
+  return `<button type="button" class="composer-hint" data-action="ritual-guide" aria-haspopup="dialog" aria-controls="panel" aria-label="ルール説明">${icon('book')}<span>ルール説明</span></button>`;
 }
 
 function ritualGuidePageButtons() {
@@ -2043,7 +2078,7 @@ function ritualGuidePageButtons() {
 }
 
 function ritualGuidePagesMarkup() {
-  return ritualGuideImages().length > 1 ? `<nav class="puzzle-gallery-pages" aria-label="儀式の手順の切り替え">${ritualGuidePageButtons()}</nav>` : '';
+  return ritualGuideImages().length > 1 ? `<nav class="puzzle-gallery-pages" aria-label="ルール説明の切り替え">${ritualGuidePageButtons()}</nav>` : '';
 }
 
 function q9AnswerVisible() {
@@ -2182,9 +2217,9 @@ function puzzleCardMarkup(p) {
 
 const CLEAR_POST_URL = {
   yoi: 'https://x.gd/1KNjU',
-  'god-returned': 'https://x.gd/MTZvo',
-  'world-saved': 'https://x.gd/1zl4B',
-  'all-saved': 'https://x.gd/Rf4fSK',
+  'god-returned': 'https://x.gd/XVrD3',
+  'world-saved': 'https://x.gd/j4SMC',
+  'all-saved': 'https://x.gd/JyINx',
 };
 
 function clearPostMarkup(url) {
@@ -2236,7 +2271,7 @@ const TRUE_AFTERWORD_PARAGRAPHS = [
   '私は謎づくりのセンスはまったくないのですが、チームメンバーには才能を持つものが何人かいまして、彼らの作る謎を一般人の視点でレビューしておりました。特に私の評価が高いのはN4の標識の謎とQ9の儀式の工作の謎です。去年にはなかったテイストの謎であり、テストプレイをして感動しました。',
   'そして3つのエンディングですが、ぜひ感想を伺いたく思います。3つのエンディングは1本あたり4時間近く思考して書き上げています。Xなどで好きなエンディングを答えていただけると幸いです。個人的な好みはA。',
   '前作ではシナリオを担当したものの、今作ではウェブアプリの構築や最終的に断念したもののNFで販売予定だった別の作品に取り組んでいたこともあってエンディングに専念させていただきました。3つのエンドは「選択」をテーマとして、中でもノーマルエンドの2つは、選択のもたらす結末への向き合い方について2つのパターンを示すエンドにしたつもりです。やはり、物語的で綺麗な結末なのは中断ルート（ルートA）で、私の実際の思考に近いのは続行ルート（ルートB）かなと思っています。約束の伏線はルートAを書き上げたあとに物語内に仕込みました。そしてこのTrueルートは、2つのルート完成後に、既存の約束を発展させつつタツの強い決意を引き出すため、多くを語らなかったミサメの行動原理に触れ、最終的に約束を叶えた暁に未来につながる新しい約束を結ぶという展開を構想した次第です。',
-  'このエンドの末文「窓の外はあの日のような宵の空。落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。」は私のお気に入りです。余燼とは焚き火のあとで炎が消え、赤くくすぶって燃え残っている火のことを指します。この単語から終わりだけでなく同時に次の日の出立＝これからの未来を連想し、この結末にピッタリの表現だと考え採用しました。',
+  'このエンドの末文「窓の外はあの日のような宵の空。落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。」は私のお気に入りです。余燼（よじん）とは焚き火のあとで炎が消え、赤くくすぶって燃え残っている火のことを指します。この単語から終わりだけでなく同時に次の日の出立＝これからの未来を連想し、この結末にピッタリの表現だと考え採用しました。',
   '最後となりますが、ここまでプレイしていただきありがとうございました。去年できなかったことをやりたいという思いから、今年はウェブアプリの導入、周遊要素を増した謎、工作をする謎、マルチエンディングなど新しい挑戦を多数導入しました。至らぬところは多々あったと思いますが楽しんでいただけたら光栄です。まだ他のエンドを見ていないという方はぜひそちらもお楽しみください。来年の出展はまだ予定しておりませんが、皆様の声が励みとなります。公式Xのフォローもよろしくお願いします。この度はありがとうございました',
 ];
 
@@ -2338,11 +2373,25 @@ function surveyFormMarkup() {
     <div id="survey-mei" ${ending ? '' : 'hidden'}>
       <fieldset class="survey-field">${legend('冥（推理）のボリューム', true, '1＝少ない、3＝丁度良い、5＝多い')}${scale('meiVolume', '少ない', '多い', !ending)}</fieldset>
       <fieldset class="survey-field">${legend('冥（推理）の難易度', true, '1＝簡単、3＝丁度良い、5＝難しい')}${scale('meiDifficulty', '簡単', '難しい', !ending)}</fieldset>
-      <fieldset class="survey-field">${legend('最初に辿り着いた結末はどれですか？')}${choices('ending', ['Aエンド', 'Bエンド', 'Cエンド'], !ending, ending?.survey ?? '')}</fieldset>
+      <fieldset class="survey-field">${legend('最初に辿り着いた結末はどれですか？')}${choices('ending', meiEndings().map(item => item.survey).filter(Boolean), !ending, ending?.survey ?? '')}</fieldset>
     </div>
     <fieldset class="survey-field">${legend('ご感想やご意見をお聞かせください。', false)}<textarea name="feedback" class="survey-textarea" rows="4"></textarea></fieldset>
     <p id="survey-error" class="survey-error" role="alert" hidden></p>
     <button class="primary-button full" type="submit" ${code ? '' : 'disabled'}>送信する</button>
+  </form>`;
+}
+
+function contactFormMarkup() {
+  const field = (id, label, required, control) => `<div class="contact-field"><label for="${id}">${esc(label)}<span class="${required ? 'survey-required' : 'survey-optional'}">${required ? '必須' : '任意'}</span></label>${control}</div>`;
+  return `<form id="contact-form">
+    <p class="panel-intro">作品やアプリへのご質問・ご感想をお送りください。送信内容はTeam.KusuNoKi宛のメールになります。</p>
+    ${field('contact-name', 'お名前', true, '<input id="contact-name" name="name" type="text" required maxlength="100" autocomplete="name">')}
+    ${field('contact-email', 'メールアドレス', true, '<input id="contact-email" name="email" type="email" required maxlength="320" autocomplete="email" inputmode="email">')}
+    ${field('contact-subject', '件名', false, '<input id="contact-subject" name="subject" type="text" maxlength="200">')}
+    ${field('contact-message', 'お問い合わせ内容', true, '<textarea id="contact-message" name="message" class="survey-textarea" rows="6" required maxlength="8000"></textarea>')}
+    <div class="contact-hp" aria-hidden="true"><label>ウェブサイト<input name="website" type="text" tabindex="-1" autocomplete="off"></label></div>
+    <p id="contact-error" class="survey-error" role="alert" hidden></p>
+    <button class="primary-button full" type="submit">送信する</button>
   </form>`;
 }
 
@@ -2523,13 +2572,16 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   heldBlackout?.remove?.();
   workspace.innerHTML = `
       ${sceneArt ? `<div class="scene-art" style="background-image:url('${esc(sceneArt)}')">${showPetals ? sakuraFallMarkup() : ''}${appearMarkup}</div>` : ''}
-      <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button>${replayMenuSection()}</nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
+      <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="contact">${icon('mail')}<span>お問い合わせ</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button>${replayMenuSection()}</nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
         <div class="play-toolbar">
-          <div id="problem-navigation" class="problem-navigation">${problemNavigationMarkup()}</div>
+          <div class="play-nav-group">
+            <div id="problem-navigation" class="problem-navigation">${problemNavigationMarkup()}</div>
+            ${inInvestigation && !investigationReturnVisible ? '<button class="investigation-back" data-action="investigation-back">問題一覧へ</button>' : ''}
+          </div>
           <div class="play-actions">
             ${showClues ? `<button class="clue-button" data-action="clues" aria-label="手がかり">${icon('cards')}<span>手がかり</span></button>` : ''}
             ${investigationView ? `<button class="answer-fab investigation-next" data-action="investigation-next" ${investigationComplete(scenario, state) ? '' : 'disabled'} aria-describedby="investigation-next-status">${icon('edit')}<span>次へ</span></button>`
-              : completionPending || p.type === 'pending' || isPlaying || branchPending || yoiEndView || meiEndRoute || meiEndView || sectionFinished ? '' : guideNext
+              : completionPending || p.type === 'pending' || isPlaying || branchPending || yoiEndView || meiEndRoute || meiEndView || sectionFinished || deferredPageTurn ? '' : guideNext
               ? `<button class="answer-fab" data-action="travel-next" aria-haspopup="dialog" aria-controls="panel" ${composerVisible ? 'disabled' : ''}>${icon('edit')}<span>次へ</span></button>`
               : `<button class="answer-fab" data-action="open-composer" ${composerVisible ? 'disabled' : ''} ${opensProblemList ? '' : `aria-controls="composer-area" aria-expanded="${composerExpanded}"`}>${icon('edit')}<span>次へ</span></button>`}
           </div>
@@ -2538,7 +2590,6 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
       ${playSaves?.getStatus().mode === 'debug' ? '' : `<div class="save-status-strip${storageWarning ? ' save-warning' : ''}"><span data-save-status>${esc(playSaves?.getStatus().message ?? '')}</span></div>`}
       ${(meiEndRoute || meiEndView) ? meiCompletionMarkup() : yoiEndView ? yoiCompletionMarkup() : ''}
       ${p.type === 'pending' ? `<section class="q4-pending"><h1>${esc(p.title)}</h1><p>${esc(p.prompt)}</p><button class="primary-button" data-action="investigation-back">問題一覧へ戻る</button></section>` : ''}
-      ${inInvestigation && !investigationReturnVisible ? '<button class="investigation-back" data-action="investigation-back">問題一覧へ</button>' : ''}
       <section class="chat-area${novel ? ' novel-area' : ''}${showStartGuide ? ' start-view' : ''}${showBoard ? ' investigation-hub' : ''}${inInvestigation ? ' investigation-detail' : ''}" aria-label="${showStartGuide ? 'WeBotの使い方' : showDeductionGuide ? '推理パートの進め方' : showBoard ? '残された違和感の一覧' : '謎解き会話'}" tabindex="0" ${boardBackground && composerVisible ? 'inert' : ''} ${yoiEndView || meiEndRoute || meiEndView || p.type === 'pending' || answerPageVisible ? 'hidden' : ''}>
         ${showStartGuide ? `<article class="start-guide guide-card" aria-labelledby="start-guide-heading">
           <header class="guide-card-heading"><span class="guide-card-icon" aria-hidden="true">${icon('chat')}</span><h1 id="start-guide-heading">WeBotの使い方</h1></header>
@@ -3755,7 +3806,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
   const wasOpen = panel.open;
   const previousPanelKind = panel.dataset?.kind;
   const isImagePanel = ['puzzle-image', 'travel-image', 'ritual-guide'].includes(kind);
-  const imageLabel = kind === 'travel-image' ? '案内写真' : kind === 'ritual-guide' ? '儀式の手順' : '問題画像';
+  const imageLabel = kind === 'travel-image' ? '案内写真' : kind === 'ritual-guide' ? 'ルール説明' : '問題画像';
   const imageOrigin = (kind === 'puzzle-image' ? document.querySelector('.puzzle-preview') : imageTrigger)?.getBoundingClientRect?.();
   imageReturnElement = isImagePanel ? kind === 'puzzle-image' ? document.querySelector('.puzzle-preview') : imageTrigger : null;
   if (!wasOpen) {
@@ -3835,13 +3886,17 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     title = '答えを選択';
     content = `<div class="answer-choice-grid" role="group" aria-label="N1の選択肢">${p.options.map(option => `<button type="button" data-action="choose-answer" data-id="${esc(option.id)}" aria-pressed="${option.id === selectedPuzzleAnswer}">${answerChoiceMarkup(option)}</button>`).join('')}</div>`;
   } else if (kind === 'ritual-guide') {
-    title = '儀式の手順';
+    title = 'ルール説明';
     const image = ritualGuideImages()[q9GuideIndex] ?? ritualGuideImages()[0];
     content = image ? `<img class="puzzle-full-image" src="${esc(image.src)}" alt="${esc(image.alt)}" draggable="false">` : '';
   } else if (kind === 'puzzle-image') {
     title = `${problemLabel(p)}の問題`;
     const image = puzzleImages(p)[puzzleImageIndex] ?? puzzleImages(p)[0];
     content = `<img class="puzzle-full-image" src="${esc(image.src)}" alt="${esc(image.alt)}" draggable="false">`;
+  } else if (kind === 'contact') {
+    title = 'お問い合わせ';
+    contactStatus = 'idle';
+    content = contactFormMarkup();
   } else if (kind === 'trouble') {
     title = 'トラブル';
     content = `<section class="trouble-guide"><header class="trouble-guide-heading"><h3>N5の現地資料が見られないとき</h3><p>会場の4箇所を、貼ってある位置のまま確認できます。写真をタップすると拡大します。</p></header><div class="trouble-photos">${travelGuideMarkup(scenario.troubleGuide, 'trouble')}</div></section>`;
@@ -3966,7 +4021,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     const summary = panel.querySelector('.hint-answer summary');
     summary?.setAttribute('tabindex', '-1');
     summary?.setAttribute('aria-hidden', 'true');
-    if (hintSubject?.explanation) panel.insertAdjacentHTML?.('beforeend', `<div class="hint-confirm" hidden><div class="hint-confirm-card" role="dialog" aria-modal="true" aria-labelledby="hint-confirm-title"><div class="panel-header"><div><h2 id="hint-confirm-title">解答を見る</h2></div><button type="button" class="icon-button" data-action="hint-answer-cancel" aria-label="閉じる">${icon('close')}</button></div><div class="panel-body"><p class="panel-intro">絵馬を裏返して、答えを表示します。</p><div class="reset-actions"><button type="button" class="secondary-button" data-action="hint-answer-cancel">戻る</button><button type="button" class="primary-button" data-action="hint-answer-confirm">解答を見る</button></div></div></div></div>`);
+    if (hintSubject?.explanation) panel.insertAdjacentHTML?.('beforeend', `<div class="hint-confirm" hidden><div class="hint-confirm-card" role="dialog" aria-modal="true" aria-labelledby="hint-confirm-title"><button type="button" class="icon-button hint-confirm-close" data-action="hint-answer-cancel" aria-label="閉じる">${icon('close')}</button><div class="panel-header"><div><h2 id="hint-confirm-title">解答を見る</h2></div></div><div class="panel-body"><p class="panel-intro">絵馬を裏返して、答えを表示します。</p><div class="reset-actions"><button type="button" class="primary-button" data-action="hint-answer-confirm">解答を見る</button></div></div></div></div>`);
   }
   if (!panel.open) panel.showModal();
   syncNavigation();
@@ -4317,7 +4372,7 @@ document.addEventListener('click', event => {
   if ((!event.target.closest('.navigation-menu') && !event.target.closest('#navigation-menu')) || event.target.closest('.menu-items [data-action]')) setMenuExpanded(false);
   if (!event.target.closest('.problem-navigation')) setProblemMenuExpanded(false);
   if (!button) return;
-  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'yoi-page-turn', 'mei-end', 'mei-survey', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'hex-hints', 'clues', 'chat', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'ritual-guide', 'ritual-guide-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-replay', 'replay-q9', 'hex-card', 'hex-save-retry', 'luminol-open', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
+  if (['toggle-menu', 'toggle-problems', 'open-composer', 'travel-found', 'select', 'investigation-closing', 'investigation-back', 'investigation-next', 'investigation-open', 'yoi-next', 'yoi-end', 'yoi-page-turn', 'mei-end', 'mei-survey', 'continue-at-venue', 'continue-online', 'play-mei', 'end-play', 'tour-thanks', 'tour-survey', 'history', 'history-back', 'hints', 'hex-hints', 'clues', 'chat', 'trouble', 'contact', 'save-info', 'save-delete-confirm', 'puzzle-image', 'travel-image', 'answer-choices', 'symbol-slot', 'continue-conversation', 'next', 'replay', 'branch', 'start', 'start-answer-confirm', 'confirm-reset', 'puzzle-page', 'ritual-guide', 'ritual-guide-page', 'image-zoom-in', 'image-zoom-out', 'image-zoom-reset', 'hex-open', 'hex-replay', 'replay-q9', 'hex-card', 'hex-save-retry', 'luminol-open', 'save-continue', 'save-new', 'save-start', 'save-entry', 'save-retry', 'save-delete', 'hint-answer', 'hint-answer-cancel'].includes(action)) haptics.trigger();
   if (['close', 'close-menu', 'save-entry-back'].includes(action)) haptics.trigger('dismiss');
   if (action === 'hex-open') { if (!hexEntryLocked()) openHexCube(); return; }
   if (action === 'hex-hints') { hintContext = 'hex-cube'; openPanel('hints'); return; }
@@ -4660,7 +4715,7 @@ document.addEventListener('click', event => {
     expandedCharacter = null;
     applyCombineResult(ids, returnTab);
   }
-  else if (['hints', 'clues', 'trouble', 'save-info', 'save-delete-confirm', 'puzzle-image', 'answer-choices'].includes(action)) {
+  else if (['hints', 'clues', 'trouble', 'contact', 'save-info', 'save-delete-confirm', 'puzzle-image', 'answer-choices'].includes(action)) {
     if (action === 'hints') hintContext = null;
     if (action === 'clues') {
       clueTab = 'cards';
@@ -4708,21 +4763,18 @@ document.addEventListener('click', event => {
     return;
   }
   else if (action === 'epilogue-next' && epiloguePhase && !historyView && !gateVisible) {
-    if (epiloguePhase === 'blackout' || epilogueBlackoutActive) return;
+    if (epiloguePhase === 'blackout' || epilogueBlackoutActive || epilogueBlackoutVisible()) return;
     if (!isPlaying) {
       if (current()?.id === 'Q9' && state.branches.Q9) showMeiEnding(state.branches.Q9);
       return;
     }
+    // 題字の表示はタップで早送りしない。
+    if (epiloguePhase === 'title' || epilogueFading) return;
     haptics.trigger('dialogue');
-    if (epiloguePhase === 'title' || epilogueFading) {
-      epilogueToken += 1;
-      epilogueFading = false;
-      clearTimeout(epilogueTimer);
-    }
     advanceNovel();
   }
   else if (action === 'novel-next' && isPlaying && novelPlayback && !historyView && !gateVisible) {
-    if (epilogueBlackoutActive) return;
+    if (epilogueBlackoutActive || epilogueBlackoutVisible()) return;
     advanceNovel();
     haptics.trigger(panel.open && panel.classList.contains('page-turn-dialog') ? 'pageTurn' : 'dialogue');
   }
@@ -4921,6 +4973,8 @@ async function submitSurvey(form) {
   }
   const ending = surveyEndingAnswer();
   if (ending) params.set(SURVEY_ENTRIES.ending, ending);
+  // 分岐するフォームは通過したページを pageHistory で送らないと、2ページ目以降の回答が記録されない。
+  params.set('pageHistory', ending ? '0,1,2' : '0,2');
   const revision = panelRevision;
   try {
     await fetch(SURVEY_ENDPOINT, { method: 'POST', mode: 'no-cors', body: params });
@@ -4935,6 +4989,52 @@ async function submitSurvey(form) {
   const body = panel.querySelector('.panel-body');
   if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>ご回答ありがとうございました。</p><p class="muted">まもなくあとがきを開きます。</p></div>';
   setTimeout(() => { if (panel.open && panel.dataset?.kind === 'survey' && panelRevision === revision) openPanel('afterword'); }, 1800);
+}
+
+async function submitContact(form) {
+  if (contactStatus === 'sending') return;
+  const errorNode = form.querySelector('#contact-error');
+  const submit = form.querySelector('[type="submit"]');
+  const fail = message => {
+    contactStatus = 'idle';
+    if (submit) { submit.disabled = false; submit.textContent = '送信する'; submit.removeAttribute('aria-busy'); }
+    if (errorNode) { errorNode.textContent = message; errorNode.hidden = false; }
+    haptics.trigger('error');
+  };
+  contactStatus = 'sending';
+  if (submit) { submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = '送信中…'; }
+  if (errorNode) errorNode.hidden = true;
+  const data = new FormData(form);
+  const revision = panelRevision;
+  try {
+    const res = await fetch(CONTACT_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.get('name'),
+        email: data.get('email'),
+        subject: data.get('subject'),
+        message: data.get('message'),
+        website: data.get('website'),
+        page: location.pathname,
+        resumeCode: normalizePlayCode(playSaves.getRecord()?.code) || undefined,
+      }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || !json.ok) {
+      fail(json.message || '送信できませんでした。時間をおいてもう一度お試しください。');
+      return;
+    }
+  } catch {
+    if (panel.open && panel.dataset?.kind === 'contact' && panelRevision === revision) fail('送信できませんでした。通信状態を確認して、もう一度お試しください。');
+    else contactStatus = 'idle';
+    return;
+  }
+  if (!panel.open || panel.dataset?.kind !== 'contact' || panelRevision !== revision) return;
+  contactStatus = 'done';
+  haptics.trigger('success');
+  const body = panel.querySelector('.panel-body');
+  if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>送信しました。ありがとうございます。</p><p class="muted">内容を確認して、必要に応じてご返信します。</p></div>';
 }
 
 document.addEventListener('change', event => {
@@ -4998,6 +5098,9 @@ document.addEventListener('submit', event => {
   } else if (event.target.id === 'survey-form') {
     event.preventDefault();
     void submitSurvey(event.target);
+  } else if (event.target.id === 'contact-form') {
+    event.preventDefault();
+    void submitContact(event.target);
   } else if (event.target.id === 'answer-form') {
     event.preventDefault();
     if (isComposingSubmit(event, composingAnswer, compositionEndedAt) || Date.now() < submissionLockedUntil) return;

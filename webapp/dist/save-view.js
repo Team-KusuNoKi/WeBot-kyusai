@@ -15,6 +15,11 @@ export function isConversationLine(message) {
 export function restorePlayView(scenario, state, raw, sourceRevision = state.scenarioRevision ?? 0, sourceState = null) {
   const rename = id => restoreProblemId(scenario, id, sourceRevision, sourceState?.version);
   const p = scenario.problems.find(item => item.id === state.selected) ?? scenario.problems[0];
+  // 宵を解き終えて冥へ進んでいない記録は、どこを開いていても宵の終幕へ戻す。
+  const yoiProblem = scenario.problems.find(item => item.completionScreen === 'yoi');
+  const chapterTwo = item => item?.chapter === '第二章';
+  const yoiFinished = Boolean(yoiProblem) && state.solved.includes(yoiProblem.id) && !chapterTwo(p)
+    && !state.solved.some(id => chapterTwo(scenario.problems.find(item => item.id === id)));
   const number = (value, max) => Number.isFinite(value) ? Math.max(0, Math.min(max, Math.floor(value))) : 0;
   const validMessage = m => m && typeof m.text === 'string' && m.text.length <= 32768
     && typeof m.speaker === 'string' && ['dialogue', 'answer', 'error', 'success'].includes(m.kind)
@@ -28,7 +33,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     const messages = state.messages.filter(m => m.problemId === p.id && isConversationLine(m));
     return { startView: !state.solved.length && p.id === scenario.problems[0].id,
-      yoiEndView: false, meiEndView: false, showVenueDirections: false, investigationView: false,
+      yoiEndView: yoiFinished, meiEndView: false, showVenueDirections: false, investigationView: false,
       repeatAnswer: false, composerExpanded: p.openAnswerOnEntry !== false && !state.solved.includes(p.id) && !(!state.solved.length && p.id === scenario.problems[0].id), sceneStart: state.messages.length,
       displayedMessages: messages, isPlaying: false, investigationScrollTop: 0, investigationReturnId: null,
       puzzleImageIndex: 0, chatScrollTop: 0, selectedPuzzleAnswer: '', selectedSymbols: [], answerDrafts: {}, seenClueIds: [], q9GuideSeen: false };
@@ -63,11 +68,12 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
     && (raw.composerExpanded ? answerId : problemId) === p.id
     ? { problemId, answerId, repeatAnswer: Boolean(origin.repeatAnswer) && state.solved.includes(problemId),
         scrollTop: number(origin.scrollTop, 1000000), scrollLeft: number(origin.scrollLeft, 1000000) } : null;
+  const isPlaying = (resumeDialogue || Boolean(raw.isPlaying)) && scene.length > 0 && !investigationView;
   return {
     answerDrafts, ...(answerOrigin ? { answerOrigin } : {}),
     startView: Boolean(raw.startView) && p.id === scenario.problems[0].id,
     showVenueDirections: raw.showVenueDirections === true,
-    yoiEndView: Boolean(raw.yoiEndView) && p.completionScreen === 'yoi' && state.solved.includes(p.id),
+    yoiEndView: (Boolean(raw.yoiEndView) && p.completionScreen === 'yoi' && state.solved.includes(p.id)) || (yoiFinished && !isPlaying),
     ...(p.id === 'Q9' && state.solved.includes('Q9') && state.branches.Q9 === raw.meiEndRoute
       && scenario.problems.find(item => item.id === 'Q9')?.answerBranches?.some(branch => branch.id === raw.meiEndRoute)
       ? { meiEndRoute: raw.meiEndRoute } : {}),
@@ -80,7 +86,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
       && displayedMessages.at(-1)?.problemId === p.id,
     investigationView, repeatAnswer: Boolean(raw.repeatAnswer) && state.solved.includes(p.id),
     composerExpanded: Boolean(raw.composerExpanded) && !investigationView && !resumeDialogue,
-    sceneStart, displayedMessages, isPlaying: (resumeDialogue || Boolean(raw.isPlaying)) && scene.length > 0 && !investigationView,
+    sceneStart, displayedMessages, isPlaying,
     investigationScrollTop: number(raw.investigationScrollTop, 1000000),
     investigationReturnId: scenario.investigation.problemIds.includes(raw.investigationReturnId) ? raw.investigationReturnId : null,
     seenClueIds: restoreSeenClueIds(scenario, raw.seenClueIds),

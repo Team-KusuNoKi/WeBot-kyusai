@@ -227,7 +227,7 @@ test('Q1は17:20～17:40のみ正解で会話を追加せずQ1.1へ進み、Q1.1
   assert.equal(second.status, 'correct');
   assert.deepEqual(second.state.solved, ['Q1', 'Q1.1']);
   const dialogue = second.state.messages.filter(m => m.problemId === 'Q1.1' && m.kind === 'dialogue');
-  assert.deepEqual(dialogue.map(m => m.speaker), ['タツ', 'マヤ', 'マヤ', 'タツ', '']);
+  assert.deepEqual(dialogue.map(m => m.speaker), ['タツ', 'タツ', 'マヤ', 'マヤ', 'タツ', '']);
   assert.ok(dialogue[0].text.includes('女子高生たちの証言によると、17時半に入館した子はミサメを目撃している'));
   assert.ok(dialogue[0].text.includes('犯行時刻は、17:20～17:40だろう'));
   assert.equal(dialogue.at(-1).text, '指示：冊子の次のページをめくろう');
@@ -652,7 +652,7 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
     'riverside', 'riverside', 'riverside', 'riverside', 'riverside', 'riverside', 'riverside', 'riverside', 'riverside', 'riverside', 'riverside',
     'riverside', 'riverside', 'riverside', 'riverside',
     'ward', 'ward', 'ward', 'ward', 'ward',
-    'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward',
+    'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward', 'ward',
     'dusk', 'dusk',
   ]);
   assert.ok(saved.every(line => !line.epilogue));
@@ -672,7 +672,7 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
     '', '', 'アサヒ', 'タツ', 'アサヒ', 'タツ', 'アサヒ', 'アサヒ', 'タツ', 'アサヒ', 'ミサメ',
     'タツ', 'タツ', 'アサヒ', 'アサヒ',
     '', '', '', '', '',
-    'ミサメ', 'タツ', 'タツ', '', 'ミサメ', 'タツ', 'ミサメ', 'ミサメ', 'ミサメ',
+    'ミサメ', 'タツ', 'タツ', '', '', 'ミサメ', 'タツ', 'ミサメ', 'ミサメ', 'ミサメ',
     '', '',
   ]);
   assert.equal(saved[0].text, '俺は前を向いてハナに対峙する。');
@@ -684,21 +684,22 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
   assert.equal(saved[10].text, '「頭があがらないな」');
   assert.equal(saved[11].text, '「あの…1つ聞いていいですか?」');
   assert.equal(saved[13].text, '「あれは偶然閃いただけさ。でも突然与えられた2択の選択肢に迷っていたとき、ふとあの日のミサメとの会話を思い出したんだ。ミサメがNFに熱心だった理由さ。あのとき聞いてただろう?」');
-  assert.equal(saved.at(-22).text, '「あっ!」');
-  assert.equal(saved.at(-21).text, '「端的に言うと、このNFを誰かにとって一生忘れられない思い出の場所にしたいなって思ったんです。」');
-  assert.equal(saved.at(-20).text, '「ミサメのいないNFは俺の見たいNFじゃないなって思ったんだ。」');
-  assert.equal(saved.at(-19).text, '「そう思うと冷静になれて、どこかで聞いた伝承をふと思い出した。」');
-  assert.equal(saved.at(-18).text, '「やっぱり先輩ってすごいっす。ミサメ先輩にもタツ先輩の勇姿を伝えましょう。」');
-  assert.equal(saved.at(-17).text, '「着きました。ここがミサメ先輩の病室です。」');
-  assert.equal(saved.at(-16).text, 'ミサメは入院しているものの体調はかなり回復しているようだった。俺達は伝えた。お化け屋敷前で別れたあとのこと、ミサメの身に起こったこと、そして誘拐事件の真相と結末を。');
-  assert.equal(saved.at(-15).text, 'その後は談笑した。あの日以前と同じように。俺が軽口をたたき、アサヒが盛り上げ、ミサメが呆れたように笑う。');
-  assert.equal(saved.at(-14).text, '当たり障りのない日常が戻ってきたことがただ嬉しかった。');
-  assert.equal(saved.at(-13).text, 'しばらくするとアサヒが病室から出ていった。もしかすると俺達に気を遣っているのかもしれない。');
-  assert.equal(saved.at(-12).text, '余計なことをしやがってと心の中で悪態をつく。顔を上げるとミサメと目があった。');
-  assert.equal(saved.at(-11).text, '「NFのことを委員長から聞きました。来年のNF中止は撤回されたって。ありがとうございます。」');
-  assert.equal(saved.at(-10).text, '「俺だけの功績じゃない。皆で掴み取った勝利みたいなもんだ。でも…」');
-  assert.equal(saved.at(-9).text, '「約束してたからな。」');
-  assert.equal(saved.at(-8).text, '桜舞う哲学の道で3人で交わしたNFを救うという約束。ミサメの熱意に絆されるように結んだ約束を俺は儀式の直前まで忘れかけていた。でも偶然思い出したその約束がきっと俺をこの結末に導いてくれた。今はそう信じている。');
+  assert.equal(saved.at(-23).text, '「あっ!」');
+  assert.equal(saved.at(-22).text, '「端的に言うと、このNFを誰かにとって一生忘れられない思い出の場所にしたいなって思ったんです。」');
+  assert.equal(saved.at(-21).text, '「ミサメのいないNFは俺の見たいNFじゃないなって思ったんだ。」');
+  assert.equal(saved.at(-20).text, '「そう思うと冷静になれて、どこかで聞いた伝承をふと思い出した。」');
+  assert.equal(saved.at(-19).text, '「やっぱり先輩ってすごいっす。ミサメ先輩にもタツ先輩の勇姿を伝えましょう。」');
+  assert.equal(saved.at(-18).text, '「着きました。ここがミサメ先輩の病室です。」');
+  assert.equal(saved.at(-17).text, 'ミサメは入院しているものの体調はかなり回復しているようだった。俺達は伝えた。お化け屋敷前で別れたあとのこと、ミサメの身に起こったこと、そして誘拐事件の真相と結末を。');
+  assert.equal(saved.at(-16).text, 'その後は談笑した。あの日以前と同じように。俺が軽口をたたき、アサヒが盛り上げ、ミサメが呆れたように笑う。');
+  assert.equal(saved.at(-15).text, '当たり障りのない日常が戻ってきたことがただ嬉しかった。');
+  assert.equal(saved.at(-14).text, 'しばらくするとアサヒが病室から出ていった。もしかすると俺達に気を遣っているのかもしれない。');
+  assert.equal(saved.at(-13).text, '余計なことをしやがってと心の中で悪態をつく。顔を上げるとミサメと目があった。');
+  assert.equal(saved.at(-12).text, '「NFのことを委員長から聞きました。来年のNF中止は撤回されたって。ありがとうございます。」');
+  assert.equal(saved.at(-11).text, '「俺だけの功績じゃない。皆で掴み取った勝利みたいなもんだ。でも…」');
+  assert.equal(saved.at(-10).text, '「約束してたからな。」');
+  assert.equal(saved.at(-9).text, '桜舞う哲学の道で3人で交わしたNFを救うという約束。ミサメの熱意に絆されるように結んだ約束を俺は儀式の直前まで忘れかけていた。');
+  assert.equal(saved.at(-8).text, 'でも偶然思い出したその約束がきっと俺をこの結末に導いてくれた。今はそう信じている。');
   assert.equal(saved.at(-7).text, '「提案があります。私、今年こんな目にあっちゃって、フィナーレ見れていないんです。11月祭のラストを飾るキャンプファイヤーです。」');
   assert.equal(saved.at(-6).text, '「ああ、確かに。」');
   assert.equal(saved.at(-5).text, '「私たちのNFは来年も続きます。私たち皆で守った場所です。だから…」');
@@ -708,7 +709,7 @@ test('Q9は示された文字から3つの言葉を受け、選んだ言葉の�
   assert.equal(saved.at(-1).text, '落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。');
   assert.equal(saved.at(-2).blackout, true);
   assert.equal(saved.at(-2).scene, 'dusk');
-  assert.ok(saved.slice(-11, -2).every(line => line.scene === 'ward' && !line.blackout));
+  assert.ok(saved.slice(-12, -2).every(line => line.scene === 'ward' && !line.blackout));
 });
 
 

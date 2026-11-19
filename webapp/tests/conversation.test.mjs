@@ -194,7 +194,7 @@ function appHarness(saved = null, reducedMotion = false, { entryOnly = false, re
     timer, gestureTimer, app, workspace, historyBody, historyScreen, composer, panel, answerField, answerForm, answerError, errorAnimations, fieldStubs, choiceLabel, navigation, problemMenu, menu, menuListeners, appended, animations, scrolls, chat, notice, visual, fullImage, galleryPages, symbolSubmit, symbolSlots,
     panelEvent(name, event) { panelListeners[name](event); },
     chatEvent(name, event = {}) { chatListeners[name](event); },
-    documentEvent(name, event = {}) { listeners[name](event); },
+    documentEvent(name, event = {}) { listeners[name]({ target: { closest: () => null }, ...event }); },
     evaluate: code => vm.runInContext(code, context),
     snapshot: () => vm.runInContext('JSON.stringify(state)', context),
     click(action, id, index = id) { listeners.click({ target: { closest: selector => selector === '[data-action]' ? { dataset: { action, id, index } } : selector === '.problem-navigation' && ['toggle-problems', 'select'].includes(action) ? {} : selector === '.navigation-menu' && action === 'toggle-menu' ? {} : null } }); },
@@ -1155,9 +1155,9 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.ok(h.panel.innerHTML.includes('data-action="yoi-next">宵の最後まで読んだら次へ</button>'));
   assert.ok(!h.app.innerHTML.includes('id="yoi-completion-title"'));
   const waiting = appHarness(h.snapshot());
-  assert.equal(waiting.evaluate('yoiEndView'), false);
-  assert.equal(waiting.panel.open, true);
-  assert.equal(waiting.panel.dataset.kind, 'yoi-page-turn');
+  assert.equal(waiting.evaluate('yoiEndView'), true);
+  assert.equal(waiting.panel.open, false);
+  assert.ok(waiting.app.innerHTML.includes('id="yoi-completion-title"'));
   await h.evaluate('closePanel()');
   assert.equal(h.panel.open, false);
   h.click('yoi-page-turn');
@@ -1427,7 +1427,7 @@ test('Q1の17:20～17:40で推理パートの案内とスクロール位置を�
   finishScene(h);
   assert.equal(h.evaluate('state.solved.includes("Q1.1")'), true);
   assert.ok(!h.app.innerHTML.includes('id="deduction-guide-heading"'));
-  assert.equal(h.evaluate('displayedMessages.length'), 5);
+  assert.equal(h.evaluate('displayedMessages.length'), 6);
   h.click('select', 'Q1');
   h.evaluate("answer(['5'])");
   assert.equal(h.evaluate('state.selected'), 'Q1.1');
@@ -1455,7 +1455,7 @@ test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイス�
   assert.equal(h.composer.hidden, true);
   assert.ok(!h.app.innerHTML.includes('class="answer-fab"'));
   finishScene(h);
-  assert.equal(h.evaluate('displayedMessages.length'), 5);
+  assert.equal(h.evaluate('displayedMessages.length'), 6);
   assert.ok(h.evaluate('historyScreenMarkup()').includes('17:30～17:40の間と考えられる'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('出口の方から入ったりもしてないわよ！'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('（確かに…。時間的には可能でも物理的にはマヤには不可能だ。'));
@@ -1477,7 +1477,7 @@ test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイス�
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.evaluate('state.selected'), 'Q2');
   assert.equal(h.composer.hidden, false);
-  assert.equal(h.evaluate('displayedMessages.length'), 5);
+  assert.equal(h.evaluate('displayedMessages.length'), 6);
   assert.ok(h.composer.innerHTML.includes('犯行時刻を偽装する方法はあるだろうか？'));
   assert.equal((h.composer.innerHTML.match(/type="radio"/g) ?? []).length, 2);
   const before = h.evaluate('JSON.stringify(state.messages)');
@@ -1498,7 +1498,7 @@ test('Q1.1の会話終了後にQ2へ進み、ある・布・ドライアイス�
   assert.equal(h.evaluate('JSON.stringify(state.messages)'), before);
   assert.equal(h.app.innerHTML, markup);
   assert.equal(h.chat.scrollTop, 91);
-  assert.equal(h.evaluate('displayedMessages.length'), 5);
+  assert.equal(h.evaluate('displayedMessages.length'), 6);
   assert.equal(h.composer.hidden, false);
   assert.equal(h.evaluate("answer('氷').status"), 'incorrect');
   assert.equal(h.evaluate("answer('ドライアイス').status"), 'correct');
@@ -1572,6 +1572,7 @@ test('Q2.2から3つの問いの一覧へ進み、自由に開いて同じ位置
     assert.equal(h.evaluate(`answer(['${id}']).status`), 'incorrect');
     assert.equal(h.evaluate('isPlaying'), false);
     assert.ok(!h.app.innerHTML.includes('data-action="novel-next"'));
+    assert.ok(h.app.innerHTML.includes('class="novel-bubble" type="button" data-action="open-composer"'));
     assert.ok(h.app.innerHTML.includes('<span>次へ</span>'));
     assert.ok(h.app.innerHTML.includes(text));
     assert.equal(h.evaluate('state.solved.includes("Q3")'), false);
@@ -1596,11 +1597,13 @@ test('Q2.2から3つの問いの一覧へ進み、自由に開いて同じ位置
   assert.equal(h.composer.hidden, false);
   assert.equal(h.evaluate("answer('脚立').status"), 'correct');
   finishScene(h);
-  const [line] = scenario.problems.find(p => p.id === 'Q3.scaffold').dialogue;
+  const lines = scenario.problems.find(p => p.id === 'Q3.scaffold').dialogue;
+  const line = lines.at(-1);
+  assert.equal(lines.length, 3);
   assert.equal(line.speaker, 'タツ');
   assert.ok(h.app.innerHTML.includes(line.text));
   assert.ok(!h.app.innerHTML.includes('data-action="novel-next"'));
-  assert.equal(h.evaluate('historyScreenMarkup()').split(line.text).length - 1, 1);
+  for (const l of lines) assert.equal(h.evaluate('historyScreenMarkup()').split(l.text).length - 1, 1);
   h.click('investigation-back');
   assert.ok(h.app.innerHTML.includes('--answered-angle: 120deg'));
   h.click('investigation-open', 'Q3');
@@ -1676,6 +1679,8 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   h.click('investigation-open', 'Q3.2');
   for (const value of ["['2']", "['1','2']", "['2','3','4']"]) assert.equal(h.evaluate(`answer(${value}).status`), 'incorrect');
   h.evaluate("answer(['3','2'])");
+  assert.ok(h.app.innerHTML.includes('data-action="novel-next"'));
+  h.click('novel-next');
   assert.ok(!h.app.innerHTML.includes('data-action="novel-next"'));
   assert.ok(h.app.innerHTML.includes('class="novel-bubble" type="button" data-action="investigation-closing"'));
   assert.ok(h.app.innerHTML.includes('幽煙の間にも謎は残っている'));
@@ -2064,13 +2069,15 @@ test('控室の問題は閉じるボタンの左から、他の問題と同じ�
   assert.equal(h.panel.classList.contains('hint-panel'), true);
   assert.match(h.panel.innerHTML, /class="hint-reader"/);
   assert.match(h.panel.innerHTML, /ヒント 1 \/ /);
-  assert.doesNotMatch(h.panel.innerHTML, /解答を見る/);
+  assert.match(h.panel.innerHTML, /hint-answer-button[^>]*hidden[^>]*>解答を見る/);
+  assert.match(h.panel.innerHTML, /class="answer-reveal hint-answer" hidden/);
+  assert.match(h.panel.innerHTML, /はじめに色の付いた面を押して/);
 });
 
 test('ヒントがない問題は解説を直接開け、解説のない問題にはボタンを出さない', t => {
   const h = appHarness();
   t.after(() => h.dispose());
-  const empty = h.evaluate('hintReaderMarkup(scenario.problems.find(p => !p.hints.length && p.explanation))');
+  const empty = h.evaluate("hintReaderMarkup({ id: 'empty-hints', hints: [], explanation: 'テスト解説' })");
   assert.match(empty, /解答を見る/);
   assert.doesNotMatch(empty, /hint-answer" hidden|hint-pager/);
   const noAnswer = h.evaluate('hintReaderMarkup(scenario.problems.find(p => p.hints.length && !p.explanation))');
@@ -2629,6 +2636,9 @@ test('Q6からQ6.2は会話完了を待って進み、犯人とカード番号�
   assert.ok(h.app.innerHTML.includes('自然に昇華するので凶器は現場に残らない'));
   assert.equal(h.evaluate('displayedMessages.length'), 1);
   h.click('novel-next');
+  assert.equal(h.evaluate('displayedMessages.length'), 2);
+  assert.ok(h.app.innerHTML.includes('あれこそ犯人を指し示す証拠だったんだ'));
+  h.click('novel-next');
   assert.equal(h.panel.open, false);
   assert.equal(h.composer.hidden, false);
   assert.equal(h.evaluate('state.selected'), 'Q6.1');
@@ -2972,7 +2982,7 @@ test('Q9の回答エリアを初めて開くと儀式シートをポップアッ
   assert.equal(h.panel.classList.contains('image-gallery'), true);
   assert.ok(h.panel.innerHTML.includes(`src="${images[0].src}"`));
   assert.ok(h.panel.innerHTML.includes(images[0].alt));
-  assert.ok(h.panel.innerHTML.includes('儀式の手順を閉じる'));
+  assert.ok(h.panel.innerHTML.includes('ルール説明を閉じる'));
   assert.ok(h.panel.innerHTML.includes('data-action="ritual-guide-page" data-index="1"'));
   assert.equal(h.evaluate('q9GuideSeen'), true);
   assert.equal(h.evaluate('capturePlayView().q9GuideSeen'), true);
@@ -2986,8 +2996,8 @@ test('Q9の回答エリアを初めて開くと儀式シートをポップアッ
   assert.equal(h.panel.open, false);
   const actions = h.app.innerHTML.match(/class="answer-composer-actions">([\s\S]*?)<\/div>/)[1];
   assert.ok(actions.indexOf('data-action="ritual-guide"') < actions.indexOf('data-action="hints"'));
-  assert.ok(actions.includes('aria-label="手順"'));
-  assert.ok(actions.includes('>手順</span>'));
+  assert.ok(actions.includes('aria-label="ルール説明"'));
+  assert.ok(actions.includes('>ルール説明</span>'));
   h.click('select', 'Q8');
   assert.ok(!h.app.innerHTML.includes('data-action="ritual-guide"'));
   h.click('select', 'Q9');
@@ -3530,7 +3540,7 @@ test('入力欄のEnterは次の欄へ移り、最終欄だけ送信する。日
   t.after(() => h.dispose());
   const calls = [];
   const form = { querySelectorAll: () => fields, requestSubmit: () => calls.push('submit') };
-  const fields = [0, 1].map(index => ({ matches: () => true, closest: () => form, focus: () => calls.push(`focus-${index}`) }));
+  const fields = [0, 1].map(index => ({ matches: () => true, closest: selector => selector === '#answer-form' ? form : null, focus: () => calls.push(`focus-${index}`) }));
   const event = index => ({ key: 'Enter', target: fields[index], preventDefault() { calls.push('prevent'); } });
   h.documentEvent('keydown', event(0));
   h.documentEvent('keydown', event(1));
@@ -3643,7 +3653,7 @@ test('明示したタイトル画面に留まり、URLを開き直したとき�
   assert.equal(h.evaluate('gateVisible'), true);
   assert.equal(h.evaluate('gateBusy'), false);
   assert.ok(h.app.innerHTML.includes('title-patchwork-v3.webp'));
-  assert.equal(h.networkCalls.length, 1);
+  assert.deepEqual(h.networkCalls.map(call => call.action), ['load', 'save']);
   const reopened = appHarness(null, false, { entryOnly: true, records: Object.fromEntries(h.storageItems) });
   t.after(() => reopened.dispose());
   await reopened.evaluate('startup');
@@ -3914,26 +3924,26 @@ test('デバッグの問題番号は冥の終幕を3画面出し、通常は到�
   assert.ok(h.app.innerHTML.includes('id="mei-completion-title"'));
   assert.ok(h.app.innerHTML.includes('>冥</h1>'));
   assert.ok(h.app.innerHTML.includes('data-action="mei-survey"><span>アンケートに答える</span>'));
-  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/1zl4B"'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/j4SMC"'));
   assert.ok(h.app.innerHTML.includes('クリアをポスト'));
   assert.ok(!h.app.innerHTML.includes('アンケート回答後はクリアポストを利用できません'));
   assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow">ご回答いただいた方には、ささやかなお礼として、制作の裏話を綴ったあとがきを公開しております。</p>'));
   assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow yoi-completion-replay">メニューバーから再度Q9をプレイ可能です。</p>'));
   assert.ok(h.app.innerHTML.indexOf('（1分）') < h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき'));
   assert.ok(h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき') < h.app.innerHTML.indexOf('メニューバーから再度Q9をプレイ可能です。'));
-  assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
-  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1zl4B"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/XVrD3'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/j4SMC"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
   h.click('mei-end', 'god-returned');
   assert.equal(h.evaluate('meiEndRoute'), 'god-returned');
   assert.ok(h.app.innerHTML.includes('data-mei-ending="god-returned"'));
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/MTZvo"'));
-  assert.ok(!h.app.innerHTML.includes('https://x.gd/1zl4B'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/XVrD3"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/j4SMC'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はあのとき、見返りがほしかっただけなんじゃないかって思う。'));
   assert.ok(!h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
   h.click('mei-survey');
   assert.equal(h.panel.dataset.kind, 'survey');
-  assert.ok(h.panel.innerHTML.includes('value="Aエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="Aエンド「それでも、前を向いて」" required  checked'));
   assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
   h.evaluate("openPanel('clear-post')");
   assert.ok(h.panel.innerHTML.includes('「神ハカエッタ」の結末を迎えました。'));
@@ -3941,13 +3951,13 @@ test('デバッグの問題番号は冥の終幕を3画面出し、通常は到�
   assert.equal(h.evaluate('meiEndRoute'), 'all-saved');
   assert.ok(h.app.innerHTML.includes('data-mei-ending="all-saved"'));
   assert.ok(h.app.innerHTML.includes('class="yoi-completion mei-completion"'));
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/Rf4fSK"'));
-  assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
-  assert.ok(!h.app.innerHTML.includes('https://x.gd/1zl4B'));
-  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/Rf4fSK"'));
-  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/Rf4fSK"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/JyINx"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/XVrD3'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/j4SMC'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/JyINx"'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/JyINx"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
   h.click('mei-survey');
-  assert.ok(h.panel.innerHTML.includes('value="Cエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="Cエンド「余燼」" required  checked'));
   h.evaluate("openPanel('clear-post')");
   assert.ok(h.panel.innerHTML.includes('「スベテガスクワレタ」の結末を迎えました。'));
   h.evaluate("playSaves.getStatus = () => ({ mode: 'normal' }); meiEndRoute = null; render()");
@@ -3989,7 +3999,7 @@ test('終幕まで行くとメニューからQ9をもう一度解け、別ルー
   assert.ok(menu().includes('>Q9をもう一度解く</span>'));
   assert.ok(menu().includes('<hr class="menu-divider"><button data-action="replay-q9">'));
   assert.ok(menu().indexOf('data-action="save-title"') < menu().indexOf('data-action="replay-q9"'));
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/MTZvo"'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/XVrD3"'));
   h.click('replay-q9');
   assert.equal(h.evaluate('meiEndRoute'), null);
   assert.equal(h.evaluate('repeatAnswer'), true);
@@ -4002,8 +4012,8 @@ test('終幕まで行くとメニューからQ9をもう一度解け、別ルー
   if (!h.evaluate('meiEndRoute') && h.evaluate('epiloguePhase')) h.click('epilogue-next');
   assert.equal(h.evaluate('meiEndRoute'), 'world-saved');
   assert.equal(h.evaluate('state.branches.Q9'), 'world-saved');
-  assert.ok(h.app.innerHTML.includes('href="https://x.gd/1zl4B"'));
-  assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
+  assert.ok(h.app.innerHTML.includes('href="https://x.gd/j4SMC"'));
+  assert.ok(!h.app.innerHTML.includes('https://x.gd/XVrD3'));
   assert.ok(menu().includes('>Q9をもう一度解く</span>'));
 });
 
@@ -4344,8 +4354,8 @@ test('Q9の別ルートは読み終えても本文を白いカードに並べな
       if (answer === 'スベテガスクワレタ') {
         assert.equal(h.evaluate('meiEndRoute'), 'all-saved');
         assert.match(h.app.innerHTML, /class="yoi-completion mei-completion"/);
-        assert.match(h.app.innerHTML, /href="https:\/\/x\.gd\/Rf4fSK"/);
-        assert.doesNotMatch(h.app.innerHTML, /https:\/\/x\.gd\/(?:MTZvo|1zl4B)/);
+        assert.match(h.app.innerHTML, /href="https:\/\/x\.gd\/JyINx"/);
+        assert.doesNotMatch(h.app.innerHTML, /https:\/\/x\.gd\/(?:XVrD3|j4SMC)/);
       }
       h.evaluate("selectProblem('Q9')");
       assert.equal(h.evaluate('meiEndRoute'), null);
@@ -4368,6 +4378,8 @@ test('Q9神ハカエッタはエピローグの次の吹き出しから先へ進
   assert.match(h.app.innerHTML, /class="clue-button"/);
   h.evaluate("answer('神ハカエッタ')");
   assert.doesNotMatch(h.app.innerHTML, /clue-button|data-action="clues"/);
+  assert.match(h.app.innerHTML, /class="epilogue-script"[^>]*>Epilogue : A</);
+  assert.match(h.app.innerHTML, /class="epilogue-heading"[^>]*>「それでも、前を向いて」</);
   const line = () => {
     const html = h.app.innerHTML;
     return html.match(/class="epilogue-line">([^<]*)/)?.[1]
@@ -4413,10 +4425,11 @@ test('Q9スベテガスクワレタはエピローグの題字から始まり、
   assert.equal(h.evaluate("answer('スベテガスクワレタ').status"), 'correct');
   assert.equal(h.evaluate('epiloguePhase'), 'title');
   assert.match(h.app.innerHTML, /class="epilogue-screen is-title"/);
-  assert.match(h.app.innerHTML, /class="epilogue-script"[^>]*>Epilogue</);
+  assert.match(h.app.innerHTML, /class="epilogue-script"[^>]*>Epilogue : C</);
+  assert.match(h.app.innerHTML, /class="epilogue-heading"[^>]*>「余燼」</);
   assert.doesNotMatch(h.app.innerHTML, /class="epilogue-line"/);
 
-  h.click('epilogue-next');
+  h.gestureTimer.drain();
   assert.match(h.app.innerHTML, /class="novel-line">俺は前を向いてハナに対峙する。/);
   assert.doesNotMatch(h.app.innerHTML, /class="epilogue-line"/);
   assert.match(h.app.innerHTML, /b-hallway\.webp/);
@@ -4524,13 +4537,13 @@ test('Q9スベテガスクワレタはエピローグの題字から始まり、
   assert.equal(h.evaluate('meiEndView'), true);
   assert.equal(h.evaluate('meiEndRoute'), 'all-saved');
   assert.match(h.app.innerHTML, /class="yoi-completion mei-completion"/);
-  assert.match(h.app.innerHTML, /class="clear-post-line" href="https:\/\/x\.gd\/Rf4fSK"/);
+  assert.match(h.app.innerHTML, /class="clear-post-line" href="https:\/\/x\.gd\/JyINx"/);
   assert.match(h.app.innerHTML, /data-action="mei-survey"/);
   assert.doesNotMatch(h.app.innerHTML, /class="epilogue-screen/);
   h.click('mei-survey');
   assert.equal(h.panel.dataset.kind, 'survey');
   assert.equal(h.evaluate('surveyEndingAnswer()'), 'スベテガスクワレタ');
-  assert.ok(h.panel.innerHTML.includes('value="Cエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="Cエンド「余燼」" required  checked'));
   assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
   assert.ok(h.panel.innerHTML.includes('id="survey-mei"'));
   assert.doesNotMatch(h.panel.innerHTML, /id="survey-mei" hidden/);
@@ -4544,6 +4557,29 @@ test('Q9スベテガスクワレタはエピローグの題字から始まり、
   assert.ok(h.evaluate('historyScreenMarkup()').includes('落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。'));
 });
 
+test('エピローグの暗転カバーやベールが見えている間はタップで読み進めない', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("selectProblem('Q9')");
+  assert.equal(h.evaluate("answer('神ハカエッタ').status"), 'correct');
+  assert.equal(h.evaluate('epiloguePhase'), 'title');
+  h.click('epilogue-next');
+  assert.equal(h.evaluate('epiloguePhase'), 'title');
+  assert.equal(h.evaluate('displayedMessages.length'), 0, '題字の表示中はタップで読み進めない');
+  h.gestureTimer.drain();
+  assert.equal(h.evaluate('displayedMessages.length'), 1);
+  h.evaluate(`{
+    const original = document.querySelector;
+    globalThis.__restoreQuerySelector = () => { document.querySelector = original; };
+    document.querySelector = selector => selector === '.scene-blackout, .epilogue-veil' ? {} : original(selector);
+  }`);
+  h.click('epilogue-next');
+  assert.equal(h.evaluate('displayedMessages.length'), 1);
+  h.evaluate('__restoreQuerySelector()');
+  h.click('epilogue-next');
+  assert.equal(h.evaluate('displayedMessages.length'), 2);
+});
+
 test('Q9セカイハスクワレタはエピローグの題字から始まり、場面の暗転を経て冥の終幕を開く', t => {
   const h = appHarness();
   t.after(() => h.dispose());
@@ -4551,10 +4587,11 @@ test('Q9セカイハスクワレタはエピローグの題字から始まり、
   assert.equal(h.evaluate("answer('セカイハスクワレタ').status"), 'correct');
   assert.equal(h.evaluate('epiloguePhase'), 'title');
   assert.match(h.app.innerHTML, /class="epilogue-screen is-title"/);
-  assert.match(h.app.innerHTML, /class="epilogue-script"[^>]*>Epilogue</);
+  assert.match(h.app.innerHTML, /class="epilogue-script"[^>]*>Epilogue : B</);
+  assert.match(h.app.innerHTML, /class="epilogue-heading"[^>]*>「残酷な旅の果てに」</);
   assert.doesNotMatch(h.app.innerHTML, /class="epilogue-line"/);
 
-  h.click('epilogue-next');
+  h.gestureTimer.drain();
   assert.match(h.app.innerHTML, /俺はハナの儀式を続行した/);
   assert.match(h.app.innerHTML, /淡い期待を持ったからだった。/);
   assert.doesNotMatch(h.app.innerHTML, /儀式の完遂を/);
@@ -4594,7 +4631,7 @@ test('Q9セカイハスクワレタはエピローグの題字から始まり、
   assert.doesNotMatch(h.app.innerHTML, /踏みしだかれたイチョウ/);
   h.click('mei-survey');
   assert.equal(h.evaluate('surveyEndingAnswer()'), 'セカイハスクワレタ');
-  assert.ok(h.panel.innerHTML.includes('value="Bエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="Bエンド「残酷な旅の果てに」" required  checked'));
   assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
   h.click('close');
 
@@ -4631,10 +4668,10 @@ test('Q9の会話が最後まで進むと冥の終幕を開く', t => {
   assert.ok(h.app.innerHTML.indexOf('（1分）') < h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき'));
   assert.ok(h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき') < h.app.innerHTML.indexOf('メニューバーから再度Q9をプレイ可能です。'));
   assert.ok(h.app.innerHTML.includes('data-action="mei-survey"'));
-  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/MTZvo"'));
+  assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/XVrD3"'));
   assert.ok(h.app.innerHTML.includes('クリアをポスト'));
-  assert.ok(h.app.innerHTML.indexOf('遊んでいただきありがとうございました。') < h.app.innerHTML.indexOf('href="https://x.gd/MTZvo"'));
-  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/MTZvo"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
+  assert.ok(h.app.innerHTML.indexOf('遊んでいただきありがとうございました。') < h.app.innerHTML.indexOf('href="https://x.gd/XVrD3"'));
+  assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/XVrD3"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
   assert.ok(h.navigation.innerHTML.includes('冥 終幕'));
   assert.ok(!h.app.innerHTML.includes('class="clue-button"'));
   h.click('select', 'Q8');
@@ -4647,7 +4684,7 @@ test('Q9の会話が最後まで進むと冥の終幕を開く', t => {
   assert.ok(h.panel.innerHTML.includes('id="survey-form"'));
   assert.ok(h.panel.innerHTML.includes('最初に辿り着いた結末はどれですか？'));
   assert.equal(h.evaluate('surveyEndingAnswer()'), '神ハカエッタ');
-  assert.ok(h.panel.innerHTML.includes('value="Aエンド" required  checked'));
+  assert.ok(h.panel.innerHTML.includes('value="Aエンド「それでも、前を向いて」" required  checked'));
   assert.ok(h.panel.innerHTML.includes('value="宵と冥" required  checked'));
   h.click('select', 'Q8');
   assert.equal(h.evaluate('surveyEndingAnswer()'), '');
