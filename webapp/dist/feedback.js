@@ -14,6 +14,35 @@ export function animateEmphasis(element, reduced = false) {
 }
 
 const disclosures = new WeakMap();
+
+function closedDisclosureHeight(details, summary) {
+  // Summary height plus the details' own padding/border (the latter excludes body).
+  const fallback = summary.getBoundingClientRect().height + details.offsetHeight - details.clientHeight
+    + parseFloat(getComputedStyle(details).paddingTop || 0) + parseFloat(getComputedStyle(details).paddingBottom || 0);
+  // History cards change padding when they close, so measure the closed box instead of the open one.
+  if (!details.classList?.contains('history-entry') || typeof details.cloneNode !== 'function' || !details.parentElement) return fallback;
+  const clone = details.cloneNode(false);
+  clone.open = false;
+  clone.classList.remove('is-closing');
+  clone.append(summary.cloneNode(true));
+  clone.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;height:auto;overflow:visible;width:${details.offsetWidth}px;margin:0;animation:none;transition:none;`;
+  try {
+    details.parentElement.append(clone);
+    const height = clone.offsetHeight;
+    clone.remove();
+    return height || fallback;
+  } catch {
+    clone.remove?.();
+    return fallback;
+  }
+}
+
+function releaseDisclosureStyles(details) {
+  if (!details.style) return;
+  details.style.height = '';
+  details.style.overflow = '';
+}
+
 // Keep native details/summary semantics, including keyboard activation.
 export function toggleDisclosure(details, reduced = false) {
   const summary = details.querySelector('summary');
@@ -21,6 +50,8 @@ export function toggleDisclosure(details, reduced = false) {
   if (!summary || !details.animate || reduced) {
     previous?.animation.cancel();
     disclosures.delete(details);
+    details.classList?.remove('is-closing');
+    releaseDisclosureStyles(details);
     const content = details.querySelector('.history-messages, .afterword-note-body, p');
     if (content) content.inert = false;
     return false;
@@ -28,23 +59,29 @@ export function toggleDisclosure(details, reduced = false) {
   const opening = previous ? !previous.opening : !details.open;
   const from = details.getBoundingClientRect().height;
   previous?.animation.cancel();
-  if (opening) details.open = true;
+  if (opening) {
+    details.classList?.remove('is-closing');
+    details.open = true;
+  } else details.classList?.add('is-closing');
   const content = details.querySelector('.history-messages, .afterword-note-body, p');
   if (content) content.inert = !opening;
-  // Summary height plus the details' own padding/border (the latter excludes body).
-  const closedHeight = summary.getBoundingClientRect().height + details.offsetHeight - details.clientHeight
-    + parseFloat(getComputedStyle(details).paddingTop || 0) + parseFloat(getComputedStyle(details).paddingBottom || 0);
-  const to = opening ? details.getBoundingClientRect().height : closedHeight;
+  const to = opening ? details.getBoundingClientRect().height : closedDisclosureHeight(details, summary);
   const animation = details.animate([
     { height: `${from}px`, overflow: 'hidden' }, { height: `${to}px`, overflow: 'hidden' },
   ], { duration: MOTION.enter, easing: MOTION.ease, fill: 'both' });
   disclosures.set(details, { animation, opening });
   void animation.finished.then(() => {
     if (disclosures.get(details)?.animation !== animation) return;
+    // Cancelling the fill snaps back to the open height for a frame. Commit the closed box first.
+    if (!opening) {
+      try { animation.commitStyles?.(); } catch { /* The fill holds the closed height until cancel. */ }
+    }
     details.open = opening;
     if (content) content.inert = false;
+    if (!opening) details.classList?.remove('is-closing');
     disclosures.delete(details);
     animation.cancel();
+    releaseDisclosureStyles(details);
   }).catch(() => {});
   return true;
 }

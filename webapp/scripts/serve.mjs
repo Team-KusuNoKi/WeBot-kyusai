@@ -46,10 +46,15 @@ const server = createServer(async (req, res) => {
     if (pathname === appUrl.slice(0, -1)) {
       res.writeHead(308, { Location: encodeURI(appUrl) + requestUrl.search }); res.end(); return;
     }
+    // The old local story archive (/ and /works/november-kyusai/) is gone.
+    if (pathname === '/' || pathname === '/11月の救祭' || pathname === '/11月の救祭/'
+      || pathname === '/works' || pathname === '/works/'
+      || pathname === '/works/november-kyusai' || pathname === '/works/november-kyusai/') {
+      res.writeHead(301, { Location: encodeURI(appUrl) + requestUrl.search }); res.end(); return;
+    }
     // Local source assets stay in dist/app and dist/assets; mirror the public URL.
     const sourcePath = pathname.startsWith('/11月の救祭/') ? pathname.slice('/11月の救祭'.length) : pathname;
-    const withoutQuery = sourcePath === '/' ? '/index.html' : sourcePath;
-    const path = resolve(root, `.${withoutQuery.endsWith('/') ? `${withoutQuery}index.html` : withoutQuery}`);
+    const path = resolve(root, `.${sourcePath.endsWith('/') ? `${sourcePath}index.html` : sourcePath}`);
     if (!path.startsWith(root.endsWith(sep) ? root : root + sep)) { res.writeHead(403); res.end(); return; }
     if (!extname(path)) { res.writeHead(308, { Location: encodeURI(`${pathname}/`) + requestUrl.search }); res.end(); return; }
     const content = await readFile(path);

@@ -93,6 +93,10 @@ export function restoreState(scenario, raw) {
     for (const p of [...scenario.problems, ...(scenario.minigames ?? [])]) {
       const count = saved.hints?.[p.id];
       if (p.hints && Number.isInteger(count) && count >= 0) hints[p.id] = Math.min(count, p.hints.length);
+      for (const tab of p.hintTabs ?? []) {
+        const tabCount = saved.hints?.[`${p.id}:${tab.id}`];
+        if (Number.isInteger(tabCount) && tabCount >= 0) hints[`${p.id}:${tab.id}`] = Math.min(tabCount, tab.hints.length);
+      }
     }
     const messages = saved.messages.filter(m => typeof m.text === 'string' && typeof m.speaker === 'string' && ['dialogue', 'answer', 'error', 'success'].includes(m.kind) && (!m.problemId || validIds.has(m.problemId)));
     // 統合前の小問で止まった記録にも、統合先の正解後の会話を補う。

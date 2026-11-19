@@ -609,6 +609,7 @@ test('メニューのトラブル欄からN5の補助写真を拡大し、一覧
   t.after(() => h.dispose());
   h.click('toggle-menu');
   assert.ok(h.app.innerHTML.includes('data-action="trouble"'));
+  h.evaluate('haptics.supported = true');
   h.click('trouble');
   assert.ok(h.panel.innerHTML.includes('class="trouble-guide-heading"'));
   assert.ok(h.panel.innerHTML.includes('<h3>N5の現地資料が見られないとき</h3>'));
@@ -2004,6 +2005,68 @@ test('ヒントを左右に読み返しても既読数を保ち、最後のペ�
   assert.doesNotMatch(h.panel.innerHTML, /hint-answer" hidden/);
 });
 
+test('ヒントは横スクロールで前後に切り替えられる', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  const hints = scenario.problems[0].hints;
+  const listeners = {};
+  const scroller = {
+    clientWidth: 200,
+    addEventListener(name, fn) { listeners[name] = fn; },
+    setPointerCapture() {},
+  };
+  const track = {
+    children: hints.map((_, i) => ({ inert: i !== 0 })),
+    style: {},
+    getBoundingClientRect() { return {}; },
+  };
+  const arrow = () => ({ addEventListener() {}, focus() {} });
+  const reader = {
+    querySelector(selector) {
+      return ({
+        '.hint-prev': arrow(), '.hint-next': arrow(), '.hint-track': track, '.hint-window': scroller,
+        '.hint-answer': { hidden: true, open: false }, '[role="status"]': {}, '.hint-pager': null,
+      })[selector] ?? null;
+    },
+    closest() { return null; },
+  };
+  h.panel.querySelector = selector => selector === '.hint-reader' ? reader : selector === '.hint-answer-button' ? null : null;
+  h.click('hints');
+  const point = (type, x, y) => listeners[type]({
+    pointerId: 1, pointerType: 'touch', button: 0, clientX: x, clientY: y,
+    target: { closest: () => null },
+    preventDefault() {},
+  });
+  point('pointerdown', 180, 40);
+  point('pointermove', 40, 44);
+  point('pointerup', 40, 44);
+  assert.equal(track.style.transform, 'translateX(-100%)');
+  point('pointerdown', 30, 40);
+  point('pointermove', 30, 120);
+  point('pointerup', 30, 120);
+  assert.equal(track.style.transform, 'translateX(-100%)');
+  listeners.wheel({ deltaX: 40, deltaY: 0, shiftKey: false, preventDefault() {} });
+  assert.equal(track.style.transform, 'translateX(-200%)');
+  listeners.wheel({ deltaX: -80, deltaY: 4, shiftKey: false, preventDefault() {} });
+  assert.equal(track.style.transform, 'translateX(-200%)');
+});
+
+test('控室の問題は閉じるボタンの左から、他の問題と同じヒント画面を開く', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  await h.evaluate('openHexCube()');
+  const hintAt = h.panel.innerHTML.indexOf('data-action="hex-hints"');
+  const closeAt = h.panel.innerHTML.indexOf('data-action="close"');
+  assert.ok(hintAt > 0 && closeAt > hintAt);
+  assert.match(h.panel.innerHTML, /class="composer-hint"/);
+  assert.doesNotMatch(h.panel.innerHTML, /控室の問題のヒント/);
+  h.click('hex-hints');
+  assert.equal(h.panel.classList.contains('hint-panel'), true);
+  assert.match(h.panel.innerHTML, /class="hint-reader"/);
+  assert.match(h.panel.innerHTML, /ヒント 1 \/ /);
+  assert.doesNotMatch(h.panel.innerHTML, /解答を見る/);
+});
+
 test('ヒントがない問題は解説を直接開け、解説のない問題にはボタンを出さない', t => {
   const h = appHarness();
   t.after(() => h.dispose());
@@ -2893,6 +2956,58 @@ test('Q8はQ7の会話を背景に通常パネルで穴埋め文の下に4つの
   assert.equal(restored.composer.hidden, false);
   assert.equal((restored.app.innerHTML.match(/name="answer" type="text"/g) ?? []).length, 3);
   assert.equal(restored.evaluate("state.solved.includes('Q8')"), true);
+});
+
+test('Q9の回答エリアを初めて開くと儀式シートをポップアップし、同じプレイでは自動では出さない', async t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  const images = scenario.problems.find(p => p.id === 'Q9').guideImages;
+  h.click('select', 'Q8');
+  assert.equal(h.panel.open, false);
+  h.click('select', 'Q9');
+  assert.equal(h.evaluate('composerExpanded'), true);
+  assert.equal(h.panel.open, true);
+  assert.equal(h.panel.dataset.kind, 'ritual-guide');
+  assert.equal(h.panel.classList.contains('image-viewer'), true);
+  assert.equal(h.panel.classList.contains('image-gallery'), true);
+  assert.ok(h.panel.innerHTML.includes(`src="${images[0].src}"`));
+  assert.ok(h.panel.innerHTML.includes(images[0].alt));
+  assert.ok(h.panel.innerHTML.includes('儀式の手順を閉じる'));
+  assert.ok(h.panel.innerHTML.includes('data-action="ritual-guide-page" data-index="1"'));
+  assert.equal(h.evaluate('q9GuideSeen'), true);
+  assert.equal(h.evaluate('capturePlayView().q9GuideSeen'), true);
+  assert.equal(h.evaluate('restorePlayView(scenario, state, capturePlayView()).q9GuideSeen'), true);
+  h.click('ritual-guide-page', '1', '1');
+  assert.equal(h.fullImage.src, images[1].src);
+  assert.equal(h.fullImage.alt, images[1].alt);
+  assert.ok(h.galleryPages.innerHTML.includes('aria-pressed="true"'));
+  h.click('close');
+  await Promise.resolve();
+  assert.equal(h.panel.open, false);
+  const actions = h.app.innerHTML.match(/class="answer-composer-actions">([\s\S]*?)<\/div>/)[1];
+  assert.ok(actions.indexOf('data-action="ritual-guide"') < actions.indexOf('data-action="hints"'));
+  assert.ok(actions.includes('aria-label="手順"'));
+  assert.ok(actions.includes('>手順</span>'));
+  h.click('select', 'Q8');
+  assert.ok(!h.app.innerHTML.includes('data-action="ritual-guide"'));
+  h.click('select', 'Q9');
+  assert.equal(h.panel.open, false);
+  h.click('ritual-guide');
+  assert.equal(h.panel.dataset.kind, 'ritual-guide');
+  assert.ok(h.panel.innerHTML.includes(`src="${images[0].src}"`));
+  const fresh = appHarness();
+  t.after(() => fresh.dispose());
+  fresh.click('select', 'Q8');
+  fresh.evaluate("answer(['ハナ', '知恵', '畏怖', '大地震'])");
+  fresh.click('travel-next');
+  fresh.click('travel-found');
+  await Promise.resolve();
+  assert.equal(fresh.evaluate('state.selected'), 'Q9');
+  assert.equal(fresh.evaluate('composerExpanded'), true);
+  // ページ確認を閉じる処理が、あとから手順ポップアップを消さない。
+  assert.equal(fresh.panel.dataset.kind, 'ritual-guide');
+  assert.equal(fresh.panel.open, true);
+  assert.ok(fresh.panel.innerHTML.includes(`src="${images[0].src}"`));
 });
 
 test('Q8の回答パネルは閉じられず、Escで履歴を開いたり他の問題へ切り替えたりできる', async () => {
@@ -3801,7 +3916,11 @@ test('デバッグの問題番号は冥の終幕を3画面出し、通常は到�
   assert.ok(h.app.innerHTML.includes('data-action="mei-survey"><span>アンケートに答える</span>'));
   assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/1zl4B"'));
   assert.ok(h.app.innerHTML.includes('クリアをポスト'));
-  assert.ok(h.app.innerHTML.includes('アンケート回答後はクリアポストを利用できません。先にご利用ください。'));
+  assert.ok(!h.app.innerHTML.includes('アンケート回答後はクリアポストを利用できません'));
+  assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow">ご回答いただいた方には、ささやかなお礼として、制作の裏話を綴ったあとがきを公開しております。</p>'));
+  assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow yoi-completion-replay">メニューバーから再度Q9をプレイ可能です。</p>'));
+  assert.ok(h.app.innerHTML.indexOf('（1分）') < h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき'));
+  assert.ok(h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき') < h.app.innerHTML.indexOf('メニューバーから再度Q9をプレイ可能です。'));
   assert.ok(!h.app.innerHTML.includes('https://x.gd/MTZvo'));
   assert.ok(h.app.innerHTML.indexOf('href="https://x.gd/1zl4B"') < h.app.innerHTML.indexOf('data-action="mei-survey"'));
   assert.ok(h.evaluate('historyScreenMarkup()').includes('俺はハナの儀式を続行した'));
@@ -3868,6 +3987,8 @@ test('終幕まで行くとメニューからQ9をもう一度解け、別ルー
   assert.equal(h.evaluate('meiEndRoute'), 'god-returned');
   assert.ok(menu().includes('data-action="replay-q9"'));
   assert.ok(menu().includes('>Q9をもう一度解く</span>'));
+  assert.ok(menu().includes('<hr class="menu-divider"><button data-action="replay-q9">'));
+  assert.ok(menu().indexOf('data-action="save-title"') < menu().indexOf('data-action="replay-q9"'));
   assert.ok(h.app.innerHTML.includes('href="https://x.gd/MTZvo"'));
   h.click('replay-q9');
   assert.equal(h.evaluate('meiEndRoute'), null);
@@ -4504,7 +4625,11 @@ test('Q9の会話が最後まで進むと冥の終幕を開く', t => {
   assert.ok(h.app.innerHTML.includes('>冥</h1>'));
   assert.ok(h.app.innerHTML.includes('「11月の救祭 冥」はここで終了です。'));
   assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow">今後の参考にするためアンケートにご協力ください。（1分）</p>'));
-  assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow">アンケート回答後はクリアポストを利用できません。先にご利用ください。</p>'));
+  assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow">ご回答いただいた方には、ささやかなお礼として、制作の裏話を綴ったあとがきを公開しております。</p>'));
+  assert.ok(h.app.innerHTML.includes('class="yoi-completion-follow yoi-completion-replay">メニューバーから再度Q9をプレイ可能です。</p>'));
+  assert.ok(!h.app.innerHTML.includes('アンケート回答後はクリアポストを利用できません'));
+  assert.ok(h.app.innerHTML.indexOf('（1分）') < h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき'));
+  assert.ok(h.app.innerHTML.indexOf('制作の裏話を綴ったあとがき') < h.app.innerHTML.indexOf('メニューバーから再度Q9をプレイ可能です。'));
   assert.ok(h.app.innerHTML.includes('data-action="mei-survey"'));
   assert.ok(h.app.innerHTML.includes('class="clear-post-line" href="https://x.gd/MTZvo"'));
   assert.ok(h.app.innerHTML.includes('クリアをポスト'));

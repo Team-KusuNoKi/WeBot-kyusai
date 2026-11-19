@@ -31,7 +31,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
       yoiEndView: false, meiEndView: false, showVenueDirections: false, investigationView: false,
       repeatAnswer: false, composerExpanded: p.openAnswerOnEntry !== false && !state.solved.includes(p.id) && !(!state.solved.length && p.id === scenario.problems[0].id), sceneStart: state.messages.length,
       displayedMessages: messages, isPlaying: false, investigationScrollTop: 0, investigationReturnId: null,
-      puzzleImageIndex: 0, chatScrollTop: 0, selectedPuzzleAnswer: '', selectedSymbols: [], answerDrafts: {}, seenClueIds: [] };
+      puzzleImageIndex: 0, chatScrollTop: 0, selectedPuzzleAnswer: '', selectedSymbols: [], answerDrafts: {}, seenClueIds: [], q9GuideSeen: false };
   }
   const investigationView = Boolean(raw.investigationView) && scenario.investigation.problemIds.includes(p.id);
   const resumeMigratedDialogue = !raw.repeatAnswer && state.solved.includes(p.id)
@@ -84,6 +84,7 @@ export function restorePlayView(scenario, state, raw, sourceRevision = state.sce
     investigationScrollTop: number(raw.investigationScrollTop, 1000000),
     investigationReturnId: scenario.investigation.problemIds.includes(raw.investigationReturnId) ? raw.investigationReturnId : null,
     seenClueIds: restoreSeenClueIds(scenario, raw.seenClueIds),
+    q9GuideSeen: raw.q9GuideSeen === true,
     puzzleImageIndex: number(raw.puzzleImageIndex, Math.max(0, (p.images?.length ?? 1) - 1)),
     chatScrollTop: number(raw.chatScrollTop, 1000000),
     selectedPuzzleAnswer: p.id === 'N1' && answerDrafts.N1 ? answerDrafts.N1[0] : p.options?.some(item => item.id === raw.selectedPuzzleAnswer) ? raw.selectedPuzzleAnswer : '',
