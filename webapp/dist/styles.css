@@ -436,6 +436,10 @@ html:has(.chat-area.investigation-hub) { overscroll-behavior: none; }
 .puzzle-card-copy .puzzle-card-instruction { margin-bottom: 14px; }
 .puzzle-card-copy .puzzle-card-destination { padding-top: 14px; border-top: 1px solid var(--surface); }
 .puzzle-blank { display: inline-flex; align-items: center; justify-content: center; width: 1.6em; height: 1.6em; margin-inline: 2px; border-radius: 50%; background: var(--ink); color: var(--white); font-weight: 400; line-height: 1; }
+.ink-red { color: #b23696; }
+.ink-gold { color: #e0a020; }
+.ink-green { color: #6a9a48; }
+.ink-stain { display: inline-block; width: 1.05em; height: 2.05em; margin: 0 -0.04em -0.7em; vertical-align: -0.18em; background: url("./assets/n6-ink-stain.png") center / contain no-repeat; }
 .composer-area .start-puzzle-card { padding: 0; border-radius: 0; box-shadow: none; }
 .composer-area .puzzle-card-number { display: none; }
 .puzzle-card-answer, .puzzle-text-answer { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 18px; min-width: 0; }
@@ -661,6 +665,15 @@ dialog.afterword-dialog { inset: 0; width: min(440px, calc(100vw - 24px)); heigh
 .afterword-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 22px 28px 8px; text-align: left; }
 .afterword-scroll:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -6px; }
 .afterword-scroll p { margin: 0 0 1.15em; font-size: 15px; line-height: 2; white-space: pre-wrap; }
+.afterword-note { margin: 6px 0 18px; border-top: 1px solid #1c140f22; }
+.afterword-note > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; margin: 0; padding: 14px 2px; border-radius: 8px; background: transparent; color: #1c140f; font: 15px var(--serif); letter-spacing: .08em; line-height: 1.6; cursor: pointer; list-style: none; }
+.afterword-note > summary::-webkit-details-marker { display: none; }
+.afterword-note > summary > svg { flex: none; width: 18px; height: 18px; transition: transform var(--motion-state) var(--motion-ease); }
+.afterword-note[open] > summary > svg { transform: rotate(180deg); }
+.afterword-note > summary:focus-visible, .afterword-note > summary:active { background: #1c140f0d; }@media (hover: hover) { .afterword-note > summary:hover { background: #1c140f0d; } }
+.afterword-note-heading { margin-bottom: .7em; font: 15px var(--serif); letter-spacing: .08em; }
+.afterword-note-body { padding: 2px 2px 0; }
+@media (prefers-reduced-motion: reduce) { .afterword-note > summary > svg { transition: none; } }
 .afterword-placeholder { margin: 28px 0 0; color: var(--muted); text-align: center; font-size: 14px; line-height: 1.9; }
 .afterword-actions { flex: none; padding: 8px 22px 22px; }
 .afterword-actions .secondary-button { width: 100%; min-height: var(--control-height-lg); border: 1px solid #1c140f55; border-radius: var(--radius-pill); background: transparent; color: #1c140f; font-size: 14px; box-shadow: none; }

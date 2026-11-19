@@ -7,7 +7,10 @@ export function bindVisualViewport(win = window, doc = document) {
   let lastWidth;
   let lastHeight = 0;
   let settleTimer = 0;
+  let releaseTimer = 0;
   let keyboardHeld = false;
+  // 回答欄を閉じたあと、キーボード収納の resize が来ず可視高だけが縮んだままになる端末がある。
+  let viewportStale = false;
   let sheetMorph;
   const listeners = [];
 
@@ -31,6 +34,39 @@ export function bindVisualViewport(win = window, doc = document) {
     return true;
   }
 
+  function editingElement(focused = doc.activeElement) {
+    return Boolean(focused?.matches?.('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="hidden"]), textarea, select'));
+  }
+
+  // 回答欄が文書に無いテストや、まだ描画前の状態では「開いている」とみなし、ドックを急がない。
+  function answerFormOpen() {
+    const form = doc.querySelector?.('#answer-form');
+    if (!form) return true;
+    return !form.hidden && !form.closest?.('[hidden]');
+  }
+
+  function armKeyboardRelease() {
+    if (releaseTimer || !win.setTimeout) return;
+    // 回答欄は開いたままフォーカスだけ外れたとき。収納アニメーションより長く待ってから、戻らない可視高を捨てる。
+    releaseTimer = win.setTimeout(() => {
+      releaseTimer = 0;
+      if (editingElement() || !keyboardHeld) return;
+      const reported = win.visualViewport?.height ?? win.innerHeight;
+      const full = Math.max(restingHeight, win.innerHeight || 0);
+      if (full - reported > 24) {
+        viewportStale = true;
+        try { win.scrollTo?.(0, 0); } catch { /* 収納後の位置ずれを戻せない環境では高さだけ戻す。 */ }
+      }
+      update();
+    }, 480);
+  }
+
+  function disarmKeyboardRelease() {
+    if (!releaseTimer) return;
+    win.clearTimeout?.(releaseTimer);
+    releaseTimer = 0;
+  }
+
   function scrollSurface(surface, delta, heightDrop) {
     // キーボード移動中でない小さな補正だけ滑らかに追従する。
     if (surface.scrollBy && Math.abs(heightDrop) < 20 && Math.abs(delta) <= 64 && !reduced()) {
@@ -42,22 +78,45 @@ export function bindVisualViewport(win = window, doc = document) {
     const viewport = win.visualViewport;
     // Pinch zoom should magnify the page rather than resize its application frame.
     if (viewport && Math.abs((viewport.scale ?? 1) - 1) > .01) return;
-    const height = viewport?.height ?? win.innerHeight;
+    let height = viewport?.height ?? win.innerHeight;
     if (!Number.isFinite(height) || height <= 0 || !doc.documentElement?.style) return;
     const focused = doc.activeElement;
-    const editing = Boolean(focused?.matches?.('input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="hidden"]), textarea, select'));
+    const editing = editingElement(focused);
     const editingAnswer = Boolean(editing && focused?.closest?.('#answer-form'));
-    // キーボード保持中に基準高を縮んだ値で上書きしない。
-    if (!restingHeight || win.innerWidth !== lastWidth || (!editing && !keyboardHeld)) restingHeight = height;
+    const formOpen = answerFormOpen();
+    // キーボード保持中や、戻らない可視高を無視している間は、基準高を縮んだ値で上書きしない。
+    if (!restingHeight || win.innerWidth !== lastWidth || (!editing && !keyboardHeld && !viewportStale)) restingHeight = height;
     lastWidth = win.innerWidth;
-    const shrunk = Math.max(restingHeight, win.innerHeight) - height;
-    // いったんドックしたら、キーボードが退き切るまで形状を維持する。
-    if (editingAnswer && shrunk > 80) keyboardHeld = true;
-    else if (shrunk <= 24) keyboardHeld = false;
+    const full = Math.max(restingHeight, win.innerHeight || 0);
+    let shrunk = full - height;
+    // いったんドックしたら、キーボードが退き切るか、回答欄が閉じるまで形状を維持する。
+    if (editingAnswer && formOpen && shrunk > 80) {
+      keyboardHeld = true;
+      viewportStale = false;
+    } else if (shrunk <= 24) {
+      keyboardHeld = false;
+      viewportStale = false;
+    }
+    // 正解で回答欄が隠れると、閉じる最後の resize が来ないことがある。その縮みは画面の空きではない。
+    if (keyboardHeld && !formOpen) {
+      if (!viewportStale) {
+        viewportStale = true;
+        try { win.scrollTo?.(0, 0); } catch { /* 高さの復元だけでも灰色の空きは埋まる。 */ }
+      }
+    }
+    let top = viewport?.offsetTop ?? 0;
+    // 回答欄が閉じているときは、入力へフォーカスが残って見えても縮みを画面高に使わない。
+    if (viewportStale && shrunk > 24 && (!formOpen || !editing)) {
+      height = full;
+      top = 0;
+      keyboardHeld = false;
+      shrunk = 0;
+    }
+    if (keyboardHeld && !editing && formOpen) armKeyboardRelease();
+    else disarmKeyboardRelease();
     const keyboard = keyboardHeld;
     const heightDrop = lastHeight ? lastHeight - height : 0;
     lastHeight = height;
-    const top = viewport?.offsetTop ?? 0;
     const bottom = top + height;
     const style = doc.documentElement.style;
     style.setProperty('--visual-height', `${height}px`);
@@ -132,5 +191,5 @@ export function bindVisualViewport(win = window, doc = document) {
   for (const name of ['resize', 'scroll', 'orientationchange', 'pageshow']) listen(win, name);
   for (const name of ['focusin', 'focusout']) listen(doc, name);
   update();
-  return { update, schedule, dispose() { win.clearTimeout?.(settleTimer); sheetMorph?.cancel(); for (const [target, name] of listeners) target.removeEventListener(name, schedule); } };
+  return { update, schedule, dispose() { win.clearTimeout?.(settleTimer); win.clearTimeout?.(releaseTimer); sheetMorph?.cancel(); for (const [target, name] of listeners) target.removeEventListener(name, schedule); } };
 }

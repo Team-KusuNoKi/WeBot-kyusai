@@ -21,7 +21,7 @@ export function toggleDisclosure(details, reduced = false) {
   if (!summary || !details.animate || reduced) {
     previous?.animation.cancel();
     disclosures.delete(details);
-    const content = details.querySelector('.history-messages, p');
+    const content = details.querySelector('.history-messages, .afterword-note-body, p');
     if (content) content.inert = false;
     return false;
   }
@@ -29,7 +29,7 @@ export function toggleDisclosure(details, reduced = false) {
   const from = details.getBoundingClientRect().height;
   previous?.animation.cancel();
   if (opening) details.open = true;
-  const content = details.querySelector('.history-messages, p');
+  const content = details.querySelector('.history-messages, .afterword-note-body, p');
   if (content) content.inert = !opening;
   // Summary height plus the details' own padding/border (the latter excludes body).
   const closedHeight = summary.getBoundingClientRect().height + details.offsetHeight - details.clientHeight

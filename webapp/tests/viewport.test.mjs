@@ -200,6 +200,72 @@ test('破棄時には登録したviewport・window・focusイベントを解除�
   assert.equal(h.viewport.listenerCount() + h.win.listenerCount() + h.doc.listenerCount(), 0);
 });
 
+test('正解で回答欄が閉じ、可視高が戻らなくても画面高へ戻し、その後の縮み通知でも維持する', () => {
+  const h = harness();
+  const form = { hidden: false, closest: () => null };
+  h.doc.querySelector = selector => selector === '.workspace' ? h.workspace : selector === '#answer-form' ? form : null;
+  const field = {
+    matches: () => true,
+    closest: selector => selector === '#answer-form' ? form : { getBoundingClientRect: () => ({ top: 100, bottom: 460 }) },
+    getBoundingClientRect: () => ({ top: 300, bottom: 340 }),
+  };
+  h.doc.activeElement = field;
+  h.viewport.height = 460;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), true);
+  assert.equal(h.height(), 460);
+
+  form.closest = selector => selector === '[hidden]' ? form : null;
+  h.doc.activeElement = null;
+  h.controller.update();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), false);
+  assert.equal(h.height(), 844);
+  assert.equal(h.values.get('--visual-height'), '844px');
+  assert.equal(h.values.get('--visual-offset-top'), '0px');
+  assert.equal(h.values.get('--visual-bottom-inset'), '0px');
+
+  h.viewport.offsetTop = 120;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.height(), 844, '閉じるresizeが来ない間は、縮んだ可視高へ戻さない');
+  assert.equal(h.values.get('--visual-offset-top'), '0px');
+
+  h.viewport.height = 844;
+  h.viewport.offsetTop = 0;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.height(), 844);
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), false);
+});
+
+test('回答欄が開いたままフォーカスが外れてもドックは維持し、可視高が戻らないときだけ遅れて離す', () => {
+  const h = harness();
+  const timers = [];
+  h.win.setTimeout = (fn, ms) => { timers.push(fn); return timers.length; };
+  h.win.clearTimeout = id => { timers[id - 1] = null; };
+  const form = { hidden: false, closest: () => null };
+  const surface = { getBoundingClientRect: () => ({ top: 100, bottom: 460 }) };
+  h.doc.querySelector = selector => selector === '.workspace' ? h.workspace : selector === '#answer-form' ? form : null;
+  h.doc.activeElement = {
+    matches: () => true,
+    closest: selector => selector === '#answer-form' ? form : surface,
+    getBoundingClientRect: () => ({ top: 300, bottom: 340 }),
+  };
+  h.viewport.height = 460;
+  h.viewport.emit('resize');
+  h.flush();
+  h.doc.activeElement = null;
+  h.controller.update();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), true, '収納アニメーション中は縮んだ高さを維持する');
+  assert.equal(h.height(), 460);
+  assert.equal(timers.length, 1);
+  timers[0]();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), false);
+  assert.equal(h.height(), 844);
+  assert.equal(h.values.get('--visual-height'), '844px');
+});
+
 test('入力欄と送信ボタンが一緒に収まる場合は両方を可視領域に入れる', () => {
   const h = harness();
   const surface = { scrollTop: 0, getBoundingClientRect: () => ({ top: 120, bottom: 448 }) };

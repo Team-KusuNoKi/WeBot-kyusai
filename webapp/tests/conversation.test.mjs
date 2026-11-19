@@ -1185,7 +1185,8 @@ test('N5からN5.5のテキストと2選択欄へ進み、完答でSTOPポップ
   assert.ok(h.panel.innerHTML.includes('周遊版をプレイしてくださり、ありがとうございました。'));
   assert.ok(h.panel.innerHTML.includes('class="tour-thanks-book-title">11月の救祭 冥</p>'));
   assert.ok(h.panel.innerHTML.includes('book-mei.webp'));
-  assert.ok(h.panel.innerHTML.includes('付属図書館前で販売中'));
+  assert.ok(h.panel.innerHTML.includes('クスノキ北西 (附属図書館前)で販売中'));
+  assert.ok(h.panel.innerHTML.includes('ご回答いただいた方には、ささやかなお礼として、制作の裏話を綴ったあとがきを公開しております。'));
   assert.ok(h.panel.innerHTML.includes('アンケートはこちら'));
   await h.evaluate('closePanel()');
   assert.equal(h.panel.open, false);
@@ -1632,7 +1633,7 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   assert.equal(h.panel.classList.contains('hex-reward-panel'), true);
   assert.ok(h.panel.innerHTML.includes('class="hex-reward-card"'));
   assert.ok(h.panel.innerHTML.includes('clue-27.webp'));
-  assert.ok(h.panel.innerHTML.includes('class="hex-reward-note">会場でプレイされている方はスタッフからカード現物を受け取ってください。'));
+  assert.ok(h.panel.innerHTML.includes('class="hex-reward-note">会場でプレイされる方へ：紙のカードをご希望の方は、『404』を取りにお越しください'));
   assert.equal(h.composer.hidden, true);
   const paper = scenario.problems.find(p => p.id === 'Q3.3');
   for (const line of paper.dialogue) {
@@ -1652,15 +1653,20 @@ test('Q3の各問とN6を解き、最後の穴埋めに正解したら冊子の�
   assert.ok(!h.app.innerHTML.includes(paper.conclusion));
   h.click('investigation-open', 'Q3.3');
   assert.equal(h.evaluate('state.selected'), 'Q3.3.1');
-  assert.ok(h.composer.innerHTML.includes('通過順に並べよ'));
-  assert.ok(h.composer.innerHTML.includes('ヒント：赤、黄、青は今見た色'));
+  assert.ok(h.composer.innerHTML.includes('線を通るものを順に並べよ'));
+  assert.ok(h.composer.innerHTML.includes('class="ink-red">赤</span>、'));
+  assert.ok(h.composer.innerHTML.includes('class="ink-gold">黄</span>、'));
+  assert.ok(h.composer.innerHTML.includes('class="ink-green">青</span> は、く'));
+  assert.ok(h.composer.innerHTML.includes('class="ink-stain" role="img" aria-label="赤い汚れで隠れた文字"'));
+  assert.ok(h.composer.innerHTML.includes('</span>まが今見た色'));
+  assert.ok(!h.composer.innerHTML.includes('くるま'));
   assert.ok(h.composer.innerHTML.includes('<h2>N6</h2>'));
   assert.ok(h.navigation.innerHTML.includes('問題番号 <strong>N6</strong>'));
-  assert.ok(h.composer.innerHTML.includes('../assets/n6-diagram.svg'));
+  assert.ok(h.composer.innerHTML.includes('../assets/n6-problem.jpg'));
   assert.ok(h.composer.innerHTML.includes('aria-label="N6の図を拡大表示"'));
   h.click('puzzle-image');
   assert.ok(h.panel.innerHTML.includes('N6の問題</h2>'));
-  assert.ok(h.panel.innerHTML.includes('../assets/n6-diagram.svg'));
+  assert.ok(h.panel.innerHTML.includes('../assets/n6-problem.jpg'));
   h.click('close');
   assert.equal(h.evaluate("answer('かべおせ').status"), 'correct');
   finishScene(h);
@@ -2027,12 +2033,16 @@ test('合成に成功すると成功のポップアップのあとカード取�
   assert.ok(h.panel.innerHTML.includes('class="hex-reward-card"'));
   assert.ok(h.panel.innerHTML.includes('clue-24.webp'));
   assert.ok(h.panel.innerHTML.includes('新しい手がかり「鏡の間：違和感」を手に入れた。'));
+  assert.ok(h.panel.innerHTML.includes('class="hex-reward-note">会場でプレイされる方へ：紙のカードをご希望の方は、『401』を取りにお越しください'));
+  assert.equal(h.evaluate('paperCardPickupNote(scenario.clueGallery.find(card => card.number === "402"))'), '会場でプレイされる方へ：紙のカードをご希望の方は、『402』を取りにお越しください');
+  assert.equal(h.evaluate('paperCardPickupNote(scenario.clueGallery.find(card => card.number === "403"))'), '会場でプレイされる方へ：紙のカードをご希望の方は、『403』を取りにお越しください');
   assert.ok(h.panel.innerHTML.includes('data-action="hex-card"'));
   h.documentEvent('submit', event);
   assert.ok(h.panel.innerHTML.includes('>成功</h2>'));
   assert.deepEqual(JSON.parse(h.snapshot()).combinations, ['combine-401']);
   h.click('combine-outcome-next');
   assert.ok(h.panel.innerHTML.includes('この手がかりは取得済みです。'));
+  assert.ok(!h.panel.innerHTML.includes('取りにお越しください'));
   assert.ok(h.panel.innerHTML.includes('data-settled="true"'));
   h.click('hex-card');
   assert.equal(h.evaluate('expandedClueId'), 'clue-24');
@@ -3981,6 +3991,7 @@ test('装置クリア後は会話を増やさず手がかり400を取得する',
   assert.ok(!h.app.innerHTML.includes('控室の問題を再度解く'));
   await h.evaluate('finishHexCube([[4],[3,4]])');
   assert.ok(h.panel.innerHTML.includes('新しい手がかり「控室について」'));
+  assert.ok(h.panel.innerHTML.includes('class="hex-reward-note">会場でプレイされる方へ：紙のカードをご希望の方は、『400』を取りにお越しください'));
   assert.ok(h.panel.innerHTML.includes('clue-23.webp'));
   assert.ok(h.panel.innerHTML.includes('手がかりを見る'));
   assert.ok(!h.panel.innerHTML.includes('装置から出てきたメモ'));
@@ -4567,9 +4578,28 @@ test('冥のAエンドとBエンドのあとがきはノーマルエンドの編
   }
   h.evaluate("meiEndView = true; meiEndRoute = 'all-saved'");
   h.evaluate("openPanel('afterword')");
-  assert.match(h.panel.innerHTML, /あとがきの本文は、ここに表示されます。/);
+  assert.match(h.panel.innerHTML, /冥をクリア\(Trueエンドに到達\)された方へ/);
   assert.doesNotMatch(h.panel.innerHTML, /冥をクリア\(エンドA,Bに到達\)された方へ/);
   assert.doesNotMatch(h.panel.innerHTML, /宵をクリアされた方へ/);
+});
+
+test('Trueエンドのあとがきは制作者コメントを閉じたまま出す', t => {
+  const h = appHarness();
+  t.after(() => h.dispose());
+  h.evaluate("meiEndRoute = 'all-saved'; openPanel('afterword')");
+  assert.match(h.panel.innerHTML, /冥をクリア\(Trueエンドに到達\)された方へ/);
+  assert.match(h.panel.innerHTML, /落日の深青に漂う茜色の余燼/);
+  assert.match(h.panel.innerHTML, /<details class="afterword-note"><summary>制作者より一言/);
+  assert.doesNotMatch(h.panel.innerHTML, /<details class="afterword-note"[^>]*\sopen/);
+  assert.match(h.panel.innerHTML, /class="afterword-note-heading">冥の謎について</);
+  assert.match(h.panel.innerHTML, /N1の色が変/);
+  assert.match(h.panel.innerHTML, /演技上手かったぜ/);
+  h.evaluate("meiEndRoute = 'god-returned'; openPanel('afterword')");
+  assert.match(h.panel.innerHTML, /冥をクリア\(エンドA,Bに到達\)された方へ/);
+  assert.doesNotMatch(h.panel.innerHTML, /制作者より一言|余燼|Trueエンドに到達/);
+  h.evaluate("meiEndRoute = 'world-saved'; openPanel('afterword')");
+  assert.match(h.panel.innerHTML, /冥をクリア\(エンドA,Bに到達\)された方へ/);
+  assert.doesNotMatch(h.panel.innerHTML, /制作者より一言|余燼/);
 });
 
 

@@ -1993,7 +1993,18 @@ function composerContentMarkup(p) {
 }
 
 function puzzleTextMarkup(text) {
-  return String(text).split('{blank}').map(esc).join('<span class="puzzle-blank">？</span>');
+  const source = String(text);
+  const pattern = /\{blank\}|\{stain\}|\{(red|gold|green)\}([\s\S]*?)\{\/\1\}/g;
+  let html = '';
+  let last = 0;
+  for (const match of source.matchAll(pattern)) {
+    html += esc(source.slice(last, match.index));
+    if (match[0] === '{blank}') html += '<span class="puzzle-blank">？</span>';
+    else if (match[0] === '{stain}') html += '<span class="ink-stain" role="img" aria-label="赤い汚れで隠れた文字"></span>';
+    else html += `<span class="ink-${match[1]}">${esc(match[2])}</span>`;
+    last = match.index + match[0].length;
+  }
+  return html + esc(source.slice(last));
 }
 
 function puzzleImages(p = current()) {
@@ -2129,12 +2140,46 @@ const MEI_AB_AFTERWORD_PARAGRAPHS = [
   'という意味深な言葉を残して、〆にしたいと思います。ここまで読んでくださりありがとうございます！長時間のプレイありがとうございました！！',
 ];
 
+const TRUE_AFTERWORD_PARAGRAPHS = [
+  '冥をクリア(Trueエンドに到達)された方へ',
+  'こちらのメッセージをご覧の皆さま。冥のクリアに加え、アンケートにもご回答いただき、誠にありがとうございます。こちらは、3つ目のエンド、Trueエンドのあとがきとなっております。初見でこちらにたどり着いた方は素晴らしい慧眼の持ち主です。ぜひ、あとで他2つのエンディングもご確認ください。メニューバーから再度Q9をプレイすることが可能です。',
+  'せっかくなのでこちらのあとがきでは、制作秘話をお話したいと思います。我ら、Team.KusuNoKiの大文字の4文字は、昨年「クスノキが枯れた日」を発表した際のメンバー4人の名前を取ったものなのですが、今年はそこに2人を加えた6人体制で制作を行いました。（新規メンバー2人のアルファベットが刻まれていないのは文字が足りないから）',
+  '私（2人目のK）は、ウェブサイト、WeBot、そして本編の3つのエンディングを担当したのですが、このワンオペ作業は非常に苦しかったです笑。学生の本分たる勉学の草鞋を脱ぎ捨て、バイトと謎解き開発に邁進した結果がこれになります。',
+  '昨年は回答入力用にLineボットを使用していたのですが、使いづらさが目立ち、回答入力だけでなく、より柔軟な表現や入力などができるようにウェブアプリを構築しました。使い勝手のほどはいかがでしたでしょうか？開発において大変だったのが、やはりデザイン面とバグの解消です。私自身がこだわり派の人間なこともあり、見やすい、滑らかに動く、わかりやすい統一的なデザインを模索したため、構築に非常に時間を要してしまいました。この程度の小さいアプリでもバグは結構出るもので、テストプレイ段階で画像の差し替えや動作不良が続々と見つかりまして、その都度求められる修正作業が必要でした。',
+  '私は謎づくりのセンスはまったくないのですが、チームメンバーには才能を持つものが何人かいまして、彼らの作る謎を一般人の視点でレビューしておりました。特に私の評価が高いのはN4の標識の謎とQ9の儀式の工作の謎です。去年にはなかったテイストの謎であり、テストプレイをして感動しました。',
+  'そして3つのエンディングですが、ぜひ感想を伺いたく思います。3つのエンディングは1本あたり4時間近く思考して書き上げています。Xなどで好きなエンディングを答えていただけると幸いです。個人的な好みはA。',
+  '前作ではシナリオを担当したものの、今作ではウェブアプリの構築や最終的に断念したもののNFで販売予定だった別の作品に取り組んでいたこともあってエンディングに専念させていただきました。3つのエンドは「選択」をテーマとして、中でもノーマルエンドの2つは、選択のもたらす結末への向き合い方について2つのパターンを示すエンドにしたつもりです。やはり、物語的で綺麗な結末なのは中断ルート（ルートA）で、私の実際の思考に近いのは続行ルート（ルートB）かなと思っています。約束の伏線はルートAを書き上げたあとに物語内に仕込みました。そしてこのTrueルートは、2つのルート完成後に、既存の約束を発展させつつタツの強い決意を引き出すため、多くを語らなかったミサメの行動原理に触れ、最終的に約束を叶えた暁に未来につながる新しい約束を結ぶという展開を構想した次第です。',
+  'このエンドの末文「窓の外はあの日のような宵の空。落日の深青に漂う茜色の余燼が冒険の終わりと次なる旅路を予感させた。」は私のお気に入りです。余燼とは焚き火のあとで炎が消え、赤くくすぶって燃え残っている火のことを指します。この単語から終わりだけでなく同時に次の日の出立＝これからの未来を連想し、この結末にピッタリの表現だと考え採用しました。',
+  '最後となりますが、ここまでプレイしていただきありがとうございました。去年できなかったことをやりたいという思いから、今年はウェブアプリの導入、周遊要素を増した謎、工作をする謎、マルチエンディングなど新しい挑戦を多数導入しました。至らぬところは多々あったと思いますが楽しんでいただけたら光栄です。まだ他のエンドを見ていないという方はぜひそちらもお楽しみください。来年の出展はまだ予定しておりませんが、皆様の声が励みとなります。公式Xのフォローもよろしくお願いします。この度はありがとうございました',
+];
+
+const TRUE_AFTERWORD_NOTES = [
+  '①　N1の色が変：実は最初の謎からハナの色覚異常についての伏線は貼られていました。N1をもう一度確認してみると、太陽のイラストの赤色が変ですよね...。',
+  '②　末席同好会の貼り紙の色が変：こちらは、覚えている方は少ないと思いますが、末席同好会のチラシに使われている色も少し変でした。ハナは堂々と赤色と思って使った色が...ということです。',
+  '③　N5の問題文が「最『期』の場所へ向かえ」になっている。正しい漢字は「最『後』」ですよね。ここもハナのお茶目心で、「あんた次の行ったところで死にまっせ」みたいな意味合いだったんですね。誤植だと思われたみなさん、違います！！！(大声)。タツたちは、「最期」の漢字を普通に「最後」と捉えて会話を進めていましたね...。気づいたところで、まさか行ったら殺されるなんて気づかず、誤植だと思うだけですが...。',
+  '④　実は、N5のタイトル「Navigate to Fear」は、恐怖への誘い、もっとストレートに言うと、「お化け屋敷への誘い」だったんですよね。ほとんどの皆様が、タイトルが「NF縛り」なのは気づかれたと思うんですけど、N5のタイトルから、勘の良い人は問題を解かずとも最期の場所はお化け屋敷と気づきそうです(気づきましたか？)。これを書いていて思い出しましたが、N3のタイトル「Notice of Fortune　幸運のお告げ」はおみくじのことを暗喩しています。',
+  '⑤　サダヲは本当にお腹が弱いだけ。サダヲは、犯人候補の4人のうち、唯一、何も後ろめたいことがない人です。なのに、一番疑われて...不憫なキャラです（笑）。',
+  '⑥　マヤの持ち物「紙切れ」には、実は金庫の開け方が書いてあるという設定がありました。わざわざ作中で回収する程でもなく、ミスリーディング要員で置いておきました。同様にアツヤのライトに名前の刻印があるのも特に意味はありません。攪乱要員です。',
+  '⑦　ハナが冥の冒頭、ミサメの死体を急に見たときに「血ってこんなスミレ色なの！？」って言ってたのは演技＆色覚異常の伏線です。隠し部屋が発見された時の、ハナの「信じられない！ありえない！」みたいな会話も彼女の演技でした。名演ですよね。作中で、タツに「演技上手かったぜ」みたいなのを最後に言わせたかったのですが、思ったより最後の展開がシリアスになってしまい、そんな余裕はありませんでした（笑）。',
+];
+
+function afterwordParagraphs(texts) {
+  return texts.filter(text => typeof text === 'string' && text.trim()).map(text => `<p>${esc(text)}</p>`).join('');
+}
+
 function afterwordMarkup() {
-  const paragraphs = (meiEndRoute === 'god-returned' || meiEndRoute === 'world-saved'
+  const trueEnding = meiEndRoute === 'all-saved';
+  const paragraphs = meiEndRoute === 'god-returned' || meiEndRoute === 'world-saved'
     ? MEI_AB_AFTERWORD_PARAGRAPHS
-    : !meiEndView && !meiEndRoute ? AFTERWORD_PARAGRAPHS : []).filter(text => typeof text === 'string' && text.trim());
-  const body = paragraphs.length
-    ? paragraphs.map(text => `<p>${esc(text)}</p>`).join('')
+    : trueEnding ? TRUE_AFTERWORD_PARAGRAPHS
+    : !meiEndView && !meiEndRoute ? AFTERWORD_PARAGRAPHS : [];
+  const letter = afterwordParagraphs(paragraphs);
+  const notes = trueEnding ? afterwordParagraphs(TRUE_AFTERWORD_NOTES) : '';
+  const note = notes
+    ? `<details class="afterword-note"><summary>制作者より一言${icon('chevron')}</summary><div class="afterword-note-body"><p class="afterword-note-heading">冥の謎について</p>${notes}</div></details>`
+    : '';
+  const body = letter || note
+    ? `${letter}${note}`
     : '<p class="afterword-placeholder">あとがきの本文は、ここに表示されます。</p>';
   return `<section class="afterword" aria-labelledby="panel-title">
     <button class="icon-button afterword-close" data-action="close" aria-label="閉じる">${icon('close')}</button>
@@ -2476,7 +2521,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
       const physical = gained.find(card => card.id === '404');
       if (physical) {
         const gallery = (scenario.clueGallery ?? []).find(card => card.requires?.card === '404');
-        presentCardReward(gallery ?? physical, false, '会場でプレイされている方はスタッフからカード現物を受け取ってください。');
+        presentCardReward(gallery ?? physical, false);
       } else if (gained.length) announceNewClue(gained.length);
     }
   }
@@ -2649,6 +2694,12 @@ function combineFabMarkup() {
 
 function combinationRewardCard(result) {
   return (scenario.clueGallery ?? []).find(card => card.requires?.combination === result.id) ?? null;
+}
+
+function paperCardPickupNote(card) {
+  const number = String(card?.number ?? card?.mark ?? '');
+  if (!/^(400|401|402|403|404)$/.test(number)) return '';
+  return `会場でプレイされる方へ：紙のカードをご希望の方は、『${number}』を取りにお越しください`;
 }
 
 function presentCardReward(card, already, note = '') {
@@ -3446,7 +3497,8 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     const showReplay = !pendingReward && playSaves.getStatus().mode === 'debug';
     title = already ? '取得済みの手がかり' : '手がかりを手に入れた';
     const message = already ? 'この手がかりは取得済みです。' : `新しい手がかり「${esc(card.title)}」を手に入れた。`;
-    const note = pendingReward?.note ? `<strong class="hex-reward-note">${esc(pendingReward.note)}</strong>` : '';
+    const noteText = pendingReward?.note || (!already ? paperCardPickupNote(card) : '');
+    const note = noteText ? `<strong class="hex-reward-note">${esc(noteText)}</strong>` : '';
     content = `<div class="hex-reward-stage"><div class="hex-reward-flash" aria-hidden="true"></div><div class="hex-reward-card"${already ? ' data-settled="true"' : ''}><div class="hex-reward-spin"><div class="hex-reward-face hex-reward-back" aria-hidden="true"></div><div class="hex-reward-face hex-reward-front"><img src="${esc(card.image)}" alt="${esc(card.title)}（手がかり番号 ${esc(card.number)}）" decoding="async"></div></div></div></div><p class="hex-reward-message" role="status">${message}${note}</p><div class="hex-reward-actions"><button class="primary-button" data-action="hex-card">手がかりを見る</button>${showReplay ? '<button class="secondary-button" data-action="hex-open">もう一度解く</button>' : ''}</div>`;
   } else if (kind === 'hex-pending') {
     title='システム';content='<p role="status">クリアしました。手がかりの保存を確認しています。通信が戻ったら、もう一度確認してください。</p><button class="primary-button full" data-action="hex-save-retry">保存を確認する</button>';
@@ -3548,7 +3600,7 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
     content = pageTurnCardMarkup(p.pageTurnText, { action: 'yoi-next', buttonLabel: '宵の最後まで読んだら次へ' });
   } else if (kind === 'tour-thanks') {
     title = '周遊版のアンケート';
-    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要1分）</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救祭 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">付属図書館前で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
+    content = `<h2 id="panel-title" class="sr-only">${title}</h2><button class="icon-button tour-thanks-close" data-action="close" aria-label="閉じる">${icon('close')}</button><div class="tour-thanks"><p>周遊版をプレイしてくださり、ありがとうございました。謎の内容、難易度などはいかがでしたでしょうか？ お時間よろしければアンケートにご回答ください。（所要1分）ご回答いただいた方には、ささやかなお礼として、制作の裏話を綴ったあとがきを公開しております。</p><div class="tour-thanks-book"><img src="../assets/book-mei.webp" width="721" height="1024" alt="11月の救祭 冥 冊子"><div class="tour-thanks-book-info"><p class="tour-thanks-book-title">11月の救祭 冥</p><p class="tour-thanks-book-price">800円</p><p class="tour-thanks-book-note">クスノキ北西 (附属図書館前)で販売中</p></div></div><button type="button" class="primary-button" data-action="tour-survey">アンケートはこちら</button></div>`;
   } else if (kind === 'survey') {
     title = 'アンケート';
     surveyStatus = 'idle';
@@ -3920,7 +3972,7 @@ function answer(value) {
 
 document.addEventListener('click', event => {
   const summary = event.target.closest('summary');
-  if (summary?.parentElement?.matches('.history-entry, .answer-reveal:not(.hint-answer), .trouble-photos') && toggleDisclosure(summary.parentElement, reducedMotion())) {
+  if (summary?.parentElement?.matches('.history-entry, .answer-reveal:not(.hint-answer), .trouble-photos, .afterword-note') && toggleDisclosure(summary.parentElement, reducedMotion())) {
     event.preventDefault();
     return;
   }
