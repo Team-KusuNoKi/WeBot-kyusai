@@ -1825,6 +1825,7 @@ dialog.hex-cube-panel:has(.luminol-talk) { overflow: visible; }
 }
 .epilogue-screen.is-title { opacity: 0; }
 .epilogue-screen.is-title.is-entering { animation: epilogue-darken 520ms ease-out forwards; }
+.epilogue-screen.is-line.is-entering { animation: epilogue-darken 360ms ease-out both; }
 @keyframes epilogue-darken { from { opacity: 0; } to { opacity: 1; } }
 .epilogue-title-card { display: grid; justify-items: center; gap: 4px; }
 .epilogue-script {
@@ -1965,6 +1966,7 @@ button.epilogue-screen:focus-visible, button.epilogue-screen:active { background
   .epilogue-screen.is-title { opacity: 1; animation: none; }
   .epilogue-script.is-writing { animation: none; -webkit-mask-image: none; mask-image: none; opacity: 1; }
   .epilogue-heading { transition: none; }
+  .epilogue-screen.is-line.is-entering { animation: none; }
   .epilogue-screen.is-line.is-entering .epilogue-bg,
   .epilogue-screen.is-line.is-entering .epilogue-veil { animation: none; }
 }

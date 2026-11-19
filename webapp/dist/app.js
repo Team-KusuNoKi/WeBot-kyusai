@@ -103,6 +103,8 @@ let displayedMessages = [];
 let isPlaying = false;
 let novelPlayback = false;
 let epiloguePhase = null;
+let shownSceneArt = '';
+let pageTurnSceneArmed = false;
 let epilogueToken = 0;
 let epilogueTimer = 0;
 let epilogueFading = false;
@@ -289,8 +291,18 @@ function conversationMessages(messages) {
 
 const preloadedSceneSources = new Set();
 
-function preloadSceneImages(scene = []) {
-  if (typeof Image === 'undefined' || !scene.length) return;
+function preloadImageSources(sources) {
+  if (typeof Image === 'undefined') return;
+  for (const src of sources) {
+    if (!src || preloadedSceneSources.has(src)) continue;
+    preloadedSceneSources.add(src);
+    const image = new Image();
+    image.src = src;
+    image.decode().catch(() => preloadedSceneSources.delete(src));
+  }
+}
+
+function preloadSceneImages(scene = [], problem = current()) {
   const sources = new Set();
   for (const line of scene) {
     for (const name of (line.speaker || '').split('＆')) {
@@ -301,17 +313,19 @@ function preloadSceneImages(scene = []) {
     if (line.background) sources.add(line.background);
     if (epilogueSceneArt[line.scene]) sources.add(epilogueSceneArt[line.scene]);
   }
-  for (const step of current().travelGuide?.steps ?? []) {
+  for (const step of problem?.travelGuide?.steps ?? []) {
     if (step.preview) sources.add(step.preview);
     if (step.image) sources.add(step.image);
   }
-  for (const src of sources) {
-    if (preloadedSceneSources.has(src)) continue;
-    preloadedSceneSources.add(src);
-    const image = new Image();
-    image.src = src;
-    image.decode().catch(() => preloadedSceneSources.delete(src));
-  }
+  preloadImageSources(sources);
+}
+
+// タイトルや再開の待ち時間に、最初に映る画面の画像を先読みしておく。
+function warmupEntryImages() {
+  const problemId = localRecord?.state?.selected ?? legacyState?.selected ?? null;
+  const problem = scenario.problems.find(p => p.id === problemId) ?? scenario.problems[0];
+  preloadSceneImages(problem?.dialogue ?? [], problem);
+  if (!problemId) preloadImageSources(['../assets/menu-guide-annotated.webp', ...Object.values(scenario.portraits ?? {})]);
 }
 
 function cancelEpilogueMotion() {
@@ -567,13 +581,18 @@ function beginEpilogueBlackout() {
 }
 
 function mountEpilogue(workspace) {
+  const hadScreen = Boolean(document.querySelector('.epilogue-screen'));
   document.querySelector('.epilogue-screen')?.remove();
   if (!epiloguePhase || historyView || gateVisible) return;
   syncPlayChrome();
   mountWorkspaceCover(epilogueMarkup());
   if (!panel.open) document.querySelector('[data-action="epilogue-next"]')?.focus({ preventScroll: true });
   if (epiloguePhase === 'title') beginEpilogueTitle();
-  else revealEpilogueLine();
+  else {
+    // 会話へ初めて被せるときだけ暗くなる入りを付ける。差し替え・再描画では点滅させない。
+    if (!hadScreen && !reducedMotion()) document.querySelector('.epilogue-screen')?.classList.add('is-entering');
+    revealEpilogueLine();
+  }
 }
 
 function playConversation(start, { fromCorrectAnswer = false } = {}) {
@@ -1510,6 +1529,8 @@ function updateSaveStatus(status) {
 }
 
 function renderEntry() {
+  shownSceneArt = '';
+  pageTurnSceneArmed = false;
   const entering = !document.querySelector('.title-entry');
   app.innerHTML = `<div class="shell title-shell"><main id="main" class="save-entry title-entry">
     <h1 class="sr-only">${esc(scenario.title)}</h1>
@@ -1523,6 +1544,7 @@ function renderEntry() {
   if (entering && !reducedMotion()) document.querySelector('.title-art')?.animate?.([{ opacity: 0, transform: 'scale(1.03)' }, { opacity: 1, transform: 'none' }], { duration: 520, easing: MOTION.ease, fill: 'backwards' });
   if (gateInput) openPanel('resume');
   syncNavigation();
+  warmupEntryImages();
 }
 
 function renderResumeLoading() {
@@ -1601,13 +1623,27 @@ function enterPlay(record) {
   if (answerOrigin && gallery) gallery.scrollLeft = answerOrigin.scrollLeft;
   changingSession = false;
   if (!isPlaying && !investigationView && !composerExpanded && !answerOrigin && current().autoOpenContinuation === 'after-dialogue') openAutomaticContinuation();
-  if (isPlaying && !novelPlayback) conversationPlayer.play(pendingConversation(state, view));
+  if (isPlaying && !novelPlayback) {
+    const remaining = pendingConversation(state, view);
+    preloadSceneImages(remaining);
+    conversationPlayer.play(remaining);
+  }
   updateSaveStatus(playSaves.getStatus());
   if (!openFinishedPageTurn() && record.code && record.code !== '000000' && !announcedCode) {
     announcedCode = true;
     openPanel('save-info', { showStartButton: startView && !state.solved.length });
   }
   maybeShowQ9Guide();
+}
+
+// transitionToPlay と対にして、チャット画面も同じ向きで退場させる。
+function transitionToEntry() {
+  const shell = document.querySelector('.shell');
+  if (shell?.classList?.contains && !shell.classList.contains('title-shell') && shell.animate && !reducedMotion()) {
+    void animateSurface(shell, false, -12).finally(renderEntry);
+    return;
+  }
+  renderEntry();
 }
 
 async function transitionToPlay(record) {
@@ -1637,6 +1673,8 @@ async function beginPlay(kind, code = '', { automatic = false } = {}) {
   if (gateBusy) return;
   gateBusy = true;
   gateError = '';
+  // 保存先の応答を待つあいだに、これから見せる場面の画像を取りに行く。
+  warmupEntryImages();
   if (automatic) renderResumeLoading();
   else renderEntry();
   try {
@@ -2633,6 +2671,17 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
         ${p.answerPresentation === 'page' && !composerVisible ? '' : composerContentMarkup(p)}
       </section>
       ${historyView ? historyScreenMarkup() : ''}`;
+  if (sceneArt !== shownSceneArt) {
+    if (sceneArt) animateFade(workspace.querySelector?.('.scene-art'), true, MOTION.state);
+    shownSceneArt = sceneArt;
+  }
+  const pageTurnButton = workspace.querySelector?.('.page-turn-scene');
+  if (pageTurnButton) {
+    if (!pageTurnSceneArmed) {
+      pageTurnSceneArmed = true;
+      animateFade(pageTurnButton, true);
+    }
+  } else pageTurnSceneArmed = false;
   if (heldBlackout) workspace.append?.(heldBlackout);
   lockPlayContent(investigationClosing || Boolean(epiloguePhase));
   syncPlayChrome();
@@ -3037,7 +3086,7 @@ function mountCombineOutcome() {
       { duration: 420, delay: 60, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' }
     );
     burstCombineConfetti(dialog.querySelector('.hex-confetti'));
-  }
+  } else if (!success) animateScale(dialog, true, .94);
   dialog.querySelector('button')?.focus({ preventScroll: true });
 }
 
@@ -3059,6 +3108,13 @@ function finishCombineOutcome() {
     openPanel('clues');
   };
   if (outcome?.kind !== 'success' || reducedMotion() || !card?.animate) {
+    // 失敗ダイアログだけ、出すときと同じ縮小で閉じる。動かせない環境では即時に閉じる。
+    if (outcome?.kind === 'failure' && !reducedMotion() && dialog?.animate) {
+      combineOutcomeClosing = true;
+      dialog.classList.add('is-closing');
+      void animateScale(dialog, false, .96).finally(proceed);
+      return;
+    }
     proceed();
     return;
   }
@@ -4038,6 +4094,8 @@ function openPanel(kind, { keepFocus = false, revealSelector = null, showStartBu
       },
     });
     imageViewer?.revealFrom(imageOrigin);
+    // 起点のない画像パネル（儀式ガイドなど）にも、中央への出入りを付ける。
+    if (!imageOrigin) animateScale(panel, true, .94);
   }
   if (kind === 'hex-cube') {
     if (parkedMiniHost) {
@@ -4163,6 +4221,7 @@ function selectProblem(id, { start = false, openOverScene = false, preserveConve
       animateFade(document.querySelector('.chat-area'), true, MOTION.state);
       animateSurface(document.querySelector('#problem-navigation'), true, -4, 'Y', MOTION.state);
     }
+    animateSurface(document.querySelector('.q4-pending'), true, 8);
   }
   if (resetBackground) document.querySelector('.chat-area').scrollTop = nextProblem.conversationBackground === 'investigation' ? investigationScrollTop : 0;
   if (!preserveConversation && displayedMessages.length) animateSurface(document.querySelector('#messages'), true, 8);
@@ -4296,6 +4355,7 @@ function answer(value) {
       const focusTarget = problem.answerChoices || problem.fields?.some(field => field.answerChoices) || problem.answerControl === 'select'
         ? composer : document.querySelector('#answer') ?? composer.querySelector?.('#answer-form input');
       focusTarget?.focus({ preventScroll: true });
+      animateQuestionAdvance(composer);
     }
     return { status: result.status, problemId: problem.id };
   }
@@ -4426,12 +4486,12 @@ document.addEventListener('click', event => {
     const leavingDebug = playSaves.getStatus().mode === 'debug';
     if (leavingDebug) playSaves.leaveSession();
     localRecord = playSaves.getRecord() ?? playSaves.readLocal();
-    renderEntry();
+    void transitionToEntry();
     if (!leavingDebug) void playSaves.flush();
     return;
   }
   else if (action === 'save-entry') {
-    save(); conversationPlayer.stop(); isPlaying = false; closePanel(); gateVisible = true; gateInput = true; gateError = ''; gateCode = ''; gateDigits = Array(6).fill(''); playSaves.leaveSession(); localRecord = playSaves.readLocal(); renderEntry(); return;
+    save(); conversationPlayer.stop(); isPlaying = false; closePanel(); gateVisible = true; gateInput = true; gateError = ''; gateCode = ''; gateDigits = Array(6).fill(''); playSaves.leaveSession(); localRecord = playSaves.readLocal(); void transitionToEntry(); return;
   }
   else if (action === 'save-retry') { void playSaves.retry().then(() => openPanel('save-info')).catch(error => { gateError = error.message; openPanel('save-info'); }); return; }
   else if (action === 'save-delete') {
@@ -4439,7 +4499,7 @@ document.addEventListener('click', event => {
     saveMutationBusy = true;
     button.disabled = true;
     conversationPlayer.stop(); isPlaying = false;
-    void playSaves.deleteCurrent().then(deleted => { if (!deleted) { openPanel('save-info'); return; } conversationPlayer.stop(); isPlaying = false; legacyState = null; localRecord = null; gateVisible = true; gateInput = false; gateError = ''; gateCode = ''; gateDigits = Array(6).fill(''); closePanel(); renderEntry(); }).catch(error => { gateError = error.message; openPanel('save-info'); }).finally(() => { saveMutationBusy = false; }); return;
+    void playSaves.deleteCurrent().then(deleted => { if (!deleted) { openPanel('save-info'); return; } conversationPlayer.stop(); isPlaying = false; legacyState = null; localRecord = null; gateVisible = true; gateInput = false; gateError = ''; gateCode = ''; gateDigits = Array(6).fill(''); closePanel(); void transitionToEntry(); }).catch(error => { gateError = error.message; openPanel('save-info'); }).finally(() => { saveMutationBusy = false; }); return;
   }
   else if (action === 'toggle-menu') setMenuExpanded(!menuExpanded);
   else if (action === 'investigation-closing' && canReadInvestigationClosing()) {
@@ -4517,7 +4577,17 @@ document.addEventListener('click', event => {
   else if (action === 'travel-next' && showsGuideStop(current()) && !composerExpanded) {
     haptics.trigger('pageTurn');
     // 暗転しためくり指示は一度だけの合図。ポップアップ以降は直前の会話を背景に戻す。
-    if (current().deferPageTurn) { pageTurnRevealed = true; render(); }
+    if (current().deferPageTurn) {
+      pageTurnRevealed = true;
+      const turnButton = document.querySelector('.page-turn-scene');
+      render();
+      // ボタンは再描画で消えるので、戻してから退場させる。
+      if (turnButton && !reducedMotion()) {
+        turnButton.inert = true;
+        document.querySelector('.workspace')?.append(turnButton);
+        void animateFade(turnButton, false, MOTION.exit).finally(() => turnButton.remove());
+      }
+    }
     openPanel('travel-next');
   }
   else if ((action === 'open-composer' || action === 'travel-found') && !isPlaying && !composerExpanded) {
@@ -4987,7 +5057,10 @@ async function submitSurvey(form) {
   surveyStatus = 'done';
   haptics.trigger('success');
   const body = panel.querySelector('.panel-body');
-  if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>ご回答ありがとうございました。</p><p class="muted">まもなくあとがきを開きます。</p></div>';
+  if (body) {
+    body.innerHTML = '<div class="survey-thanks" role="status"><p>ご回答ありがとうございました。</p><p class="muted">まもなくあとがきを開きます。</p></div>';
+    animateSurface(body.querySelector('.survey-thanks'), true, 8);
+  }
   setTimeout(() => { if (panel.open && panel.dataset?.kind === 'survey' && panelRevision === revision) openPanel('afterword'); }, 1800);
 }
 
@@ -5034,7 +5107,10 @@ async function submitContact(form) {
   contactStatus = 'done';
   haptics.trigger('success');
   const body = panel.querySelector('.panel-body');
-  if (body) body.innerHTML = '<div class="survey-thanks" role="status"><p>送信しました。ありがとうございます。</p><p class="muted">内容を確認して、必要に応じてご返信します。</p></div>';
+  if (body) {
+    body.innerHTML = '<div class="survey-thanks" role="status"><p>送信しました。ありがとうございます。</p><p class="muted">内容を確認して、必要に応じてご返信します。</p></div>';
+    animateSurface(body.querySelector('.survey-thanks'), true, 8);
+  }
 }
 
 document.addEventListener('change', event => {
@@ -5043,6 +5119,7 @@ document.addEventListener('change', event => {
   if (!section) return;
   const enabled = event.target.value === '宵と冥';
   section.hidden = !enabled;
+  if (enabled) animateSurface(section, true, 8);
   section.querySelectorAll('input').forEach(input => {
     input.disabled = !enabled;
     if (!enabled) {
@@ -5130,7 +5207,7 @@ playSaves = createPlaySaveController({ scenarioId: scenario.id, storage: browser
     else if (!record) {
       conversationPlayer.stop(); closePanel();
       gateVisible = true; gateInput = false; gateBusy = false;
-      renderEntry();
+      void transitionToEntry();
     }
   },
 });
