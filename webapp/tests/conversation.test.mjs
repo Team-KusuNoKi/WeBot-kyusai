@@ -4756,6 +4756,8 @@ test('Trueエンドのあとがきは制作者コメントを閉じたまま出�
   assert.match(h.panel.innerHTML, /class="afterword-note-heading">冥の謎について</);
   assert.match(h.panel.innerHTML, /N1の色が変/);
   assert.match(h.panel.innerHTML, /演技上手かったぜ/);
+  assert.match(h.panel.innerHTML, /最後の儀式シートは去年初めて謎解きを作成した段階から/);
+  assert.match(h.panel.innerHTML, /より高い次元で見て頂けるのではないか/);
   h.evaluate("meiEndRoute = 'god-returned'; openPanel('afterword')");
   assert.match(h.panel.innerHTML, /冥をクリア\(エンドA,Bに到達\)された方へ/);
   assert.doesNotMatch(h.panel.innerHTML, /制作者より一言|余燼|Trueエンドに到達/);
