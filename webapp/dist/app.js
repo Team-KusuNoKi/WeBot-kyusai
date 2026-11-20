@@ -580,8 +580,7 @@ function beginEpilogueBlackout() {
   lineFade.finished.then(hold, hold);
 }
 
-function mountEpilogue(workspace) {
-  const hadScreen = Boolean(document.querySelector('.epilogue-screen'));
+function mountEpilogue(workspace, hadScreen = Boolean(document.querySelector('.epilogue-screen'))) {
   document.querySelector('.epilogue-screen')?.remove();
   if (!epiloguePhase || historyView || gateVisible) return;
   syncPlayChrome();
@@ -2609,6 +2608,8 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   // 暗転中の再描画で黒を外すと、次の場面が一瞬見える。カバーは描き直した画面の上へ戻す。
   const heldBlackout = workspace.querySelector?.('.scene-blackout') ?? null;
   heldBlackout?.remove?.();
+  // 幕の有無も書き直しで消える前に取る。取り逃すと入りのフェードが毎回掛かり、裏の吹き出しが一瞬見える。
+  const hadEpilogueScreen = Boolean(document.querySelector('.epilogue-screen'));
   workspace.innerHTML = `
       ${sceneArt ? `<div class="scene-art" style="background-image:url('${esc(sceneArt)}')">${showPetals ? sakuraFallMarkup() : ''}${appearMarkup}</div>` : ''}
       <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="contact">${icon('mail')}<span>お問い合わせ</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button>${replayMenuSection()}</nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
@@ -2694,7 +2695,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
       .finished.catch(() => {}).finally(() => previousClosing.remove());
   } else previousClosing?.remove();
   if (investigationClosing) mountWorkspaceCover(investigationClosingMarkup());
-  mountEpilogue(workspace);
+  mountEpilogue(workspace, hadEpilogueScreen);
   if (investigationClosing) document.querySelector('.investigation-closing button')?.focus({ preventScroll: true });
   document.querySelector('.chat-area').scrollTop = chatScrollTop;
   const historyBody = document.querySelector('.history-body');
