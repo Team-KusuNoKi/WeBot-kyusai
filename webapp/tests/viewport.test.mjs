@@ -266,6 +266,90 @@ test('回答欄が開いたままフォーカスが外れてもドックは維�
   assert.equal(h.values.get('--visual-height'), '844px');
 });
 
+test('キーボード中のパンは追従し、閉じたあと下に空きがないずれは捨てる', () => {
+  const h = harness();
+  const scrolls = [];
+  h.win.scrollTo = (x, y) => scrolls.push([x, y]);
+  const surface = { getBoundingClientRect: () => ({ top: 100, bottom: 460 }) };
+  h.doc.activeElement = {
+    matches: () => true,
+    closest: () => surface,
+    getBoundingClientRect: () => ({ top: 300, bottom: 340 }),
+  };
+  h.viewport.height = 460;
+  h.viewport.offsetTop = 180;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.values.get('--visual-offset-top'), '180px');
+  assert.equal(h.values.get('--visual-height'), '460px');
+
+  h.doc.activeElement = null;
+  h.viewport.height = 844;
+  h.viewport.offsetTop = 420;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.values.get('--visual-offset-top'), '0px');
+  assert.equal(h.values.get('--visual-height'), '844px');
+  assert.deepEqual(scrolls, [[0, 0]]);
+});
+
+test('ページのスクロール分のずれは先頭へ戻さない', () => {
+  const h = harness();
+  const scrolls = [];
+  h.win.scrollTo = (x, y) => scrolls.push([x, y]);
+  h.win.scrollY = 200;
+  h.viewport.height = 844;
+  h.viewport.offsetTop = 200;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.values.get('--visual-offset-top'), '200px');
+  assert.equal(h.values.get('--visual-height'), '844px');
+  assert.deepEqual(scrolls, []);
+
+  h.viewport.offsetTop = 500;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.values.get('--visual-offset-top'), '200px', 'スクロールを超える分だけ捨てる');
+  assert.deepEqual(scrolls, []);
+});
+
+test('入力を終えた直後は、キーボードが退き切るまで縮んだ画面を広げない', () => {
+  const h = harness();
+  const timers = [];
+  h.win.setTimeout = fn => { timers.push(fn); return timers.length; };
+  h.win.clearTimeout = id => { timers[id - 1] = null; };
+  h.doc.activeElement = {
+    matches: () => true,
+    closest: () => null,
+    getBoundingClientRect: () => ({ top: 300, bottom: 340 }),
+  };
+  h.viewport.height = 422;
+  h.viewport.offsetTop = 422;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.values.get('--visual-height'), '422px');
+
+  h.doc.activeElement = null;
+  h.controller.update();
+  assert.equal(h.values.get('--visual-height'), '422px');
+  assert.equal(h.values.get('--visual-offset-top'), '422px');
+  assert.equal(timers.length, 1);
+  timers[0]();
+  assert.equal(h.values.get('--visual-offset-top'), '0px');
+  assert.equal(h.values.get('--visual-height'), '844px');
+});
+
+test('入力前から可視領域が下半分に座っているずれは画面いっぱいに戻す', () => {
+  const h = harness();
+  h.viewport.height = 422;
+  h.viewport.offsetTop = 422;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.values.get('--visual-offset-top'), '0px');
+  assert.equal(h.values.get('--visual-height'), '844px');
+  assert.equal(h.height(), 844);
+});
+
 test('入力欄と送信ボタンが一緒に収まる場合は両方を可視領域に入れる', () => {
   const h = harness();
   const surface = { scrollTop: 0, getBoundingClientRect: () => ({ top: 120, bottom: 448 }) };

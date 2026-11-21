@@ -8,6 +8,9 @@ export function bindVisualViewport(win = window, doc = document) {
   let lastHeight = 0;
   let settleTimer = 0;
   let releaseTimer = 0;
+  let blurTimer = 0;
+  let blurSettle = false;
+  let wasEditing = false;
   let keyboardHeld = false;
   // 回答欄を閉じたあと、キーボード収納の resize が来ず可視高だけが縮んだままになる端末がある。
   let viewportStale = false;
@@ -112,6 +115,32 @@ export function bindVisualViewport(win = window, doc = document) {
       keyboardHeld = false;
       shrunk = 0;
     }
+    const justBlurred = wasEditing && !editing;
+    if (editing && blurTimer) { win.clearTimeout?.(blurTimer); blurTimer = 0; blurSettle = false; }
+    wasEditing = editing;
+    // Safari はキーボードを閉じたあと、可視高だけ戻して offsetTop を残すことがある。
+    // ページを読んでいるスクロール分は残す。スクロールでは説明できないずれだけを捨てる。
+    // 入力を終えた直後の縮みは、キーボードの収納が終わるまで広げない。
+    const scrollY = Number.isFinite(win.scrollY) ? Math.max(0, win.scrollY) : 0;
+    if (!keyboardHeld && !editing && top - scrollY > 80) {
+      const layout = win.innerHeight || height;
+      const coveredBelow = layout - height - top;
+      const stuck = coveredBelow < 24 || top + height > layout + 1;
+      const expand = layout - height > 24;
+      if (stuck && expand && (justBlurred || blurSettle) && win.setTimeout) {
+        if (!blurTimer) blurTimer = win.setTimeout(() => { blurTimer = 0; blurSettle = false; update(); }, 480);
+        blurSettle = true;
+      } else if (stuck) {
+        top = scrollY;
+        if (expand) {
+          height = layout;
+          shrunk = 0;
+        }
+        if (scrollY <= 24) {
+          try { win.scrollTo?.(0, 0); } catch { /* 位置を戻せない環境では top だけ戻す。 */ }
+        }
+      }
+    }
     if (keyboardHeld && !editing && formOpen) armKeyboardRelease();
     else disarmKeyboardRelease();
     const keyboard = keyboardHeld;
@@ -191,5 +220,5 @@ export function bindVisualViewport(win = window, doc = document) {
   for (const name of ['resize', 'scroll', 'orientationchange', 'pageshow']) listen(win, name);
   for (const name of ['focusin', 'focusout']) listen(doc, name);
   update();
-  return { update, schedule, dispose() { win.clearTimeout?.(settleTimer); win.clearTimeout?.(releaseTimer); sheetMorph?.cancel(); for (const [target, name] of listeners) target.removeEventListener(name, schedule); } };
+  return { update, schedule, dispose() { win.clearTimeout?.(settleTimer); win.clearTimeout?.(releaseTimer); win.clearTimeout?.(blurTimer); sheetMorph?.cancel(); for (const [target, name] of listeners) target.removeEventListener(name, schedule); } };
 }
