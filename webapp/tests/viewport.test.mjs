@@ -266,6 +266,43 @@ test('回答欄が開いたままフォーカスが外れてもドックは維�
   assert.equal(h.values.get('--visual-height'), '844px');
 });
 
+test('狭い画面でキーボードを使っていないときは、可視領域のずれを上端へ戻す', () => {
+  const h = harness();
+  const scrolls = [];
+  h.win.innerWidth = 390;
+  h.win.scrollY = 180;
+  h.win.scrollTo = (x, y) => { scrolls.push([x, y]); h.win.scrollY = y; };
+  h.viewport.offsetTop = 327;
+  h.viewport.height = 700;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.deepEqual(scrolls, [[0, 0]]);
+  assert.equal(h.values.get('--visual-offset-top'), '0px');
+  assert.equal(h.values.get('--visual-height'), '700px');
+});
+
+test('回答キーボードでパンしている間は、狭い画面でも可視領域の上端を維持する', () => {
+  const h = harness();
+  h.win.innerWidth = 390;
+  h.viewport.emit('resize');
+  h.flush();
+  h.win.scrollTo = () => { throw new Error('キーボード中はスクロールを捨てない'); };
+  const form = { hidden: false, closest: () => null };
+  const surface = { getBoundingClientRect: () => ({ top: 100, bottom: 460 }) };
+  h.doc.querySelector = selector => selector === '.workspace' ? h.workspace : selector === '#answer-form' ? form : null;
+  h.doc.activeElement = {
+    matches: () => true,
+    closest: selector => selector === '#answer-form' ? form : surface,
+    getBoundingClientRect: () => ({ top: 300, bottom: 340 }),
+  };
+  h.viewport.height = 460;
+  h.viewport.offsetTop = 40;
+  h.viewport.emit('resize');
+  h.flush();
+  assert.equal(h.workspace.hasAttribute('data-answer-keyboard'), true);
+  assert.equal(h.values.get('--visual-offset-top'), '40px');
+});
+
 test('入力欄と送信ボタンが一緒に収まる場合は両方を可視領域に入れる', () => {
   const h = harness();
   const surface = { scrollTop: 0, getBoundingClientRect: () => ({ top: 120, bottom: 448 }) };

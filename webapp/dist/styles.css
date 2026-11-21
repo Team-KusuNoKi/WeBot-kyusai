@@ -1156,7 +1156,9 @@ dialog.answer-choice-dialog { inset-block: var(--visual-offset-top, 0px) var(--v
 .composer-area.answer-page { overscroll-behavior: contain; }
 /* Keep the play surface against the visible viewport, including when the browser pans to a field. */
 @media (max-width: 599px) {
-  .shell:has(> .workspace) { position: fixed; inset: var(--visual-offset-top, 0px) 0 auto; height: var(--visual-height, 100dvh); }
+  /* プレイ中は文書をスクロールさせない。Safari がレイアウトをずらすと、固定画面の上に地の灰色が空く。 */
+  body:has(.shell > .workspace) { overflow: hidden; height: 100%; }
+  .shell:has(> .workspace) { position: fixed; inset: 0 0 auto; height: var(--visual-height, 100dvh); }
   .shell > .workspace { height: 100%; }
 }
 .shell:has(> .workspace[data-answer-keyboard]) {
@@ -1821,13 +1823,15 @@ dialog.hex-cube-panel:has(.luminol-talk) { overflow: visible; }
   border: 0;
   background: #050505;
   color: #f4efe6;
+  opacity: 1;
   touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
-.epilogue-screen.is-title { opacity: 0; }
-.epilogue-screen.is-title.is-entering { animation: epilogue-darken 520ms ease-out forwards; }
-.epilogue-screen.is-line.is-entering { animation: epilogue-darken 360ms ease-out both; }
-@keyframes epilogue-darken { from { opacity: 0; } to { opacity: 1; } }
-.epilogue-title-card { display: grid; justify-items: center; gap: 4px; }
+/* 幕自体は透明にしない。Safari では幕の opacity と題字の -webkit-mask が重なると背景が塗られず、前のページが透ける。 */
+.epilogue-backdrop { position: absolute; z-index: 0; inset: 0; background: #050505; pointer-events: none; }
+.epilogue-title-card { position: relative; z-index: 1; display: grid; justify-items: center; gap: 4px; }
 .epilogue-script {
   opacity: 0;
   padding-inline: .25em;
@@ -1963,7 +1967,7 @@ dialog.hex-cube-panel:has(.luminol-talk) { overflow: visible; }
 }
 button.epilogue-screen:focus-visible, button.epilogue-screen:active { background-color: #050505; color: #f4efe6; scale: 1; }@media (hover: hover) { button.epilogue-screen:hover { background-color: #050505; color: #f4efe6; scale: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .epilogue-screen.is-title { opacity: 1; animation: none; }
+  .epilogue-screen.is-title { opacity: 1; }
   .epilogue-script.is-writing { animation: none; -webkit-mask-image: none; mask-image: none; opacity: 1; }
   .epilogue-heading { transition: none; }
   .epilogue-screen.is-line.is-entering { animation: none; }

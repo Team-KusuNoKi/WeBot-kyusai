@@ -115,6 +115,15 @@ export function bindVisualViewport(win = window, doc = document) {
     if (keyboardHeld && !editing && formOpen) armKeyboardRelease();
     else disarmKeyboardRelease();
     const keyboard = keyboardHeld;
+    // スマートフォンの固定画面は、キーボードでパンしている間だけ可視領域の上端に追従する。
+    // それ以外で offsetTop を足すと、Safari は既に可視領域へ固定している画面をさらに下げ、地の灰色が上に空く。
+    const playWidth = win.innerWidth;
+    if (Number.isFinite(playWidth) && playWidth <= 599 && !keyboard) {
+      if (top > 0 || (win.scrollY ?? 0) > 0) {
+        try { win.scrollTo?.(0, 0); } catch { /* スクロールを戻せない環境では、固定位置だけ上端にする。 */ }
+      }
+      top = 0;
+    }
     const heightDrop = lastHeight ? lastHeight - height : 0;
     lastHeight = height;
     const bottom = top + height;

@@ -400,7 +400,7 @@ function epilogueMarkup() {
     const script = `Epilogue${mark ? ` : ${mark}` : ''}`;
     const label = caption ? `${script}「${caption}」` : script;
     const heading = caption ? `<span class="epilogue-heading" aria-hidden="true">${esc(`「${caption}」`)}</span>` : '';
-    return `<button type="button" class="epilogue-screen is-title" data-action="epilogue-next" aria-label="${esc(label)}"><span class="epilogue-title-card"><span class="epilogue-script" aria-hidden="true">${esc(script)}</span>${heading}</span></button>`;
+    return `<button type="button" class="epilogue-screen is-title" data-action="epilogue-next" aria-label="${esc(label)}"><span class="epilogue-backdrop" aria-hidden="true"></span><span class="epilogue-title-card"><span class="epilogue-script" aria-hidden="true">${esc(script)}</span>${heading}</span></button>`;
   }
   const line = displayedMessages.findLast(message => message.epilogue);
   const background = line?.background || epilogueSceneArt[line?.scene] || '';
@@ -454,8 +454,9 @@ function beginEpilogueTitle() {
     return;
   }
   screen.dataset.started = 'true';
-  if (reducedMotion()) screen.style.opacity = '1';
-  else screen.classList.add('is-entering');
+  // 幕の地は最初から塗る。透けるアニメーションは題字だけに掛ける。
+  screen.style.opacity = '1';
+  if (!reducedMotion()) screen.classList.add('is-entering');
   const start = () => {
     if (token !== epilogueToken || epiloguePhase !== 'title' || !script.isConnected) return;
     fitEpilogueTitle(script);
@@ -580,7 +581,7 @@ function beginEpilogueBlackout() {
   lineFade.finished.then(hold, hold);
 }
 
-function mountEpilogue(workspace, hadScreen = Boolean(document.querySelector('.epilogue-screen'))) {
+function mountEpilogue(workspace) {
   document.querySelector('.epilogue-screen')?.remove();
   if (!epiloguePhase || historyView || gateVisible) return;
   syncPlayChrome();
@@ -588,8 +589,7 @@ function mountEpilogue(workspace, hadScreen = Boolean(document.querySelector('.e
   if (!panel.open) document.querySelector('[data-action="epilogue-next"]')?.focus({ preventScroll: true });
   if (epiloguePhase === 'title') beginEpilogueTitle();
   else {
-    // 会話へ初めて被せるときだけ暗くなる入りを付ける。差し替え・再描画では点滅させない。
-    if (!hadScreen && !reducedMotion()) document.querySelector('.epilogue-screen')?.classList.add('is-entering');
+    // 行の幕も透明にしない。文言だけを後から出す。差し替えで幕をフェードさせると、Safari では裏が透ける。
     revealEpilogueLine();
   }
 }
@@ -2608,8 +2608,6 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
   // 暗転中の再描画で黒を外すと、次の場面が一瞬見える。カバーは描き直した画面の上へ戻す。
   const heldBlackout = workspace.querySelector?.('.scene-blackout') ?? null;
   heldBlackout?.remove?.();
-  // 幕の有無も書き直しで消える前に取る。取り逃すと入りのフェードが毎回掛かり、裏の吹き出しが一瞬見える。
-  const hadEpilogueScreen = Boolean(document.querySelector('.epilogue-screen'));
   workspace.innerHTML = `
       ${sceneArt ? `<div class="scene-art" style="background-image:url('${esc(sceneArt)}')">${showPetals ? sakuraFallMarkup() : ''}${appearMarkup}</div>` : ''}
       <header class="play-header"><div class="topbar"><div class="brand"><div class="navigation-menu"><button class="menu-button" data-action="toggle-menu" aria-label="メニュー" aria-controls="navigation-menu" aria-expanded="${menuExpanded}">${icon('menu')}</button><nav id="navigation-menu" class="menu-items" ${menuExpanded ? '' : 'hidden'} aria-label="メインメニュー"><button class="active" data-action="chat" aria-current="page">${icon('chat')}<span>トーク</span></button><button data-action="hints" ${composerExpanded ? '' : 'hidden'}>${icon('hint')}<span>ヒント</span></button>${showClues ? `<button data-action="clues">${icon('cards')}<span>手がかり</span>${clueCount ? `<small class="nav-badge">${clueCount}</small>` : ''}</button>` : ''}<button data-action="history">${icon('history')}<span>履歴</span></button><button data-action="save-info">${icon('numberTicket')}<span>再開番号</span></button><button data-action="trouble">${icon('warning')}<span>トラブル</span></button><button data-action="contact">${icon('mail')}<span>お問い合わせ</span></button><button data-action="save-title">${icon('home')}<span>タイトルに戻る</span></button>${replayMenuSection()}</nav></div><span class="brand-title">${esc(playBrandTitle())}</span></div>${headerActionsMarkup()}</div>
@@ -2695,7 +2693,7 @@ function render({ scroll = false, peelingConclusions = [] } = {}) {
       .finished.catch(() => {}).finally(() => previousClosing.remove());
   } else previousClosing?.remove();
   if (investigationClosing) mountWorkspaceCover(investigationClosingMarkup());
-  mountEpilogue(workspace, hadEpilogueScreen);
+  mountEpilogue(workspace);
   if (investigationClosing) document.querySelector('.investigation-closing button')?.focus({ preventScroll: true });
   document.querySelector('.chat-area').scrollTop = chatScrollTop;
   const historyBody = document.querySelector('.history-body');
